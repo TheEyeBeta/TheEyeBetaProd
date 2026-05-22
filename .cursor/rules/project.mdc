@@ -1,0 +1,44 @@
+---
+description: Always-on project conventions for the Zinc monorepo
+globs: ["**/*.py", "**/*.cpp", "**/*.h", "**/*.sql"]
+alwaysApply: true
+---
+
+# Zinc Project Conventions
+
+## Python
+
+- Format with `ruff format`, lint with `ruff check --fix`.
+- All public symbols must have type annotations and Google-style docstrings.
+- Logger: `import structlog; log = structlog.get_logger()` — never `print()`.
+- Secrets from environment variables only — never hardcoded.
+- Pydantic v2 for all data models.
+
+## C++
+
+- Standard: C++20. Formatter: `clang-format` (config at repo root).
+- Each `.cpp` includes its own header first.
+- Prefer `std::span`/`std::string_view` over raw pointers in APIs.
+
+## SQL
+
+- All SQL linted with `sqlfluff --dialect postgres`.
+- Migrations are reversible Alembic scripts in `services/<svc>/migrations/`.
+
+## Tests
+
+- New behaviour → new test in `tests/unit/` or `tests/smoke/`.
+- Smoke tests require `@pytest.mark.smoke` and depend on running infra.
+
+## Commits
+
+- Format: `<type>(<scope>): <subject>` (Conventional Commits).
+- Types: feat, fix, chore, docs, test, refactor, perf, ci.
+- No secrets in commit messages.
+
+## References
+
+- @CLAUDE.md — master agent guide
+- @docs/repo-layout.md — directory tree
+- @docs/ci.md — CI matrix
+- @docs/adr/ — architecture decisions

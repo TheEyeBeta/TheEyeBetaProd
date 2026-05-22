@@ -1,0 +1,264 @@
+name: theeyebeta
+
+# ─────────────────────────────────────────────────────────────────────────────
+# All ports bind to 127.0.0.1 EXCEPT MinIO console (:9001) which is exposed on
+# all interfaces so the web UI is reachable over Tailscale.
+# Credentials come from .env — copy .env.example and fill in secrets.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # PostgreSQL 17 + TimescaleDB + pgvector
+  # ───────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: timescale/timescaledb-ha:pg17-latest
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-theeyebeta}
+      POSTGRES_USER:     ${POSTGRES_USER:-theeyebeta}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pg_data:/home/postgres/pgdata/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      start_period: 40s
+      retries: 12
+    restart: unless-stopped
+    networks:
+      - theeyebeta-net
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Redis 7
+  # ───────────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: >
+      redis-server
+        --save 60 1
+        --loglevel warning
+        --appendonly yes
+        --appendfsync everysec
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - theeyebeta-net
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # NATS 2 with JetStream
+  # ───────────────────────────────────────────────────────────────────────────
+  nats:
+    image: nats:2-alpine
+    command:
+      - "-js"
+      - "-m"
+      - "8222"
+      - "--name"
+      - "theeyebeta-nats"
+      - "-sd"
+      - "/data"
+    ports:
+      - "127.0.0.1:4222:4222"   # Client connections
+      - "127.0.0.1:8222:8222"   # HTTP monitoring / healthz
+    volumes:
+      - nats_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz | grep -q ok"]
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - theeyebeta-net
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # MinIO (S3-compatible object storage)
+  # S3 API binds to 127.0.0.1; console exposed on all interfaces for Tailscale.
+  # ───────────────────────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER:     ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
+    ports:
+      - "127.0.0.1:9000:9000"   # S3 API — loopback only
+      - "9001:9001"             # Web console — all interfaces (Tailscale)
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - theeyebeta-net
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Prometheus
+  # ───────────────────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-remote-write-receiver"
+      - "--web.enable-lifecycle"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - theeyebeta-net
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Loki (log aggregation)
+  # ───────────────────────────────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:latest
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - loki_data:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready | grep -q ready"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
+    restart: unless-stopped
+    networks:
+      - theeyebeta-net
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Tempo (distributed tracing backend)
+  # OTLP receivers (4317/4318) are internal-only — consumed by otel-collector.
+  # Query API (3200) exposed to localhost for Grafana.
+  # ───────────────────────────────────────────────────────────────────────────
+  tempo:
+    image: grafana/tempo:latest
+    command: ["-config.file=/etc/tempo/config.yaml"]
+    ports:
+      - "127.0.0.1:3200:3200"   # HTTP query API (Grafana datasource)
+    expose:
+      - "4317"                  # OTLP gRPC  — Docker network only
+      - "4318"                  # OTLP HTTP  — Docker network only
+    volumes:
+      - ./infra/tempo/config.yaml:/etc/tempo/config.yaml:ro
+      - tempo_data:/var/tempo
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3200/ready | grep -q ready"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
+    restart: unless-stopped
+    networks:
+      - theeyebeta-net
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # OpenTelemetry Collector
+  # Receives OTLP from host-side services; fans out to Prometheus/Loki/Tempo.
+  # ───────────────────────────────────────────────────────────────────────────
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "127.0.0.1:4317:4317"   # OTLP gRPC  — services send traces/metrics/logs here
+      - "127.0.0.1:4318:4318"   # OTLP HTTP
+      - "127.0.0.1:8888:8888"   # Collector self-metrics (scraped by Prometheus)
+    volumes:
+      - ./infra/otelcol/config.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:13133/"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - theeyebeta-net
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Grafana
+  # Datasources provisioned from infra/grafana/provisioning/.
+  # ───────────────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana-oss:latest
+    environment:
+      GF_SECURITY_ADMIN_USER:     admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set in .env}
+      GF_USERS_ALLOW_SIGN_UP:     "false"
+      GF_FEATURE_TOGGLES_ENABLE:  traceqlEditor,correlations
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health | grep -q ok"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
+    restart: unless-stopped
+    networks:
+      - theeyebeta-net
+
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  pg_data:
+  redis_data:
+  nats_data:
+  minio_data:
+  prometheus_data:
+  loki_data:
+  tempo_data:
+  grafana_data:
+
+networks:
+  theeyebeta-net:
+    name: theeyebeta-net
+    driver: bridge

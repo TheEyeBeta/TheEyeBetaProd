@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.env
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.egg
+
+# C++
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.dylib
+*.exe
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile.cmake
+
+# Secrets & SOPS
+# *.enc.yaml files ARE tracked (they are encrypted). Everything else is not.
+.env
+.env.*
+!.env.example
+*.plain                        # plaintext copies of encrypted files
+secrets/*.plain
+# age private key — lives in 1Password, not in the repo
+# ~/.config/sops/age/keys.txt  (outside repo; listed here as documentation)
+
+# Docker
+.docker/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite3
+
+# Node (if any frontend)
+node_modules/
+.npm/
+
+# Terraform/Infra
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# Temp
+tmp/
+temp/
+*.tmp

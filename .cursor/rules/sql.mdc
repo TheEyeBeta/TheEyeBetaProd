@@ -1,0 +1,97 @@
+---
+description: Alembic migrations and raw SQL conventions for PostgreSQL 17 + TimescaleDB
+globs: ["db/**/*.sql", "db/migrations/**/*.py"]
+alwaysApply: false
+---
+
+# SQL / Migration Rules
+
+## Alembic Conventions
+
+- **Every schema change through Alembic** — no hand-edited SQL files applied directly.
+- Generate with: `alembic revision --autogenerate -m "add_orders_table"`
+- One migration per logical module (see `docs/architecture.md §4.2`).
+  Do not bundle unrelated changes in one revision.
+- Every migration must implement `upgrade()` **and** `downgrade()`.
+  If `downgrade()` is truly irreversible, add a comment explaining why and raise
+  `NotImplementedError("irreversible: <reason>")` rather than leaving it empty.
+
+```python
+# Example migration skeleton
+def upgrade() -> None:
+    op.create_table(
+        "orders",
+        sa.Column("id", sa.UUID, primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("symbol", sa.Text, nullable=False),
+        sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False,
+                  server_default=sa.func.now()),
+    )
+
+def downgrade() -> None:
+    op.drop_table("orders")
+```
+
+## Column Conventions
+
+| Convention | Rule |
+|------------|------|
+| Primary keys | `UUID` default `gen_random_uuid()` for external entities; `BIGSERIAL` for high-volume append-only |
+| Timestamps | `TIMESTAMPTZ NOT NULL` — never `TIMESTAMP WITHOUT TIME ZONE`, never nullable |
+| Foreign keys | `ON DELETE RESTRICT` unless explicitly overridden with justification comment |
+| Booleans | `BOOLEAN NOT NULL DEFAULT FALSE` — never nullable booleans |
+| Text | `TEXT` not `VARCHAR(n)` unless a length constraint is semantically meaningful |
+| Enum-like | Use PostgreSQL `CREATE TYPE … AS ENUM` or `TEXT` with a `CHECK` constraint |
+
+## Raw SQL (op.execute strings)
+
+```python
+# Use multi-line strings with explicit formatting
+op.execute("""
+    CREATE INDEX CONCURRENTLY idx_orders_symbol_created
+    ON orders (symbol, created_at DESC)
+    WHERE status = 'OPEN';
+""")
+```
+
+- Always use `CREATE INDEX CONCURRENTLY` for indexes on large tables to avoid lock.
+- No `SELECT *` in migration scripts — be explicit about columns.
+- Prefer `server_default` over `default` in Alembic column definitions (runs in DB, not Python).
+
+## TimescaleDB
+
+```python
+# create_hypertable immediately after CREATE TABLE — same migration
+op.execute("""
+    SELECT create_hypertable(
+        'ticks',
+        'ts',
+        chunk_time_interval => INTERVAL '1 day',
+        if_not_exists => TRUE
+    );
+""")
+```
+
+- `create_hypertable` must be called **in the same migration** as `CREATE TABLE`, never separately.
+- Default chunk intervals: 1 day for tick/event tables, 1 week for aggregate tables.
+- Never call `create_hypertable` on a table that already has rows — data loss risk.
+- Enable compression separately in a follow-up migration after verifying data shape.
+
+## Permissions & Audit Log
+
+- `audit_log` is **append-only**. Never grant `UPDATE` or `DELETE` on it to any role.
+- No migration may `DROP`, `TRUNCATE`, or remove columns from `audit_log`.
+- New columns on `audit_log` are permitted; announce them in the PR description.
+- After any permission change, include the `REVOKE` statements for the inverse as a comment.
+
+## Naming
+
+- Table names: plural noun, `snake_case` (`orders`, `market_snapshots`).
+- Index names: `idx_<table>_<columns>` — e.g. `idx_orders_symbol_created`.
+- FK constraint names: `fk_<table>_<ref_table>` — e.g. `fk_orders_instruments`.
+- Sequence names: `<table>_<column>_seq` (auto by PostgreSQL for `BIGSERIAL`).
+
+## Linting
+
+- `sqlfluff lint --dialect postgres` on all `.sql` files.
+- For inline SQL in Python migration scripts, add `# sqlfluff: disable` only with justification.
+- `make lint-sql` must pass in CI.

@@ -1,0 +1,156 @@
+---
+description: Jinja2 + htmx + Tailwind + Chart.js patterns for the admin service frontend
+globs: ["services/admin_service/templates/**", "services/admin_service/static/**"]
+alwaysApply: false
+---
+
+# Frontend Rules — Admin Service
+
+## Stack (No Build Step)
+
+- **Jinja2** templates rendered server-side by FastAPI.
+- **htmx** from CDN — pin to a specific version tag, never `@latest`:
+  ```html
+  <script src="https://unpkg.com/htmx.org@2.0.3" integrity="sha384-…" crossorigin="anonymous"></script>
+  ```
+- **Tailwind CSS** via CDN Play CDN in development; pin version in production.
+- **Chart.js** for data visualisation — loaded from CDN, initialised in `static/js/charts.js`.
+- **No TypeScript, no React, no Vue, no bundler, no npm.**
+
+## htmx Attribute Patterns
+
+Every interactive element uses `hx-*` attributes — no raw `fetch()`, no inline `onclick`.
+
+### Basic mutation
+```html
+<button
+  hx-post="/admin/orders/{{ order.id }}/approve"
+  hx-target="#order-row-{{ order.id }}"
+  hx-swap="outerHTML"
+  hx-indicator="#spinner-{{ order.id }}">
+  Approve
+</button>
+<span id="spinner-{{ order.id }}" class="htmx-indicator">⏳</span>
+```
+
+### Polling (live data)
+```html
+<div hx-get="/admin/status/feeds"
+     hx-trigger="every 5s"
+     hx-swap="innerHTML"
+     id="feed-status">
+  {% include "components/_feed_status.html" %}
+</div>
+```
+
+### Infinite scroll / pagination
+```html
+<tr hx-get="/admin/orders?page={{ next_page }}"
+    hx-trigger="revealed"
+    hx-swap="afterend">
+  <td colspan="6">Loading…</td>
+</tr>
+```
+
+### Boost internal navigation
+```html
+<a href="/admin/orders" hx-boost="true">Orders</a>
+```
+
+## Confirmation Modals
+
+A confirmation modal is **required** before completing any of these actions:
+
+| Trigger | Modal must display |
+|---------|--------------------|
+| Any SQL write (INSERT / UPDATE / DELETE) via admin UI | Table name, operation, affected row count |
+| `tb restart <svc>` call | Service name + current health status |
+| Order approve / reject | Order ID, side, quantity, instrument, current status |
+| Proposal approve / reject | Proposal ID, submitter, one-line description |
+
+Implementation pattern using the shared `_confirm_modal.html` partial:
+
+```html
+<!-- Simple: hx-confirm for non-critical actions -->
+<button hx-delete="/admin/cache/{{ key }}"
+        hx-confirm="Delete cache key '{{ key }}'? This cannot be undone.">
+  Delete
+</button>
+
+<!-- Complex: modal partial for high-stakes actions -->
+<button
+  hx-get="/admin/orders/{{ order.id }}/confirm-approve"
+  hx-target="#modal-container"
+  hx-swap="innerHTML">
+  Approve
+</button>
+```
+
+## Chart.js Patterns
+
+```javascript
+// static/js/charts.js
+// Charts are initialised from data attributes — no inline <script> tags in templates.
+
+document.querySelectorAll('[data-chart]').forEach(el => {
+  const type = el.dataset.chart;            // "line" | "bar" | "doughnut"
+  const data = JSON.parse(el.dataset.chartData);
+  new Chart(el, { type, data, options: defaultOptions(type) });
+});
+```
+
+```html
+<!-- Template: pass data via data attribute, never inline <script> -->
+<canvas
+  data-chart="line"
+  data-chart-data="{{ chart_data | tojson }}"
+  class="w-full h-64">
+</canvas>
+```
+
+- No inline `<script>` blocks in templates — all JS lives in `static/js/`.
+- Chart data injected via `data-*` attributes and parsed in `charts.js`.
+- Use `| tojson` Jinja2 filter (not `| safe` — avoids XSS).
+
+## Tailwind Utility Conventions
+
+- Use Tailwind utility classes directly in HTML — no custom CSS files unless unavoidable.
+- Consistent component classes extracted to a Jinja2 macro:
+  ```html
+  {# templates/macros/ui.html #}
+  {% macro btn_primary(text, **attrs) %}
+  <button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          {{ attrs | xmlattr }}>{{ text }}</button>
+  {% endmacro %}
+  ```
+- Dark mode via `dark:` variants — keep consistent with `class="dark"` on `<html>`.
+- No `style=""` inline attributes — use Tailwind arbitrary values `[...]` if needed.
+
+## Security
+
+- Never render user-supplied strings with `{{ var | safe }}` — always use `{{ var }}`.
+- All mutating forms must include the CSRF token:
+  ```html
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  ```
+- No secrets, API keys, or internal IDs exposed in HTML source or `data-*` attributes.
+- CSP header set by the FastAPI middleware — do not add `unsafe-inline` script sources.
+
+## Template Structure
+
+```
+services/admin_service/templates/
+├── base.html                 # Layout shell, CDN script tags, modal container
+├── _confirm_modal.html       # Reusable confirmation modal (htmx-powered)
+├── _flash.html               # Flash / toast message partial
+├── macros/
+│   └── ui.html               # Button, badge, table-row macros
+├── components/               # Reusable htmx fragment partials
+│   ├── _feed_status.html
+│   ├── _order_row.html
+│   └── _proposal_card.html
+└── pages/                    # Full-page templates (one per route group)
+    ├── dashboard.html
+    ├── orders.html
+    └── proposals.html
+```

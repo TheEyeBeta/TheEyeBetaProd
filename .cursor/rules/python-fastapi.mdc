@@ -1,0 +1,113 @@
+---
+description: Python 3.12 + FastAPI async patterns, Pydantic v2, DI, error handling
+globs: ["services/**/*.py", "libs/**/*.py", "tb/**/*.py"]
+alwaysApply: false
+---
+
+# Python / FastAPI Rules
+
+## Async-First
+
+- Every FastAPI route handler must be `async def`. No `def` route handlers.
+- No synchronous blocking I/O inside an async context:
+  - ❌ `psycopg2`, `requests`, `open()` (in async routes)
+  - ✅ `psycopg` (v3 async), `httpx.AsyncClient`, `aiofiles`
+- If a sync library is unavoidable, wrap with `asyncio.to_thread()` and add a comment:
+  ```python
+  # blocking: <library> has no async API
+  result = await asyncio.to_thread(sync_call, arg)
+  ```
+
+## Application Structure
+
+```python
+# main.py — app factory, never import at module level
+from fastapi import FastAPI
+
+def create_app() -> FastAPI:
+    app = FastAPI(title="<ServiceName>", version="0.1.0")
+    app.include_router(orders_router, prefix="/orders")
+    app.add_middleware(...)
+    return app
+
+app = create_app()
+```
+
+- One `APIRouter` per domain module in `routes/`.
+- Use `tags=["orders"]` on each router for OpenAPI grouping.
+- Mount `/health` returning `{"status": "ok", "version": settings.VERSION}` on every service.
+
+## Pydantic v2
+
+- **All** request bodies, response models, and inter-service payloads are Pydantic v2 `BaseModel` subclasses.
+- No plain `dict` crossing a service boundary — deserialise on the way in, serialise on the way out.
+- Use `model_config = ConfigDict(frozen=True)` on DTOs that should not be mutated after creation.
+- Use `model_validator(mode="before")` for cross-field validation; `field_validator` for single fields.
+- Prefer `AliasGenerator` over `alias=` per-field for consistent camelCase ↔ snake_case mapping.
+
+## Dependency Injection
+
+Inject all shared resources via `Depends()` — never import singletons at module level:
+
+```python
+from fastapi import Depends
+from collections.abc import AsyncGenerator
+from sqlalchemy.ext.asyncio import AsyncSession
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with async_session() as session:
+        yield session
+
+@router.post("/orders")
+async def create_order(
+    body: CreateOrderRequest,
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    user: User = Depends(require_authenticated_user),
+) -> OrderResponse:
+    ...
+```
+
+- Database session factory created once in `db/session.py`, injected via `Depends`.
+- Auth: `require_authenticated_user` dependency raises `401` if token is invalid.
+- Settings: `get_settings` returns a cached `functools.lru_cache`-wrapped singleton.
+
+## Error Handling
+
+- Use `HTTPException` with explicit status codes — never return error payloads as `200 OK`:
+  ```python
+  raise HTTPException(status_code=404, detail="Order not found")
+  raise HTTPException(status_code=422, detail=[{"loc": ["body", "symbol"], "msg": "required"}])
+  ```
+- Define a global exception handler for domain exceptions in `main.py`:
+  ```python
+  @app.exception_handler(DomainError)
+  async def domain_error_handler(request, exc):
+      return JSONResponse(status_code=400, content={"detail": str(exc)})
+  ```
+- Never catch `Exception` broadly without re-raising or logging the full traceback.
+- Validation errors from Pydantic surface automatically as `422 Unprocessable Entity`.
+
+## Configuration
+
+```python
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    database_url: str
+    redis_url: str = "redis://localhost:6379/0"
+    debug: bool = False
+```
+
+- All env vars declared here — no `os.environ` reads elsewhere.
+- Missing required vars raise `ValidationError` at startup (fail fast).
+- Use `@lru_cache` on `get_settings()` so the `.env` file is parsed once.
+
+## Typing
+
+- `mypy --strict` must pass on all `libs/` code.
+- Annotate all function signatures, including `-> None` returns.
+- Prefer `collections.abc` types (`Sequence`, `Mapping`, `AsyncGenerator`) over `typing.*`.
+- Use `typing.Annotated` with `Field(...)` for Pydantic metadata — not `= Field(...)` directly.

@@ -1,0 +1,49 @@
+---
+# C++ style for theeyebeta — LLVM base, 100-column limit.
+# This file takes precedence over the repo-root .clang-format for all files under cpp/.
+BasedOnStyle: LLVM
+ColumnLimit: 100
+
+# Indentation
+IndentWidth:                  4
+ContinuationIndentWidth:      4
+TabWidth:                     4
+UseTab:                       Never
+
+# Braces
+BreakBeforeBraces:            Attach
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+# Alignment
+AlignConsecutiveAssignments:  false
+AlignConsecutiveDeclarations: false
+AlignTrailingComments:        true
+PointerAlignment:             Left
+DerivePointerAlignment:       false
+
+# Includes
+SortIncludes:                 CaseSensitive
+IncludeBlocks:                Regroup
+IncludeCategories:
+  # 1. Matching header (foo.cpp → foo.h)
+  - Regex:    '^"[^/]+'
+    Priority: 1
+  # 2. C++ standard library
+  - Regex:    '^<(algorithm|any|array|atomic|bit|cassert|chrono|cmath|concepts|cstddef|cstdint|cstring|expected|filesystem|functional|iterator|limits|map|memory|mutex|numeric|optional|ranges|set|span|stdexcept|string|string_view|thread|tuple|type_traits|unordered_map|utility|variant|vector)>'
+    Priority: 2
+  # 3. Third-party (Eigen, nlohmann, nanobind, etc.)
+  - Regex:    '^<(Eigen|nlohmann|nanobind)/'
+    Priority: 3
+  # 4. Project headers
+  - Regex:    '.*'
+    Priority: 4
+
+# Templates & lambdas
+AlwaysBreakTemplateDeclarations: Yes
+LambdaBodyIndentation:           Signature
+
+# C++20
+Standard: c++20
+...

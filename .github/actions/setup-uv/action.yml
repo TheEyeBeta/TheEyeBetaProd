@@ -1,0 +1,34 @@
+name: Setup Python + uv
+description: >
+  Install Python, uv, restore the uv cache, and optionally sync dev deps.
+  Reused by ci.yml and release.yml to avoid duplication.
+
+inputs:
+  python-version:
+    description: Python version to install
+    default: "3.12"
+  sync-args:
+    description: Extra args passed to `uv sync` (e.g. "--group dev")
+    default: "--group dev"
+  skip-sync:
+    description: Set to "true" to skip `uv sync` (cache restore only)
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+        cache-dependency-glob: "**/pyproject.toml"
+
+    - name: Sync dependencies
+      if: inputs.skip-sync != 'true'
+      shell: bash
+      run: uv sync ${{ inputs.sync-args }}

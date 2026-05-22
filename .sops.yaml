@@ -1,0 +1,11 @@
+# SOPS configuration — repo root
+# Creation rules are path-matched from the file being encrypted.
+# Detailed setup instructions: docs/secrets.md
+#
+# Replace the placeholder below with the output of `age-keygen` (Public key line).
+# For multiple recipients (team + CI), comma-separate the public keys.
+
+creation_rules:
+  - path_regex: ^secrets/.*\.enc\.yaml$
+    age: >-
+      age1PLACEHOLDER__REPLACE_WITH_OUTPUT_OF__age-keygen__PUBLIC_KEY_LINE

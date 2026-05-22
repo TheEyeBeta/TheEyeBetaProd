@@ -1,0 +1,116 @@
+---
+description: C++20 patterns, CMake + Conan build system, Eigen, nanobind Python bindings
+globs: ["cpp/**/*.hpp", "cpp/**/*.cpp", "cpp/**/CMakeLists.txt"]
+alwaysApply: false
+---
+
+# C++ Rules
+
+## Language Standard
+
+- **C++20** throughout. Use modules, concepts, ranges, `std::span`, `std::expected`,
+  designated initialisers, and `consteval` where appropriate.
+- Compile flags: `-std=c++20 -Wall -Wextra -Wpedantic -Werror`.
+- No exceptions in hot paths — use `std::expected<T, E>` for fallible operations:
+  ```cpp
+  [[nodiscard]] std::expected<Order, OrderError>
+  parse_fix_message(std::string_view raw) noexcept;
+  ```
+- Exceptions permitted only in one-time startup / configuration code.
+
+## CMake Patterns
+
+```cmake
+# cpp/CMakeLists.txt
+cmake_minimum_required(VERSION 3.28)
+project(theeyebeta_cpp CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)   # needed by clang-tidy
+
+find_package(Eigen3 REQUIRED)
+find_package(nlohmann_json REQUIRED)
+
+add_library(order_book STATIC
+    src/order_book/order_book.cpp
+)
+target_link_libraries(order_book PUBLIC Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_include_directories(order_book PUBLIC include/)
+```
+
+- One `CMakeLists.txt` per subdirectory that defines a target.
+- Always set `CMAKE_EXPORT_COMPILE_COMMANDS ON` (enables clang-tidy integration).
+- Use `target_*` commands — never global `include_directories` / `link_libraries`.
+- Install rules: `cmake --install build/ --prefix dist/`.
+
+## Conan 2
+
+```python
+# cpp/conanfile.py
+from conan import ConanFile
+
+class TheEyeBetaCpp(ConanFile):
+    settings = "os", "compiler", "build_type", "arch"
+    generators = "CMakeDeps", "CMakeToolchain"
+
+    def requirements(self):
+        self.requires("eigen/3.4.0")
+        self.requires("nlohmann_json/3.11.3")
+        self.requires("gtest/1.14.0")
+        self.requires("nanobind/2.1.0")
+```
+
+- All dependencies declared in `cpp/conanfile.py` — no vcpkg, no FetchContent, no git submodules.
+- Run `conan install cpp/ -of build/conan --build=missing` before CMake configure.
+- Lock file (`conan.lock`) committed to the repo — update intentionally, not accidentally.
+
+## Eigen
+
+- Include: `#include <Eigen/Dense>` (not individual sub-headers unless compile time matters).
+- Prefer `Eigen::MatrixXd`, `Eigen::VectorXd` for dynamic sizes; fixed-size (`Matrix3d`) in hot loops.
+- Never return Eigen objects by value from virtual functions (alignment issues).
+- Use `.eval()` to break aliasing in compound expressions when in doubt.
+
+## nanobind Bindings
+
+- Binding files named `<module>_nb.cpp` — never mix binding code with implementation.
+- One nanobind module per logical C++ library:
+  ```cpp
+  // order_book_nb.cpp
+  #include <nanobind/nanobind.h>
+  #include "order_book/order_book.h"
+
+  namespace nb = nanobind;
+
+  NB_MODULE(order_book, m) {
+      nb::class_<OrderBook>(m, "OrderBook")
+          .def(nb::init<int>())
+          .def("add_order", &OrderBook::add_order)
+          .def("best_bid", &OrderBook::best_bid);
+  }
+  ```
+- Expose `std::expected` return types as Python exceptions via a helper wrapper.
+- Test the nanobind module from Python in `tests/smoke/test_cpp_<module>.py`.
+
+## Formatting & Linting
+
+- `clang-format` with `BasedOnStyle: LLVM`, `ColumnLimit: 100` (config: `cpp/.clang-format`).
+- `clang-tidy` checks enabled: `modernize-*`, `performance-*`, `bugprone-*`,
+  `cppcoreguidelines-pro-type-*`.
+- `make lint-cpp` runs both; must pass before PR merge.
+- No `reinterpret_cast` without `// NOLINT(cppcoreguidelines-pro-type-reinterpret-cast):` + reason.
+
+## Header Guards
+
+Prefer `#pragma once` over include guards — it is supported by all targeted compilers.
+
+## Documentation
+
+Every public header opens with:
+```cpp
+/**
+ * @file   order_book.h
+ * @brief  Price-level order book with O(log n) insertion and O(1) best-bid/ask.
+ */
+```
+Every public function has `@brief`, `@param[in/out]`, `@return`, and `@throws` (if applicable).

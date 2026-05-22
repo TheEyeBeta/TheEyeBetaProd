@@ -1,0 +1,70 @@
+---
+description: Universal code style rules — apply to every file in the repo
+globs: []
+alwaysApply: true
+---
+
+# Universal Code Style
+
+## Line Length
+
+- Hard limit: **100 columns** for all languages.
+- Python: enforced by `ruff` (`line-length = 100` in `pyproject.toml`).
+- C++: enforced by `clang-format` (`ColumnLimit: 100`).
+- SQL: enforced by `sqlfluff` (`max_line_length = 100`).
+- Markdown / YAML: soft limit — prefer wrapping at 100 but do not break URLs or code spans.
+
+## Naming Conventions by Language
+
+| Language | Variables / functions | Classes / types | Constants | Modules / files |
+|----------|-----------------------|-----------------|-----------|-----------------|
+| Python | `snake_case` | `PascalCase` | `UPPER_SNAKE_CASE` | `snake_case.py` |
+| C++ | `snake_case` | `PascalCase` | `kPascalCase` | `snake_case.cpp/.h` |
+| JavaScript / Jinja macros | `lowerCamelCase` | `PascalCase` | `UPPER_SNAKE_CASE` | `kebab-case.js` |
+| SQL | `snake_case` | n/a | n/a | `snake_case.sql` |
+| YAML / TOML keys | `snake_case` or `kebab-case` (match existing file convention) | | | |
+
+## Whitespace
+
+- No trailing whitespace on any line.
+- Files must end with exactly one newline (`\n`).
+- No mixed tabs and spaces — Python: 4 spaces; C++: 4 spaces; YAML/TOML: 2 spaces.
+- Enforced by pre-commit `trailing-whitespace` and `end-of-file-fixer` hooks.
+
+## Imports & Includes
+
+- Python: `ruff` isort profile — stdlib → third-party → first-party (`zinc`, service name).
+- C++: own header first, then stdlib, then third-party, then project headers.
+- Never use wildcard imports (`from foo import *`).
+- Never use `using namespace std;` in C++ headers.
+
+## Comments
+
+- Comments explain **why**, not what — the code says what.
+- No commented-out code in commits. Use `git stash` or a branch.
+- `TODO` comments must include a linked issue: `# TODO(#42): description`.
+- Doxygen blocks on all public C++ symbols; Google-style docstrings on all public Python symbols.
+
+## Commit Messages
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>(<scope>): <subject>
+
+[optional body]
+
+[optional footer: Refs #issue]
+```
+
+- **Types:** `feat`, `fix`, `chore`, `docs`, `test`, `refactor`, `perf`, `ci`, `build`
+- Subject: imperative mood, lowercase, no trailing period, ≤ 72 chars
+- No merge commits on `main` — squash-merge PRs
+- No secrets, credentials, or PII in commit messages
+
+## Files the AI Must Never Modify Without Asking
+
+- `audit_log` migrations (append-only schema)
+- `.env` / `.env.*` files in any directory
+- `secrets/` directory contents
+- `CLAUDE.md` (prompt this rule file to update it)

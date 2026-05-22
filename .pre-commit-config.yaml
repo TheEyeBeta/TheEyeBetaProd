@@ -1,0 +1,151 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# theeyebeta — pre-commit configuration
+# Run `make install-hooks` to activate.
+# Run `pre-commit autoupdate` to bump revisions.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Installs both pre-commit (code) and commit-msg (message) hooks in one call.
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+
+repos:
+
+  # ── ruff — Python linter + formatter (replaces flake8, isort, pyupgrade) ──
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.0
+    hooks:
+      - id: ruff
+        name: ruff (lint + autofix)
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+        name: ruff (format)
+
+  # ── black — formatting safety-net after ruff ──────────────────────────────
+  - repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+      - id: black
+        name: black
+        language_version: python3.12
+
+  # ── mypy — type-check libs/ only (fast; full mypy runs in CI) ─────────────
+  # Local hook so it uses the project's own uv environment and stubs.
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy --strict (libs/)
+        language: system
+        entry: bash -c '
+          if [ ! -d libs ] || [ -z "$(find libs -name "*.py" -print -quit)" ]; then
+            echo "mypy: libs/ is empty — skipping";
+            exit 0;
+          fi
+          uv run mypy --strict libs/
+        '
+        pass_filenames: false
+        types: [python]
+        files: ^libs/
+        require_serial: true
+
+  # ── clang-format — C++ formatter (reads cpp/.clang-format: LLVM, 100-col) ─
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v19.1.7
+    hooks:
+      - id: clang-format
+        name: clang-format (C++)
+        types_or: [c, c++]
+        # cpp/.clang-format is found via nearest-ancestor lookup for files under cpp/.
+        # Root .clang-format covers any other C-like files in the repo.
+
+  # ── clang-tidy — static analysis on staged C++ files ─────────────────────
+  # Runs on staged files only; gracefully skips when clang-tidy is not installed
+  # or when no compile_commands.json exists yet (first build hasn't run).
+  - repo: local
+    hooks:
+      - id: clang-tidy
+        name: clang-tidy (modernize/performance/bugprone)
+        language: system
+        entry: bash -c '
+          if ! command -v clang-tidy &>/dev/null; then
+            echo "clang-tidy: not installed — skipping (run: apt install clang-tidy)";
+            exit 0;
+          fi
+          if [ "$#" -eq 0 ]; then exit 0; fi
+          COMPILE_DB_FLAGS=""
+          for d in build/linux-release build/linux-debug build; do
+            if [ -f "$d/compile_commands.json" ]; then
+              COMPILE_DB_FLAGS="-p $d";
+              break;
+            fi
+          done
+          exec clang-tidy \
+            --checks="modernize-*,performance-*,bugprone-*,-modernize-use-trailing-return-type" \
+            --warnings-as-errors="modernize-*,performance-*,bugprone-*" \
+            ${COMPILE_DB_FLAGS} \
+            "$@"
+        ' --
+        types_or: [c++]
+        files: ^cpp/
+        require_serial: false
+
+  # ── sqlfluff — SQL linter (postgres dialect) ──────────────────────────────
+  - repo: https://github.com/sqlfluff/sqlfluff
+    rev: 3.3.1
+    hooks:
+      - id: sqlfluff-lint
+        name: sqlfluff lint
+        args: [--dialect, postgres]
+        files: ^db/
+
+  # ── gitleaks — secret scanner ─────────────────────────────────────────────
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.0
+    hooks:
+      - id: gitleaks
+        name: gitleaks (secret scan)
+
+  # ── conventional-pre-commit — enforce Conventional Commits format ─────────
+  # Allowed types mirror CLAUDE.md §4 Commits.
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args:
+          - feat
+          - fix
+          - chore
+          - docs
+          - test
+          - refactor
+          - perf
+          - ci
+          - build
+
+  # ── pre-commit-hooks — universal file hygiene ─────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: trailing whitespace
+      - id: end-of-file-fixer
+        name: end-of-file newline
+      - id: check-yaml
+        name: check YAML syntax
+        args: [--unsafe]    # allow custom tags e.g. !ENV, !reference
+      - id: check-toml
+        name: check TOML syntax
+      - id: check-json
+        name: check JSON syntax
+      - id: check-merge-conflict
+        name: no merge conflict markers
+      - id: check-added-large-files
+        name: no large files (>1 MB)
+        args: [--maxkb=1024]
+      - id: mixed-line-ending
+        name: enforce LF line endings
+        args: [--fix=lf]
+      - id: check-case-conflict
+        name: no case-insensitive filename conflicts
+      - id: detect-private-key
+        name: no private keys in source

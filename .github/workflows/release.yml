@@ -1,0 +1,261 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"          # v0.1.0, v1.2.3, …
+      - "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+" # v1.0.0-rc.1
+
+# No concurrency cancellation — a release run must always complete in full.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  REGISTRY_OWNER: ${{ github.repository_owner }}
+  PYTHON_VERSION: "3.12"
+  # Semver extracted from the tag (strips leading "v")
+  SEMVER: ${{ github.ref_name }}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job dependency graph:
+#
+#   build-images ──┐
+#   publish-cli  ──┴── release-notes
+# ─────────────────────────────────────────────────────────────────────────────
+
+jobs:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 1. build-images — build & push all 14 service images to GHCR
+  # ═══════════════════════════════════════════════════════════════════════════
+  build-images:
+    name: Image — ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false   # don't cancel sibling services if one fails
+      matrix:
+        service:
+          - data-ingestion
+          - snapshot-packager
+          - llm-gateway
+          - agent-runtime
+          - guard-service
+          - master-orchestrator
+          - risk-service
+          - compliance-service
+          - oms
+          - broker-adapter-alpaca
+          - backtest-engine
+          - audit-service
+          - rnd-agent
+          - admin-service
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Check Dockerfile exists (no-op on empty repo) ─────────────────────
+      - name: Check Dockerfile presence
+        id: df_check
+        run: |
+          DOCKERFILE="services/${{ matrix.service }}/Dockerfile"
+          if [ -f "$DOCKERFILE" ]; then
+            echo "exists=true"  >> "$GITHUB_OUTPUT"
+            echo "context=services/${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "⚠️  $DOCKERFILE not found — skipping build for ${{ matrix.service }}"
+          fi
+
+      # ── Docker setup (composite action) ───────────────────────────────────
+      - name: Docker setup
+        if: steps.df_check.outputs.exists == 'true'
+        uses: ./.github/actions/docker-setup
+        with:
+          ghcr-token: ${{ secrets.GHCR_TOKEN }}
+          registry-owner: ${{ env.REGISTRY_OWNER }}
+
+      # ── Generate image tags & OCI labels ──────────────────────────────────
+      - name: Docker metadata
+        if: steps.df_check.outputs.exists == 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.REGISTRY_OWNER }}/theeyebeta-${{ matrix.service }}
+          tags: |
+            # vX.Y.Z  (from the git tag)
+            type=semver,pattern={{version}}
+            # X.Y  (minor floating tag)
+            type=semver,pattern={{major}}.{{minor}}
+            # Short SHA  (always — useful for git bisect)
+            type=sha,prefix=,suffix=,format=short
+          labels: |
+            org.opencontainers.image.title=theeyebeta-${{ matrix.service }}
+            org.opencontainers.image.vendor=theeyebeta
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      # ── Build & push (multi-platform) ─────────────────────────────────────
+      - name: Build and push
+        if: steps.df_check.outputs.exists == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ steps.df_check.outputs.context }}
+          file: ${{ steps.df_check.outputs.context }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # GitHub Actions cache backend — keyed per service so caches don't collide
+          cache-from: type=gha,scope=img-${{ matrix.service }}
+          cache-to: type=gha,scope=img-${{ matrix.service }},mode=max
+          provenance: true    # SLSA provenance attestation
+          sbom: true          # SBOM attestation alongside the image
+
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 2. publish-cli — build tb wheel and publish to PyPI
+  # ═══════════════════════════════════════════════════════════════════════════
+  publish-cli:
+    name: Publish tb CLI → PyPI
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # required for Trusted Publishing (OIDC)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Check tb/ exists (no-op on empty repo) ────────────────────────────
+      - name: Check tb/ presence
+        id: tb_check
+        run: |
+          if [ -d tb ] && [ -f tb/pyproject.toml ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "⚠️  tb/pyproject.toml not found — skipping PyPI publish"
+          fi
+
+      - name: Setup Python + uv
+        if: steps.tb_check.outputs.exists == 'true'
+        uses: ./.github/actions/setup-uv
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          skip-sync: "true"
+
+      # ── Inject release version into the wheel ─────────────────────────────
+      - name: Set package version from tag
+        if: steps.tb_check.outputs.exists == 'true'
+        working-directory: tb
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"   # strip leading "v"
+          # Write version into pyproject.toml dynamic version field
+          sed -i "s/^version = .*/version = \"${VERSION}\"/" pyproject.toml
+          echo "Building version ${VERSION}"
+
+      - name: Build wheel
+        if: steps.tb_check.outputs.exists == 'true'
+        working-directory: tb
+        run: |
+          uv build --wheel --out-dir dist/
+          ls -lh dist/
+
+      # ── Publish to PyPI via Trusted Publishing (no PYPI_TOKEN needed) ─────
+      # Falls back to PYPI_TOKEN if OIDC is not configured for this repo.
+      - name: Publish to PyPI (Trusted Publishing)
+        if: steps.tb_check.outputs.exists == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: tb/dist/
+          skip-existing: true
+          # Remove the line below once Trusted Publishing is configured on PyPI.
+          # password: ${{ secrets.PYPI_TOKEN }}
+
+      - name: Upload wheel as artifact
+        if: steps.tb_check.outputs.exists == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tb-cli-wheel-${{ github.ref_name }}
+          path: tb/dist/*.whl
+
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 3. release-notes — generate changelog from Conventional Commits & publish
+  # ═══════════════════════════════════════════════════════════════════════════
+  release-notes:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-images, publish-cli]
+    permissions:
+      contents: write   # required to create the GitHub Release
+
+    steps:
+      - name: Checkout (full history — needed for git-cliff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Generate release body from Conventional Commits ───────────────────
+      - name: Install git-cliff
+        run: |
+          curl -sSfL \
+            "https://github.com/orhun/git-cliff/releases/latest/download/git-cliff-x86_64-unknown-linux-musl.tar.gz" \
+            | tar -xz --strip-components=2 -C /usr/local/bin git-cliff-*/git-cliff
+          git-cliff --version
+
+      - name: Generate release notes (since last tag)
+        id: cliff
+        run: |
+          # Find the previous tag to bound the changelog range
+          PREV_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]' | sed -n '2p' || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..${{ github.ref_name }}"
+            echo "Generating notes for range: ${RANGE}"
+            git-cliff --config cliff.toml "${RANGE}" --output RELEASE_NOTES.md
+          else
+            echo "First release — using full history"
+            git-cliff --config cliff.toml --output RELEASE_NOTES.md
+          fi
+          echo "--- release notes preview ---"
+          cat RELEASE_NOTES.md
+
+      # ── Collect image digests from build-images outputs ───────────────────
+      - name: Download SBOM artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sbom-*
+          merge-multiple: true
+          path: release-artefacts/
+        continue-on-error: true   # SBOM may not exist on empty repo
+
+      - name: Download tb CLI wheel
+        uses: actions/download-artifact@v4
+        with:
+          pattern: tb-cli-wheel-*
+          merge-multiple: true
+          path: release-artefacts/
+        continue-on-error: true   # wheel may not exist on empty repo
+
+      # ── Create GitHub Release ─────────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "theeyebeta ${{ github.ref_name }}"
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc.') }}
+          files: release-artefacts/**
+          fail_on_unmatched_files: false
+          generate_release_notes: false  # we use git-cliff output instead
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

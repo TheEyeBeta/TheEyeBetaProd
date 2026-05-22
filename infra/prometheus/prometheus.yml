@@ -1,0 +1,22 @@
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: theeyebeta-dev
+    env:     development
+
+scrape_configs:
+  # ── Prometheus self-monitoring ──────────────────────────────────────────────
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # ── OTel Collector (self-metrics exported on :8888) ─────────────────────────
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8888"]
+
+  # ── Application services (add targets as services come online) ──────────────
+  - job_name: theeyebeta-services
+    static_configs:
+      - targets: []    # e.g. "market-service:8001", "order-service:8002"

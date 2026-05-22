@@ -1,0 +1,39 @@
+---
+description: Bootstrap phase rules — apply when creating or extending repo scaffold
+globs: ["docker-compose.yml", "Makefile", "infra/**", "docs/**", ".github/**"]
+alwaysApply: false
+---
+
+# Bootstrap Rules
+
+## Directory Tree
+
+Apply the directory tree documented in @docs/repo-layout.md exactly.
+Do not invent new top-level directories without updating that document.
+
+## Dockerfiles
+
+When writing any Dockerfile, follow the template in @docs/templates/Dockerfile.template:
+- Multi-stage build (builder + runtime stage)
+- Explicit non-root user in runtime stage
+- LABEL with org.opencontainers.image.* metadata
+- HEALTHCHECK instruction
+- Pin image digest or semver tag
+
+## Compose Changes
+
+When adding a service to docker-compose.yml:
+1. Add healthcheck
+2. Add to the `depends_on` of any service that needs it
+3. Update `docs/repo-layout.md` service table
+4. Add a Makefile target if the service has a CLI tool (e.g. `redis-cli`)
+
+## Confirm Before Delete
+
+ALWAYS ask the user before deleting any existing file.
+Use `git mv` for renames so history is preserved.
+
+## ADR on Architecture Changes
+
+Any change that affects: database choice, messaging topology, secret management,
+CI matrix, or container runtime — requires a new or updated ADR in `docs/adr/`.

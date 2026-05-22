@@ -1,0 +1,57 @@
+# Zinc Dockerfile Template
+# Usage: Copy this file, replace <SERVICE>, <PORT>, and fill in build steps.
+# Follow all conventions from .claude/rules/04-infrastructure.md.
+
+# ─────────────────────────────────────────────
+# Stage 1: Builder
+# ─────────────────────────────────────────────
+FROM python:3.12-slim AS builder
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /build
+
+# Copy dependency manifests first (layer cache optimisation)
+COPY pyproject.toml uv.lock* ./
+COPY libs/ libs/
+
+# Install dependencies into a virtual environment
+RUN uv sync --no-dev --frozen
+
+# Copy application source
+COPY src/ src/
+
+# ─────────────────────────────────────────────
+# Stage 2: Runtime
+# ─────────────────────────────────────────────
+FROM python:3.12-slim AS runtime
+
+LABEL org.opencontainers.image.title="zinc-<SERVICE>" \
+      org.opencontainers.image.description="Zinc <SERVICE> service" \
+      org.opencontainers.image.vendor="Zinc" \
+      org.opencontainers.image.licenses="MIT"
+
+# Create non-root user
+RUN groupadd --gid 1001 nonroot \
+ && useradd --uid 1001 --gid nonroot --no-create-home nonroot
+
+WORKDIR /app
+
+# Copy virtual environment and source from builder
+COPY --from=builder /build/.venv /app/.venv
+COPY --from=builder /build/src /app/src
+
+# Ensure venv binaries are on PATH
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+USER nonroot
+
+EXPOSE <PORT>
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:<PORT>/health')"
+
+CMD ["python", "-m", "src.<SERVICE>.main"]
