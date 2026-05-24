@@ -1,0 +1,19 @@
+---
+description: Alembic + Postgres + TimescaleDB conventions for theeyebeta
+globs: ["db/**/*.py", "db/**/*.sql"]
+alwaysApply: false
+---
+
+# Database conventions
+
+- Target DB: TheEyeBeta2025Live on 127.0.0.1:5432, schema "theeyebeta"
+- Driver: psycopg3 (URL prefix postgresql+psycopg://)
+- Every CREATE TABLE goes in schema "theeyebeta" — use op.create_table(..., schema=SCHEMA)
+- Every raw op.execute uses fully-qualified theeyebeta.<table_name>
+- Hypertable workflow: op.create_table(...) -> op.execute SELECT create_hypertable -> op.execute ALTER TABLE ... SET compression -> op.execute add_compression_policy
+- All timestamps: timestamptz NOT NULL DEFAULT now() where appropriate
+- All FKs: ON DELETE RESTRICT unless documented otherwise
+- Roles: tb_app (write), tb_rnd_readonly (read + INSERT proposals only)
+- audit_log: tb_app gets INSERT + SELECT only; UPDATE and DELETE are revoked
+- Every migration has a working downgrade() that reverses upgrade() in opposite order
+- Every public.* reference is a bug — schema must always be theeyebeta

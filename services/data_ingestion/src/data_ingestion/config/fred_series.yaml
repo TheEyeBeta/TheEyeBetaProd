@@ -1,0 +1,13 @@
+series:
+  # United States
+  - { code: "GDP",        description: "US GDP (quarterly, billions of chained 2017 USD)" }
+  - { code: "CPIAUCSL",   description: "US CPI — All Urban Consumers, All Items" }
+  - { code: "UNRATE",     description: "US Unemployment Rate" }
+  - { code: "DGS10",      description: "US 10-Year Treasury Constant Maturity Rate" }
+  - { code: "DGS2",       description: "US 2-Year Treasury Constant Maturity Rate" }
+  - { code: "DFF",        description: "US Effective Federal Funds Rate" }
+  - { code: "DCOILWTICO", description: "Crude Oil Prices: West Texas Intermediate (WTI)" }
+  - { code: "DEXJPUS",    description: "Japan / US Foreign Exchange Rate (JPY per USD)" }
+  - { code: "DEXCHUS",    description: "China / US Foreign Exchange Rate (CNY per USD)" }
+  - { code: "DEXHKUS",    description: "Hong Kong / US Foreign Exchange Rate (HKD per USD)" }
+  - { code: "VIXCLS",     description: "CBOE Volatility Index (VIX)" }

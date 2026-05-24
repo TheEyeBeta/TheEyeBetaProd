@@ -25,6 +25,3 @@ GRAFANA_ADMIN_PASSWORD=changeme_grafana
 # ── Data ingestion ───────────────────────────────────────────────────────────
 FRED_API_KEY=
 INGEST_DATABASE_URL=postgresql://tb_app:tb_app_CHANGE_ME@127.0.0.1:5432/TheEyeBeta2025Live
-
-# ── Agent runtime ────────────────────────────────────────────────────────────
-OPENAI_API_KEY=

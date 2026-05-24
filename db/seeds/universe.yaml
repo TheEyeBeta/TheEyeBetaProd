@@ -1,0 +1,33 @@
+# Starter universe — 16 tickers across 7 markets.
+# Keys: symbol, exchange, asset_class, sector, industry
+# Run: uv run python db/seeds/seed_instruments.py
+
+# US — NASDAQ
+- { symbol: "AAPL",  exchange: "XNAS", asset_class: "equity", sector: "Technology",          industry: "Consumer Electronics" }
+- { symbol: "MSFT",  exchange: "XNAS", asset_class: "equity", sector: "Technology",          industry: "Software" }
+- { symbol: "NVDA",  exchange: "XNAS", asset_class: "equity", sector: "Technology",          industry: "Semiconductors" }
+- { symbol: "GOOGL", exchange: "XNAS", asset_class: "equity", sector: "Communication",       industry: "Internet Content" }
+
+# US — NYSE
+- { symbol: "JPM",   exchange: "XNYS", asset_class: "equity", sector: "Financials",          industry: "Banks" }
+- { symbol: "XOM",   exchange: "XNYS", asset_class: "equity", sector: "Energy",              industry: "Oil & Gas" }
+
+# Japan — TSE
+- { symbol: "7203",  exchange: "XTKS", asset_class: "equity", sector: "Consumer Cyclical",   industry: "Auto Manufacturers" }   # Toyota
+- { symbol: "6758",  exchange: "XTKS", asset_class: "equity", sector: "Technology",          industry: "Consumer Electronics" } # Sony
+
+# Hong Kong — HKEX
+- { symbol: "0700",  exchange: "XHKG", asset_class: "equity", sector: "Communication",       industry: "Internet Content" }     # Tencent
+- { symbol: "9988",  exchange: "XHKG", asset_class: "equity", sector: "Consumer Cyclical",   industry: "Internet Retail" }      # Alibaba HK
+
+# Taiwan — TWSE
+- { symbol: "2330",  exchange: "XTAI", asset_class: "equity", sector: "Technology",          industry: "Semiconductors" }       # TSMC
+- { symbol: "2317",  exchange: "XTAI", asset_class: "equity", sector: "Technology",          industry: "Electronic Manufacturing" } # Hon Hai
+
+# China — Shanghai SSE
+- { symbol: "601318", exchange: "XSHG", asset_class: "equity", sector: "Financials",         industry: "Insurance" }            # Ping An
+- { symbol: "600519", exchange: "XSHG", asset_class: "equity", sector: "Consumer Defensive", industry: "Beverages" }            # Moutai
+
+# China — Shenzhen SZSE
+- { symbol: "000858", exchange: "XSHE", asset_class: "equity", sector: "Consumer Defensive", industry: "Beverages" }            # Wuliangye
+- { symbol: "300750", exchange: "XSHE", asset_class: "equity", sector: "Technology",         industry: "Batteries" }            # CATL
