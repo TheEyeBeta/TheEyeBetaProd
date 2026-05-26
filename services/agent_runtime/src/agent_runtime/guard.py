@@ -7,7 +7,7 @@ import re
 
 from pydantic import ValidationError
 
-from .schemas import AgentDecision, AgentOutput
+from .schemas import AgentOutput
 
 # Maps internal guard kinds to theeyebeta.guard_violations.violation_type CHECK values.
 VIOLATION_TYPE_DB: dict[str, str] = {

@@ -1,21 +1,30 @@
 [project]
 name = "snapshot-packager"
 version = "0.1.0"
-description = "theeyebeta snapshot packager — builds per-market daily snapshots"
+description = "theeyebeta snapshot packager — agent-ready JSON from data.snapshots events"
 requires-python = ">=3.12"
 dependencies = [
     "zinc-schemas",
-    "psycopg[binary,pool]>=3.2",
-    "polars[rtcompat]>=1.12",
-    "pyarrow>=18.0",
-    "typer>=0.15",
+    "zinc-native",
+    "asyncpg>=0.30",
+    "nats-py>=2.8",
+    "minio>=7.2",
+    "redis>=5.0",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.4",
     "structlog>=24.4",
-    "jsonschema>=4.23",
+    "prometheus-client>=0.21",
     "python-dotenv>=1.0",
+    "numpy>=2.0",
+    "uuid6>=2024.7",
+    "typer>=0.15",
 ]
 
 [tool.uv.sources]
 zinc-schemas = { workspace = true }
+zinc-native = { workspace = true }
 
 [project.scripts]
 tb-snapshot = "snapshot_packager.cli:app"

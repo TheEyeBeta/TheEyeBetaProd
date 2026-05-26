@@ -1,0 +1,75 @@
+{#-
+  "Recent runs" right-pane tab body.
+
+  Context:
+   * ``agent``        — the selected agent.
+   * ``runs``         — list of :class:`AgentRunRow`.
+   * ``runs_limit``   — page size used in the SQL query.
+-#}
+<div data-test-id="agent-runs-panel">
+  <p class="mb-2 text-xs text-slate-500">
+    Showing {{ runs | length }} of last {{ runs_limit }} runs.
+  </p>
+  {% if runs %}
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
+        <thead class="bg-slate-50 dark:bg-slate-950">
+          <tr class="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <th scope="col" class="px-3 py-2">Started (UTC)</th>
+            <th scope="col" class="px-3 py-2">Status</th>
+            <th scope="col" class="px-3 py-2">Triggered by</th>
+            <th scope="col" class="px-3 py-2">Duration</th>
+            <th scope="col" class="px-3 py-2 text-right">Tokens in/out</th>
+            <th scope="col" class="px-3 py-2 text-right">Cost $</th>
+            <th scope="col" class="px-3 py-2">Run id</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 text-sm dark:divide-slate-800">
+          {% for run in runs %}
+            {% set sev = "low" if run.status == "succeeded"
+                          else "high" if run.status == "failed"
+                          else "medium" %}
+            <tr data-run-id="{{ run.id }}" data-status="{{ run.status }}">
+              <td class="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-700 dark:text-slate-300">
+                {{ run.started_at.strftime("%Y-%m-%d %H:%M:%S") }}
+              </td>
+              <td class="px-3 py-2">
+                <span class="severity-badge severity-{{ sev }}">{{ run.status }}</span>
+              </td>
+              <td class="px-3 py-2 font-mono text-xs">{{ run.triggered_by }}</td>
+              <td class="px-3 py-2 font-mono text-xs">
+                {% if run.ended_at %}
+                  {{ ((run.ended_at - run.started_at).total_seconds()) | round(2) }}s
+                {% else %}
+                  <span class="text-slate-400">running…</span>
+                {% endif %}
+              </td>
+              <td class="px-3 py-2 text-right font-mono text-xs tabular-nums">
+                {{ run.total_input_tokens or 0 }} / {{ run.total_output_tokens or 0 }}
+              </td>
+              <td class="px-3 py-2 text-right font-mono text-xs tabular-nums">
+                {% if run.total_cost_usd is not none %}
+                  {{ "%.4f" | format(run.total_cost_usd|float) }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td class="px-3 py-2 font-mono text-[0.7rem] text-slate-500">{{ run.id }}</td>
+            </tr>
+            {% if run.error %}
+              <tr class="bg-rose-50/60 dark:bg-rose-950/40">
+                <td colspan="7" class="px-3 py-1 text-xs text-rose-700 dark:text-rose-300">
+                  <strong class="font-semibold">error:</strong> {{ run.error }}
+                </td>
+              </tr>
+            {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="rounded-md border border-dashed border-slate-300 px-3 py-6 text-center text-sm text-slate-500 dark:border-slate-700">
+      No runs recorded for this agent yet.
+    </p>
+  {% endif %}
+</div>

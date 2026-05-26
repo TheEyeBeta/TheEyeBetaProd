@@ -25,7 +25,6 @@ from pathlib import Path
 import psycopg
 import pytest
 from dotenv import load_dotenv
-
 from zinc_schemas.snapshot import Snapshot
 
 load_dotenv(dotenv_path=str(Path(__file__).parents[3] / ".env"))

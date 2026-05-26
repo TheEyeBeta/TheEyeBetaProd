@@ -1,0 +1,83 @@
+{#-
+  4-card stat grid. Rendered both as part of dashboard.html and as the htmx
+  polling fragment (GET /admin/fragments/stats).
+-#}
+<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-test-id="stat-cards">
+  {#- Pending orders — green when zero, red when there's a backlog. -#}
+  <article
+    class="rounded-lg border bg-white p-4 shadow-sm dark:bg-slate-900
+           {% if stats.pending_orders_count == 0 %}
+             border-emerald-300 dark:border-emerald-800
+           {% elif stats.pending_orders_count >= 10 %}
+             border-rose-300 dark:border-rose-800
+           {% else %}
+             border-amber-300 dark:border-amber-800
+           {% endif %}"
+    data-stat="pending-orders"
+  >
+    <div class="flex items-center justify-between">
+      <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Pending orders
+      </h3>
+      {% if stats.pending_orders_count == 0 %}
+        <span class="severity-badge severity-low">clear</span>
+      {% elif stats.pending_orders_count >= 10 %}
+        <span class="severity-badge severity-high">backlog</span>
+      {% else %}
+        <span class="severity-badge severity-medium">queue</span>
+      {% endif %}
+    </div>
+    <p class="mt-2 text-3xl font-semibold tabular-nums" data-stat-value="pending-orders">
+      {{ stats.pending_orders_count }}
+    </p>
+    <a
+      href="/admin/orders"
+      class="mt-2 inline-block text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+    >Review queue →</a>
+  </article>
+
+  {#- Active agents. -#}
+  <article
+    class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+    data-stat="active-agents"
+  >
+    <div class="flex items-center justify-between">
+      <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Active agents
+      </h3>
+      <span class="severity-badge {% if stats.active_agents_count > 0 %}severity-low{% else %}severity-medium{% endif %}">
+        {% if stats.active_agents_count > 0 %}online{% else %}idle{% endif %}
+      </span>
+    </div>
+    <p class="mt-2 text-3xl font-semibold tabular-nums" data-stat-value="active-agents">
+      {{ stats.active_agents_count }}
+    </p>
+    <a
+      href="/admin/agents"
+      class="mt-2 inline-block text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+    >Open registry →</a>
+  </article>
+
+  {#- Today's cost (LLM + vendor APIs). -#}
+  <article
+    class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+    data-stat="today-cost"
+  >
+    <div class="flex items-center justify-between">
+      <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Today's cost
+      </h3>
+      <span class="text-xs text-slate-400">{{ stats.today }}</span>
+    </div>
+    <p class="mt-2 text-3xl font-semibold tabular-nums" data-stat-value="today-cost">
+      ${{ "%.2f" | format(stats.today_cost_usd | float) }}
+    </p>
+    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+      LLM ${{ "%.2f" | format(stats.today_model_cost_usd | float) }} ·
+      API ${{ "%.2f" | format(stats.today_api_cost_usd | float) }}
+    </p>
+  </article>
+
+  {#- Audit verify status — last checkpoint signing timestamp. -#}
+  {% include "components/_audit_verify_card.html" %}
+</div>

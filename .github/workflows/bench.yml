@@ -1,0 +1,139 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cpp/**"
+      - "scripts/compare_benchmarks.py"
+      - "scripts/merge_benchmark_json.py"
+      - ".github/workflows/bench.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "cpp/**"
+      - "scripts/compare_benchmarks.py"
+      - "scripts/merge_benchmark_json.py"
+      - ".github/workflows/bench.yml"
+  schedule:
+    - cron: "0 3 * * *"
+
+concurrency:
+  group: bench-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  PRESET: linux-release
+  BASELINE_PATH: cpp/bench/baselines/linux-release.json
+  REGRESSION_THRESHOLD: "1.10"
+
+jobs:
+  bench:
+    name: C++ microbenchmarks
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: bench-ccache-${{ hashFiles('cpp/**') }}
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ libstdc++-12-dev pkg-config
+
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2/p
+          key: ubuntu-22.04-conan2-${{ hashFiles('cpp/conanfile.py') }}
+          restore-keys: ubuntu-22.04-conan2-
+
+      - name: Install Conan
+        run: |
+          pip install --quiet conan
+          conan profile detect --force
+
+      - name: Conan install and CMake build
+        working-directory: cpp
+        env:
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+        run: |
+          conan install . \
+            -of=../build/${{ env.PRESET }} \
+            --build=missing \
+            -s build_type=Release
+          cmake --preset ${{ env.PRESET }} \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --build --preset ${{ env.PRESET }} --parallel "$(nproc)"
+
+      - name: Run benchmarks (JSON output)
+        working-directory: build/${{ env.PRESET }}/cpp/bench
+        run: |
+          mkdir -p results
+          for bench in risk_bench ta_bench opt_bench bt_bench oms_bench; do
+            "./${bench}" \
+              --benchmark_min_time=0.1s \
+              --benchmark_repetitions=3 \
+              --benchmark_report_aggregates_only=true \
+              --benchmark_format=json \
+              --benchmark_out="results/${bench}.json"
+          done
+
+      - name: Merge benchmark JSON
+        run: |
+          python scripts/merge_benchmark_json.py \
+            bench-results/merged.json \
+            build/${{ env.PRESET }}/cpp/bench/results/*.json
+
+      - name: Fetch baseline from main (PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin main --depth=1
+          git show "origin/main:${{ env.BASELINE_PATH }}" > baseline.json 2>/dev/null || \
+            cp "${{ env.BASELINE_PATH }}" baseline.json
+
+      - name: Compare against baseline (PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          python scripts/compare_benchmarks.py \
+            baseline.json \
+            bench-results/merged.json \
+            --threshold "${REGRESSION_THRESHOLD}"
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results-${{ github.sha }}
+          path: |
+            bench-results/merged.json
+            build/${{ env.PRESET }}/cpp/bench/results/*.json
+          if-no-files-found: error
+
+      - name: Update baseline on main
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          cp bench-results/merged.json "${BASELINE_PATH}"
+
+      - name: Commit baseline (main)
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore(bench): refresh linux-release benchmark baseline"
+          file_pattern: cpp/bench/baselines/linux-release.json
+          skip_dirty_check: true

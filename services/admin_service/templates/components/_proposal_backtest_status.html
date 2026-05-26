@@ -1,0 +1,65 @@
+{#-
+  Validation-backtest status fragment polled by the approved card.
+
+  Context:
+   * ``proposal_id`` — id of the parent proposal (string).
+   * ``backtest_id`` — id of the validation backtest_run or ``None``.
+   * ``status``      — backtest_run.status or ``None``.
+   * ``polling``     — boolean; True while we want to keep polling, False
+                       on terminal states (completed / failed / cancelled /
+                       missing run).
+
+  The fragment is the *inner* of the parent ``<section data-validation-backtest>``,
+  so we must keep the polling trigger on the parent (the parent was already
+  configured with ``hx-trigger="load, every 5s"`` in ``_proposal_card.html``).
+  When ``polling`` flips to False, we set ``hx-disable`` via the JS hook so the
+  parent stops polling.
+-#}
+<div
+  data-test-id="proposal-backtest-status"
+  data-backtest-id="{{ backtest_id or '' }}"
+  data-status="{{ status or 'unknown' }}"
+  data-polling="{{ 'true' if polling else 'false' }}"
+  class="flex flex-wrap items-center justify-between gap-2"
+>
+  <div class="flex items-center gap-2 text-xs">
+    <span class="font-medium uppercase tracking-wide text-slate-500">Validation backtest</span>
+    {% if backtest_id %}
+      <a
+        href="/admin/backtest/{{ backtest_id }}/results"
+        class="font-mono text-xs text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-300"
+      >{{ backtest_id }}</a>
+    {% else %}
+      <span class="italic text-slate-500">none queued</span>
+    {% endif %}
+  </div>
+  <div class="flex items-center gap-2">
+    {% if status == "completed" %}
+      <span class="severity-badge severity-low">completed</span>
+    {% elif status == "running" %}
+      <span class="severity-badge severity-medium">running</span>
+      <span aria-hidden="true" class="animate-pulse text-xs text-slate-500">●</span>
+    {% elif status == "failed" %}
+      <span class="severity-badge severity-high">failed</span>
+    {% elif status == "cancelled" %}
+      <span class="severity-badge severity-medium">cancelled</span>
+    {% elif status %}
+      <span class="severity-badge severity-medium">{{ status }}</span>
+    {% else %}
+      <span class="text-xs text-slate-500">—</span>
+    {% endif %}
+  </div>
+  {% if not polling %}
+    {#- Detach the parent's polling once we hit a terminal state. -#}
+    <script>
+      (function () {
+        const node = document.currentScript.closest('[data-validation-backtest]');
+        if (node && window.htmx) {
+          window.htmx.trigger(node, 'htmx:abort');
+          node.removeAttribute('hx-trigger');
+          node.setAttribute('data-polling', 'false');
+        }
+      })();
+    </script>
+  {% endif %}
+</div>

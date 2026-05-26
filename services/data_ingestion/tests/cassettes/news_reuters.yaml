@@ -1,0 +1,27 @@
+interactions:
+  - request:
+      method: GET
+      uri: https://feeds.reuters.com/reuters/businessNews
+      body: ""
+      headers: {}
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        Content-Type:
+          - application/rss+xml
+      body:
+        string: |
+          <?xml version="1.0" encoding="UTF-8"?>
+          <rss version="2.0">
+            <channel>
+              <title>Reuters Business</title>
+              <item>
+                <title>Sample headline</title>
+                <link>https://www.reuters.com/sample-article</link>
+                <pubDate>Wed, 15 Jan 2025 12:00:00 GMT</pubDate>
+                <description>Sample summary</description>
+              </item>
+            </channel>
+          </rss>

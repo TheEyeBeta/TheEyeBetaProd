@@ -38,3 +38,19 @@ datasources:
         timeShiftEnabled: true
         spanStartTimeShift: "1h"
         spanEndTimeShift:   "1h"
+
+  # Local dev: password must match POSTGRES_PASSWORD in .env (default changeme_postgres).
+  - name: PostgreSQL
+    type: postgres
+    uid: postgres
+    access: proxy
+    url: postgres:5432
+    user: theeyebeta
+    database: theeyebeta
+    isDefault: false
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1700
+      timescaledb: true
+    secureJsonData:
+      password: changeme_postgres

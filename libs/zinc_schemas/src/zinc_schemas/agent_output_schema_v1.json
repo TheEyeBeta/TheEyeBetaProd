@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentOutputV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["market_stance", "regime_call", "decisions"],
+  "properties": {
+    "market_stance": {
+      "type": "string",
+      "enum": ["bullish", "bearish", "neutral"]
+    },
+    "regime_call": {
+      "type": "string",
+      "enum": ["trending", "ranging", "volatile", "calm"]
+    },
+    "decisions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "instrument_symbol",
+          "decision",
+          "confidence",
+          "horizon_days",
+          "key_drivers",
+          "rationale"
+        ],
+        "properties": {
+          "instrument_symbol": { "type": "string", "minLength": 1 },
+          "decision": {
+            "type": "string",
+            "enum": ["BUY", "SELL", "HOLD", "REDUCE", "EXIT", "OBSERVE"]
+          },
+          "confidence": { "type": "number" },
+          "horizon_days": { "type": "integer", "minimum": 5, "maximum": 30 },
+          "key_drivers": {
+            "type": "array",
+            "maxItems": 5,
+            "items": { "type": "string" }
+          },
+          "rationale": { "type": "string", "maxLength": 1500 },
+          "evidence_refs": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^(technicals|prices|macro)\\.[A-Za-z0-9_.]+$" }
+          }
+        }
+      }
+    }
+  }
+}

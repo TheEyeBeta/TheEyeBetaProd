@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}SQL{% endblock %}
+
+{% block head_extra %}
+  {#-
+    CodeMirror 5 + SQL mode (CDN). v5 ships an SQL highlight + paren-matcher
+    out of the box, no build step needed. Theme matches the dark mode used by
+    the rest of the admin shell.
+  -#}
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"
+    integrity="sha512-uf06llspW44/LZpHzHT6qBOIVODjWtv4MxCricRxkzvopAlSWnTf6hpZTFxuuZcuNE9CBQhqE0Seu1CoRk84nQ=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  >
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css"
+    integrity="sha512-WjE9jiHshapH/9rA2yHMfJcMVi9+UeJWFsAsKaJOguEYUfFI2VfaP5JNX5LRpFx9rgkpFL5b6OhBM6sZ4cN5OQ=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  >
+  <style>
+    .CodeMirror {
+      height: 22rem;
+      border-radius: 0.5rem;
+      border: 1px solid rgb(203 213 225);
+      font-size: 0.875rem;
+    }
+    .dark .CodeMirror { border-color: rgb(30 41 59); }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <section class="space-y-4" data-page="sql" data-confirm-phrase="I UNDERSTAND">
+    <header class="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-semibold tracking-tight">SQL playground</h1>
+        <p class="text-sm text-slate-600 dark:text-slate-400">
+          Read-only SELECT or write statement against the admin DB.
+          Reads run via <code class="rounded bg-slate-100 px-1 dark:bg-slate-800">/admin/sql/query</code>;
+          writes require typing the confirmation phrase and emit an
+          <code class="rounded bg-slate-100 px-1 dark:bg-slate-800">execute.sql</code>
+          audit row.
+        </p>
+      </div>
+      <dl class="flex flex-wrap items-center gap-4 text-xs text-slate-500">
+        <div>
+          <dt class="font-medium uppercase tracking-wide">Row cap</dt>
+          <dd class="tabular-nums text-sm font-semibold text-slate-900 dark:text-slate-100">
+            {{ query_max_rows }}
+          </dd>
+        </div>
+        <div>
+          <dt class="font-medium uppercase tracking-wide">Timeout</dt>
+          <dd class="tabular-nums text-sm font-semibold text-slate-900 dark:text-slate-100">
+            {{ query_timeout_seconds }} s
+          </dd>
+        </div>
+      </dl>
+    </header>
+
+    <form
+      id="sql-form"
+      class="space-y-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+      hx-post="/admin/sql/fragments/query"
+      hx-target="#sql-result"
+      hx-swap="innerHTML"
+      hx-indicator="#sql-spinner"
+    >
+      <fieldset class="flex flex-wrap items-center gap-4">
+        <legend class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Mode
+        </legend>
+        <label class="flex items-center gap-2 text-sm">
+          <input
+            type="radio"
+            name="mode"
+            value="read"
+            checked
+            data-test-id="sql-mode-read"
+            class="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+          >
+          Read only <span class="severity-badge severity-low">SELECT</span>
+        </label>
+        <label class="flex items-center gap-2 text-sm">
+          <input
+            type="radio"
+            name="mode"
+            value="write"
+            data-test-id="sql-mode-write"
+            class="h-4 w-4 text-rose-600 focus:ring-rose-500"
+          >
+          Write <span class="severity-badge severity-high">requires confirmation</span>
+        </label>
+      </fieldset>
+
+      <div>
+        <label for="sql-statement" class="sr-only">SQL statement</label>
+        <textarea
+          id="sql-statement"
+          name="statement"
+          rows="14"
+          required
+          placeholder="-- SELECT id, status FROM theeyebeta.orders WHERE status = $1 LIMIT 10;"
+          class="block w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+        ></textarea>
+      </div>
+
+      <details class="text-sm">
+        <summary class="cursor-pointer select-none text-slate-600 dark:text-slate-400">
+          Parameters (optional JSON array — e.g. <code>["pending", 5]</code>)
+        </summary>
+        <textarea
+          id="sql-parameters"
+          name="parameters"
+          rows="2"
+          placeholder='[]'
+          class="mt-2 block w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+        ></textarea>
+      </details>
+
+      <div class="flex items-center justify-between gap-3">
+        <button
+          id="sql-run"
+          type="submit"
+          data-test-id="sql-run"
+          class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          Run
+          <span id="sql-spinner" class="htmx-indicator" aria-hidden="true">…</span>
+        </button>
+        <p class="text-xs text-slate-500">
+          Cmd/Ctrl+Enter runs the current statement.
+        </p>
+      </div>
+    </form>
+
+    <section
+      id="sql-result"
+      data-test-id="sql-result"
+      aria-live="polite"
+      class="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900"
+    >
+      Results will appear here after you run a statement.
+    </section>
+  </section>
+{% endblock %}
+
+{% block body_extra %}
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"
+    integrity="sha512-8RnEqURPUc5aqFEN04aQEiPlSAdE0jlFS/9iGgUyNtwFnSKCXhmB6ZTNl7LnDtDWKabJIASzXrzD0K+LYexU9g=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  ></script>
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"
+    integrity="sha512-JCt7Gj4dpcDXrgPS+f9bUw8DLPYM1RouHQzC4VsLsZNXf6sa2hI3yYxNCwLxJWJ2hLnRYvWoMRk/AveZodPjyA=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  ></script>
+  <script>
+    (function () {
+      "use strict";
+
+      const root = document.querySelector('[data-page="sql"]');
+      if (!root) return;
+
+      const confirmPhrase = root.dataset.confirmPhrase || "I UNDERSTAND";
+      const form = document.getElementById("sql-form");
+      const textarea = document.getElementById("sql-statement");
+      const paramsTextarea = document.getElementById("sql-parameters");
+      const resultPane = document.getElementById("sql-result");
+
+      // ── CodeMirror replaces the plain textarea but keeps it in the DOM so
+      //    htmx form serialisation works after we call ``editor.save()``.
+      let editor = null;
+      if (window.CodeMirror && textarea) {
+        const isDark = document.documentElement.classList.contains("dark");
+        editor = window.CodeMirror.fromTextArea(textarea, {
+          mode: "text/x-pgsql",
+          theme: isDark ? "material-darker" : "default",
+          lineNumbers: true,
+          matchBrackets: true,
+          lineWrapping: true,
+          extraKeys: {
+            "Cmd-Enter": () => form.requestSubmit(),
+            "Ctrl-Enter": () => form.requestSubmit(),
+          },
+        });
+        // Keep CM and the textarea in sync with theme toggles.
+        const observer = new MutationObserver(() => {
+          const dark = document.documentElement.classList.contains("dark");
+          editor.setOption("theme", dark ? "material-darker" : "default");
+        });
+        observer.observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ["class"],
+        });
+      }
+
+      function currentMode() {
+        const radio = form.querySelector('input[name="mode"]:checked');
+        return radio ? radio.value : "read";
+      }
+
+      // Before htmx serialises the form, copy CM state into the textarea so
+      // ``statement`` in the request body is up to date.
+      document.body.addEventListener("htmx:configRequest", (evt) => {
+        if (editor) editor.save();
+        // Drop ``mode`` from the body — the server uses the route, not the field.
+        if (evt.detail && evt.detail.parameters && "mode" in evt.detail.parameters) {
+          delete evt.detail.parameters.mode;
+        }
+      });
+
+      // Intercept submit so write mode goes through the confirm modal.
+      form.addEventListener("submit", function (evt) {
+        if (currentMode() !== "write") {
+          form.setAttribute("hx-post", "/admin/sql/fragments/query");
+          return; // htmx handles the rest.
+        }
+
+        evt.preventDefault();
+        evt.stopPropagation();
+        if (editor) editor.save();
+
+        // Fetch the modal — it contains its own form pre-filled with the
+        // statement, parameters, and a fresh UUIDv7 idempotency key.
+        if (window.htmx) {
+          window.htmx.ajax("GET", "/admin/sql/fragments/confirm", {
+            target: "#modal",
+            swap: "innerHTML",
+          }).then(() => {
+            const stmtInput = document.querySelector("#sql-confirm-statement");
+            const paramsInput = document.querySelector("#sql-confirm-parameters");
+            if (stmtInput) stmtInput.value = textarea.value;
+            if (paramsInput) paramsInput.value = paramsTextarea.value;
+            const focusInput = document.querySelector("#sql-confirm-phrase");
+            if (focusInput) focusInput.focus();
+          });
+        }
+      });
+
+      // Provide visual feedback if the user toggles into write mode.
+      form.querySelectorAll('input[name="mode"]').forEach((radio) => {
+        radio.addEventListener("change", () => {
+          const submit = document.getElementById("sql-run");
+          if (currentMode() === "write") {
+            submit.classList.remove("bg-indigo-600", "hover:bg-indigo-500", "focus:ring-indigo-500");
+            submit.classList.add("bg-rose-600", "hover:bg-rose-500", "focus:ring-rose-500");
+            submit.firstChild.textContent = "Run (will require confirmation)";
+          } else {
+            submit.classList.add("bg-indigo-600", "hover:bg-indigo-500", "focus:ring-indigo-500");
+            submit.classList.remove("bg-rose-600", "hover:bg-rose-500", "focus:ring-rose-500");
+            submit.firstChild.textContent = "Run";
+          }
+        });
+      });
+
+      // Expose the confirm phrase for the modal's gating logic.
+      window.adminSql = { confirmPhrase: confirmPhrase, editor: () => editor };
+    })();
+  </script>
+{% endblock %}

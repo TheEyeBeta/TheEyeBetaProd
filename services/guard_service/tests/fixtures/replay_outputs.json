@@ -1,0 +1,42 @@
+[
+  {
+    "agent_id": "macro-lead",
+    "raw_output": "{\"market_stance\":\"neutral\",\"regime_call\":\"ranging\",\"decisions\":[{\"instrument_symbol\":\"AAPL\",\"decision\":\"HOLD\",\"confidence\":0.65,\"horizon_days\":10,\"key_drivers\":[\"macro.us.dgs10 stable\",\"technicals.AAPL.rsi14 neutral\"],\"rationale\":\"technicals.AAPL.rsi14 at 55; macro.us.dgs10 at 4.25 implies range-bound conditions.\"}]}",
+    "valid_symbols": ["AAPL"],
+    "snapshot": {
+      "market": "US",
+      "universe": [{"symbol": "AAPL", "instrument_id": 1}],
+      "technicals": {"AAPL": {"rsi14": 55.0}},
+      "prices": {"AAPL": {"close": 105.0}},
+      "macro": {"us.dgs10": 4.25}
+    },
+    "expected_decisions": [
+      {
+        "instrument_symbol": "AAPL",
+        "decision": "HOLD",
+        "confidence": 0.65,
+        "horizon_days": 10
+      }
+    ]
+  },
+  {
+    "agent_id": "macro-lead",
+    "raw_output": "{\"market_stance\":\"bearish\",\"regime_call\":\"volatile\",\"decisions\":[{\"instrument_symbol\":\"AAPL\",\"decision\":\"REDUCE\",\"confidence\":0.72,\"horizon_days\":15,\"key_drivers\":[\"technicals.AAPL.rsi14 elevated\",\"macro.us.dgs10 rising\"],\"rationale\":\"technicals.AAPL.rsi14 above 60; macro.us.dgs10 at 4.5 signals tighter conditions.\"}]}",
+    "valid_symbols": ["AAPL"],
+    "snapshot": {
+      "market": "US",
+      "universe": [{"symbol": "AAPL", "instrument_id": 1}],
+      "technicals": {"AAPL": {"rsi14": 62.0}},
+      "prices": {"AAPL": {"close": 108.0}},
+      "macro": {"us.dgs10": 4.5}
+    },
+    "expected_decisions": [
+      {
+        "instrument_symbol": "AAPL",
+        "decision": "REDUCE",
+        "confidence": 0.72,
+        "horizon_days": 15
+      }
+    ]
+  }
+]

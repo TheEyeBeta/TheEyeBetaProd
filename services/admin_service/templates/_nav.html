@@ -1,0 +1,55 @@
+<nav
+  id="admin-nav"
+  class="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90"
+  aria-label="Primary"
+>
+  <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+    <a
+      href="/admin/"
+      class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-white"
+    >
+      <span
+        aria-hidden="true"
+        class="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500"
+      ></span>
+      theeyebeta admin
+    </a>
+
+    <ul class="hidden items-center gap-1 md:flex" role="menubar">
+      {% for item in nav_items %}
+        <li role="none">
+          <a
+            href="{{ item.href }}"
+            role="menuitem"
+            data-nav-key="{{ item.key }}"
+            class="rounded-md px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white
+                   {% if active_nav == item.key %}bg-slate-900 text-white hover:bg-slate-900 dark:bg-white dark:text-slate-900 dark:hover:bg-white{% endif %}"
+            {% if active_nav == item.key %}aria-current="page"{% endif %}
+          >{{ item.label }}</a>
+        </li>
+      {% endfor %}
+    </ul>
+
+    <div class="flex items-center gap-2">
+      <button
+        type="button"
+        id="theme-toggle"
+        aria-label="Toggle dark mode"
+        class="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+      >
+        <span aria-hidden="true" data-theme-icon-light>☀</span>
+        <span aria-hidden="true" data-theme-icon-dark class="hidden">☾</span>
+        <span class="sr-only">Toggle theme</span>
+      </button>
+
+      <button
+        type="button"
+        id="logout-btn"
+        hx-post="/admin/auth/logout"
+        hx-swap="none"
+        hx-on::after-request="window.location.assign('/admin/login')"
+        class="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-500"
+      >Logout</button>
+    </div>
+  </div>
+</nav>

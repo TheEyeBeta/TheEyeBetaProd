@@ -1,0 +1,2 @@
+# Google Benchmark baselines (large JSON time series).
+cpp/bench/baselines/*.json filter=lfs diff=lfs merge=lfs -text

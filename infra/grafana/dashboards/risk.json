@@ -1,0 +1,162 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "postgres", "uid": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "title": "VaR 95% over time",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "postgres" },
+          "format": "time_series",
+          "rawSql": "SELECT\n  ts AS time,\n  var_95 AS \"VaR 95%\"\nFROM theeyebeta.risk_metrics\nWHERE portfolio_id = '$portfolio_id'::uuid\n  AND $__timeFilter(ts)\nORDER BY ts",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "title": "HHI concentration over time",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "postgres" },
+          "format": "time_series",
+          "rawSql": "SELECT\n  ts AS time,\n  concentration_hhi AS \"HHI\"\nFROM theeyebeta.risk_metrics\nWHERE portfolio_id = '$portfolio_id'::uuid\n  AND $__timeFilter(ts)\nORDER BY ts",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "postgres" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right" },
+        "stacking": { "mode": "normal" }
+      },
+      "title": "Breach count by reason",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "postgres" },
+          "format": "time_series",
+          "rawSql": "SELECT\n  date_trunc('hour', ts) AS time,\n  reason AS metric,\n  COUNT(*)::double precision AS value\nFROM theeyebeta.risk_metrics rm,\n  LATERAL jsonb_array_elements_text(\n    COALESCE(rm.raw->'validation'->'failed_checks', '[]'::jsonb)\n  ) AS reason\nWHERE rm.portfolio_id = '$portfolio_id'::uuid\n  AND $__timeFilter(rm.ts)\n  AND COALESCE(rm.raw->'validation'->>'outcome', '') IN ('BLOCK', 'WARN')\nGROUP BY 1, 2\nORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "postgres" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": { "color": "green", "index": 0, "text": "OK" },
+                "1": { "color": "red", "index": 1, "text": "TRIPPED" }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "value_and_name" },
+      "title": "Drawdown circuit breaker",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "postgres" },
+          "format": "table",
+          "rawSql": "SELECT\n  max_drawdown AS \"30d drawdown\",\n  CASE\n    WHEN max_drawdown > COALESCE(\n      (SELECT (mandate->>'max_drawdown_pct')::numeric FROM theeyebeta.portfolios WHERE id = '$portfolio_id'::uuid),\n      0.15\n    ) THEN 1\n    ELSE 0\n  END AS \"circuit tripped\"\nFROM theeyebeta.risk_metrics\nWHERE portfolio_id = '$portfolio_id'::uuid\nORDER BY ts DESC\nLIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "30d drawdown": true },
+            "renameByName": { "circuit tripped": "Status" }
+          }
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["theeyebeta", "risk-service"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "datasource": { "type": "postgres", "uid": "postgres" },
+        "definition": "SELECT id::text AS __value, name AS __text FROM theeyebeta.portfolios ORDER BY name",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Portfolio",
+        "multi": false,
+        "name": "portfolio_id",
+        "options": [],
+        "query": "SELECT id::text AS __value, name AS __text FROM theeyebeta.portfolios ORDER BY name",
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-7d", "to": "now" },
+  "title": "Risk Service",
+  "uid": "theeyebeta-risk",
+  "version": 1
+}

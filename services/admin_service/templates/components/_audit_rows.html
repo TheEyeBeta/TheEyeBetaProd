@@ -1,0 +1,47 @@
+{#-
+  Audit-log table rows — also returned standalone for pagination append
+  via ``hx-target="#audit-rows" hx-swap="beforeend"``.
+-#}
+{% for row in rows %}
+  <tr
+    id="audit-row-{{ row.id }}"
+    data-audit-id="{{ row.id }}"
+    data-action="{{ row.action }}"
+  >
+    <td class="whitespace-nowrap px-4 py-2 font-mono text-xs text-slate-700 dark:text-slate-300">
+      {{ row.ts.strftime("%Y-%m-%d %H:%M:%S") }}
+    </td>
+    <td class="px-4 py-2 font-mono text-xs">{{ row.actor }}</td>
+    <td class="px-4 py-2">
+      <span
+        class="severity-badge severity-{{ row.severity }}"
+        title="severity: {{ row.severity }}"
+      >{{ row.action }}</span>
+    </td>
+    <td class="px-4 py-2 font-mono text-xs">
+      <span class="text-slate-400">{{ row.entity_type }}</span>
+      <span class="ml-1">{{ row.entity_id }}</span>
+    </td>
+    <td class="max-w-md px-4 py-2 align-top">
+      <code class="block break-all text-xs text-slate-600 dark:text-slate-300">{{ row.payload_snippet }}</code>
+      {% if row.payload_truncated %}
+        <details class="mt-1 text-xs">
+          <summary class="cursor-pointer font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+            Show full payload
+          </summary>
+          <pre class="mt-1 max-h-80 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-50 p-2 text-[0.7rem] dark:bg-slate-950">{{ row.payload_pretty }}</pre>
+        </details>
+      {% endif %}
+    </td>
+    <td class="px-4 py-2 text-right font-mono text-xs text-slate-400 tabular-nums">{{ row.id }}</td>
+  </tr>
+{% else %}
+  <tr data-empty="true">
+    <td
+      colspan="6"
+      class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400"
+    >
+      No matching audit rows.
+    </td>
+  </tr>
+{% endfor %}

@@ -1,0 +1,20 @@
+# RSS feeds polled by the news adapter (feedparser + httpx).
+feeds:
+  - name: reuters
+    url: https://feeds.reuters.com/reuters/businessNews
+    language: en
+  - name: bloomberg
+    url: https://feeds.bloomberg.com/markets/news.rss
+    language: en
+  - name: ft
+    url: https://www.ft.com/?format=rss
+    language: en
+  - name: nikkei
+    url: https://asia.nikkei.com/rss/feed/nar
+    language: en
+  - name: scmp
+    url: https://www.scmp.com/rss/91/feed
+    language: en
+  - name: yicai
+    url: https://www.yicai.com/rss/
+    language: zh

@@ -1,0 +1,192 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "title": "LLM cost daily",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT gs::timestamptz AS time, 'daily' AS metric, COALESCE(SUM(m.cost_usd), 0)::double precision AS value FROM generate_series(date_trunc('day', $__timeFrom()::timestamptz), date_trunc('day', $__timeTo()::timestamptz), interval '1 day') gs LEFT JOIN theeyebeta.model_runs m ON date_trunc('day', m.created_at) = gs GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "title": "Cost by agent",
+      "type": "barchart",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "WITH agent_costs AS (SELECT COALESCE(a.agent_id, 'unlinked') AS agent, SUM(m.cost_usd)::double precision AS cost_usd FROM theeyebeta.model_runs m LEFT JOIN theeyebeta.agent_runs a ON a.id = m.run_id WHERE $__timeFilter(m.created_at) GROUP BY 1) SELECT agent, cost_usd FROM agent_costs UNION ALL SELECT 'none' AS agent, 0::double precision AS cost_usd WHERE NOT EXISTS (SELECT 1 FROM agent_costs) ORDER BY cost_usd DESC",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 7
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "title": "Cost by model",
+      "type": "barchart",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "WITH model_costs AS (SELECT model, SUM(cost_usd)::double precision AS cost_usd FROM theeyebeta.model_runs WHERE $__timeFilter(created_at) GROUP BY model) SELECT model, cost_usd FROM model_costs UNION ALL SELECT 'none' AS model, 0::double precision AS cost_usd WHERE NOT EXISTS (SELECT 1 FROM model_costs) ORDER BY cost_usd DESC",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 7
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "title": "Cumulative MTD",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "time_series",
+          "rawSql": "WITH days AS (SELECT generate_series(date_trunc('month', now())::date, current_date, interval '1 day')::date AS day), daily AS (SELECT created_at::date AS day, SUM(cost_usd) AS cost FROM theeyebeta.model_runs WHERE created_at >= date_trunc('month', now()) GROUP BY 1) SELECT day::timestamptz AS time, 'mtd' AS metric, SUM(COALESCE(cost,0)) OVER (ORDER BY day)::double precision AS value FROM days LEFT JOIN daily USING(day) ORDER BY day",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "theeyebeta",
+    "costs"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "title": "TheEyeBeta Costs",
+  "uid": "theeyebeta-costs",
+  "version": 1
+}

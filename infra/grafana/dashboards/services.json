@@ -1,0 +1,380 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "row",
+      "title": "$service",
+      "id": 1,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "repeat": "service"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "title": "Request rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{service=\"$service\"}[5m])) or vector(0)",
+          "refId": "A",
+          "legendFormat": "req/s"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "title": "Error rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{service=\"$service\",status=~\"5..\"}[5m])) or vector(0)",
+          "refId": "A",
+          "legendFormat": "5xx/s"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "title": "Latency p50/p95/p99",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{service=\"$service\"}[5m])) by (le)) or vector(0)",
+          "refId": "A",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service=\"$service\"}[5m])) by (le)) or vector(0)",
+          "refId": "B",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service=\"$service\"}[5m])) by (le)) or vector(0)",
+          "refId": "C",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "title": "Memory",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(process_resident_memory_bytes{service=\"$service\"}) or vector(0)",
+          "refId": "A",
+          "legendFormat": "rss"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cores",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "title": "CPU",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(process_cpu_seconds_total{service=\"$service\"}[5m])) or vector(0)",
+          "refId": "A",
+          "legendFormat": "cpu/s"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "theeyebeta",
+    "services"
+  ],
+  "templating": {
+    "list": [
+      {
+        "type": "custom",
+        "name": "service",
+        "label": "Service",
+        "query": "admin-service,agent-runtime,api,audit-service,backtest-engine,broker-adapter-alpaca,compliance-service,data-ingestion,guard-service,llm-gateway,master-orchestrator,oms,risk-service,rnd-agent,snapshot-packager,worker",
+        "current": {
+          "text": [
+            "admin-service",
+            "agent-runtime",
+            "api",
+            "audit-service",
+            "backtest-engine",
+            "broker-adapter-alpaca",
+            "compliance-service",
+            "data-ingestion",
+            "guard-service",
+            "llm-gateway",
+            "master-orchestrator",
+            "oms",
+            "risk-service",
+            "rnd-agent",
+            "snapshot-packager",
+            "worker"
+          ],
+          "value": [
+            "admin-service",
+            "agent-runtime",
+            "api",
+            "audit-service",
+            "backtest-engine",
+            "broker-adapter-alpaca",
+            "compliance-service",
+            "data-ingestion",
+            "guard-service",
+            "llm-gateway",
+            "master-orchestrator",
+            "oms",
+            "risk-service",
+            "rnd-agent",
+            "snapshot-packager",
+            "worker"
+          ]
+        },
+        "options": [
+          {
+            "text": "admin-service",
+            "value": "admin-service",
+            "selected": true
+          },
+          {
+            "text": "agent-runtime",
+            "value": "agent-runtime",
+            "selected": true
+          },
+          {
+            "text": "api",
+            "value": "api",
+            "selected": true
+          },
+          {
+            "text": "audit-service",
+            "value": "audit-service",
+            "selected": true
+          },
+          {
+            "text": "backtest-engine",
+            "value": "backtest-engine",
+            "selected": true
+          },
+          {
+            "text": "broker-adapter-alpaca",
+            "value": "broker-adapter-alpaca",
+            "selected": true
+          },
+          {
+            "text": "compliance-service",
+            "value": "compliance-service",
+            "selected": true
+          },
+          {
+            "text": "data-ingestion",
+            "value": "data-ingestion",
+            "selected": true
+          },
+          {
+            "text": "guard-service",
+            "value": "guard-service",
+            "selected": true
+          },
+          {
+            "text": "llm-gateway",
+            "value": "llm-gateway",
+            "selected": true
+          },
+          {
+            "text": "master-orchestrator",
+            "value": "master-orchestrator",
+            "selected": true
+          },
+          {
+            "text": "oms",
+            "value": "oms",
+            "selected": true
+          },
+          {
+            "text": "risk-service",
+            "value": "risk-service",
+            "selected": true
+          },
+          {
+            "text": "rnd-agent",
+            "value": "rnd-agent",
+            "selected": true
+          },
+          {
+            "text": "snapshot-packager",
+            "value": "snapshot-packager",
+            "selected": true
+          },
+          {
+            "text": "worker",
+            "value": "worker",
+            "selected": true
+          }
+        ],
+        "hide": 0,
+        "multi": true,
+        "includeAll": false
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "title": "TheEyeBeta Services",
+  "uid": "theeyebeta-services",
+  "version": 1
+}

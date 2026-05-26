@@ -24,10 +24,24 @@ def version_cmd() -> None:
 
 @app.command("run")
 def run(
-    agent_id: str = typer.Argument(..., help="Agent id (e.g. technical-analyst)"),
-    market: str = typer.Option(..., help="MIC exchange code (e.g. XNAS)"),
-    target_date: str = typer.Option(..., "--date", help="Trade date YYYY-MM-DD"),
+    agent_id: str = typer.Argument(..., help="Agent id (e.g. macro-lead)"),
+    snapshot_id: str | None = typer.Option(
+        None,
+        "--snapshot-id",
+        help="Packaged snapshot UUID (preferred)",
+    ),
+    market: str | None = typer.Option(None, help="Market code when resolving by date"),
+    target_date: str | None = typer.Option(None, "--date", help="Trade date YYYY-MM-DD"),
 ) -> None:
-    """Run one agent against a market snapshot for the given date."""
-    out = asyncio.run(run_agent(agent_id, market, date.fromisoformat(target_date)))
+    """Run one agent against a packaged snapshot."""
+    if snapshot_id:
+        from uuid import UUID
+
+        from .runner import AgentRunner
+
+        out = asyncio.run(AgentRunner().run(agent_id, UUID(snapshot_id)))
+    else:
+        if not market or not target_date:
+            raise typer.BadParameter("Provide --snapshot-id or both --market and --date")
+        out = asyncio.run(run_agent(agent_id, market, date.fromisoformat(target_date)))
     typer.echo(json.dumps(out, indent=2))

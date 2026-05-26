@@ -1,0 +1,234 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "title": "Submission rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT gs AS time, 'submitted' AS metric, COUNT(o.id)::double precision AS value FROM generate_series($__timeFrom()::timestamptz, $__timeTo()::timestamptz, interval '15 minutes') gs LEFT JOIN theeyebeta.orders o ON o.submitted_at >= gs AND o.submitted_at < gs + interval '15 minutes' GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "title": "Fill rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT gs AS time, 'filled' AS metric, COUNT(o.id)::double precision AS value FROM generate_series($__timeFrom()::timestamptz, $__timeTo()::timestamptz, interval '15 minutes') gs LEFT JOIN theeyebeta.orders o ON o.status = 'filled' AND o.updated_at >= gs AND o.updated_at < gs + interval '15 minutes' GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "title": "Time to fill p50/p95",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "time_series",
+          "rawSql": "WITH fills AS (SELECT date_trunc('hour', updated_at) AS bucket, EXTRACT(EPOCH FROM (updated_at - submitted_at)) AS seconds FROM theeyebeta.orders WHERE status = 'filled' AND submitted_at IS NOT NULL AND $__timeFilter(updated_at)) SELECT gs AS time, 'p50' AS metric, COALESCE(percentile_cont(0.50) WITHIN GROUP (ORDER BY seconds), 0)::double precision AS value FROM generate_series($__timeFrom()::timestamptz, $__timeTo()::timestamptz, interval '1 hour') gs LEFT JOIN fills ON fills.bucket = gs GROUP BY 1 UNION ALL SELECT gs AS time, 'p95' AS metric, COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY seconds), 0)::double precision AS value FROM generate_series($__timeFrom()::timestamptz, $__timeTo()::timestamptz, interval '1 hour') gs LEFT JOIN fills ON fills.bucket = gs GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 7
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "title": "Reconciliation drift",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COALESCE(SUM(ABS(qty - filled_qty)), 0)::double precision AS reconciliation_drift FROM theeyebeta.orders WHERE status IN ('submitted','accepted','partially_filled')",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 7
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "title": "Pending approval",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*)::double precision AS pending_approval FROM theeyebeta.orders WHERE status = 'pending_approval'",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "theeyebeta",
+    "orders"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "title": "TheEyeBeta Orders",
+  "uid": "theeyebeta-orders",
+  "version": 1
+}

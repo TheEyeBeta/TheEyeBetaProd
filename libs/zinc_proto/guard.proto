@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package zinc.guard;
+
+option py_generic_services = true;
+
+// Constitution enforcement for agent LLM outputs.
+service Guard {
+  rpc ValidateAgentOutput(ValidateRequest) returns (ValidateResponse);
+}
+
+message ToolCall {
+  string id = 1;
+  string name = 2;
+  string arguments_json = 3;
+}
+
+message ValidateRequest {
+  string agent_id = 1;
+  string run_id = 2;
+  string raw_output = 3;
+  repeated ToolCall tool_calls = 4;
+  // Optional snapshot JSON for evidence/mandate checks (packaged v1 dict).
+  string snapshot_json = 5;
+  repeated string valid_symbols = 6;
+}
+
+message ValidateResponse {
+  Outcome outcome = 1;
+  repeated Violation violations = 2;
+  string sanitized_output = 3;
+}
+
+enum Outcome {
+  PASS = 0;
+  RETRY = 1;
+  ESCALATE = 2;
+  REJECT = 3;
+}
+
+message Violation {
+  string type = 1;
+  string severity = 2;
+  string detail = 3;
+}

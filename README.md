@@ -88,8 +88,8 @@ make install-hooks
 | `broker-adapter-alpaca` | 8010 | private | Alpaca Markets REST + WebSocket adapter |
 | `backtest-engine` | 8011 | private | Vectorised backtester; reads snapshots from MinIO |
 | `audit-service` | 8012 | private | Append-only audit trail; audit_log is write-once |
-| `rnd-agent` | 8013 | private | Research agent — generates proposals from historical data + LLM |
-| `admin-service` | 8080 | **public** (Tailscale) | Jinja2 + htmx admin dashboard |
+| `rnd-agent` | 7120 | 127.0.0.1 | Research agent — generates proposals from historical data + LLM |
+| `admin-service` | 7200 | 0.0.0.0 (Tailscale) | Jinja2 + htmx admin dashboard (JWT) |
 
 ### Infrastructure services
 
@@ -134,7 +134,7 @@ flowchart LR
     end
 
     subgraph OPS ["Operations"]
-        ADM[admin-service :8080]
+        ADM[admin-service :7200]
         CS[compliance-service]
         AS[audit-service]
     end

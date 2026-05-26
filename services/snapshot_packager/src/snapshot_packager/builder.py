@@ -1,179 +1,216 @@
-"""Snapshot builder: queries the DB and assembles a Snapshot object."""
+"""Snapshot builder: Postgres reads + zinc_native.ta batch technicals."""
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
-from uuid import uuid4
+import math
+from datetime import UTC, date, datetime, time, timedelta
+from typing import Any
 
-import polars as pl
-import psycopg
+import asyncpg
+import numpy as np
 import structlog
-
-from zinc_schemas.snapshot import (
-    SCHEMA_VERSION,
-    PriceBlock,
-    Snapshot,
-    TechnicalsBlock,
-    UniverseEntry,
+from uuid6 import uuid7
+from zinc_schemas.packaged_snapshot import (
+    PACKAGED_SCHEMA_VERSION,
+    PackagedNewsItem,
+    PackagedPriceBar,
+    PackagedSnapshotV1,
+    PackagedTechnicals,
+    PackagedUniverseEntry,
 )
 
-from .technicals import add_technicals
+from snapshot_packager.macro_keys import macro_key_for_series
+from snapshot_packager.markets import MARKET_EXCHANGE_CASE_SQL, VALID_MARKETS
+from snapshot_packager.technicals_native import snapshot_technicals_last
 
 log = structlog.get_logger()
 
-# Minimum bars to fetch per instrument — must exceed the longest indicator window
-# (SMA200 = 200 bars) with margin.
 WINDOW_BARS = 250
 
+_UNIVERSE_SQL = f"""
+SELECT i.id, i.symbol, i.sector, i.industry
+  FROM theeyebeta.instruments i
+  JOIN theeyebeta.exchanges e ON e.id = i.exchange_id
+ WHERE i.active
+   AND {MARKET_EXCHANGE_CASE_SQL} = $1
+ ORDER BY i.symbol
+"""  # noqa: S608
 
-async def build_snapshot(
-    conn: psycopg.AsyncConnection,  # type: ignore[type-arg]
-    market: str,
-    trade_date: date,
-) -> Snapshot:
-    """Build a complete Snapshot for one market on one trading date.
 
-    Fetches the last ``WINDOW_BARS`` price bars per instrument, computes
-    technical indicators over the full window, then extracts the as-of
-    (latest) row for each instrument into the snapshot.
+def _finite_or_none(value: float) -> float | None:
+    if value is None or not math.isfinite(value):
+        return None
+    return float(value)
 
-    Args:
-        conn: Open psycopg3 async connection (read-only access required).
-        market: MIC exchange code, e.g. ``"XNAS"``.
-        trade_date: The trading date to snapshot.
 
-    Returns:
-        A fully populated :class:`Snapshot` ready for serialisation.
+class SnapshotBuilder:
+    """Build agent-ready packaged snapshots for one market and trade date."""
 
-    Raises:
-        ValueError: If no active instruments are found for ``market``.
-    """
-    # ── 1. Universe ───────────────────────────────────────────────────────────
-    cur = await conn.execute(
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
+
+    async def build(self, market: str, trade_date: date) -> dict[str, Any]:
+        """Assemble a v1 packaged snapshot dict.
+
+        Args:
+            market: Aggregated market code (US, HK, JP, TW, CN).
+            trade_date: Trading calendar date.
+
+        Returns:
+            JSON-serialisable dict matching :class:`PackagedSnapshotV1`.
+
+        Raises:
+            ValueError: If ``market`` is unknown or the universe is empty.
         """
-        SELECT i.id, i.symbol, i.sector, i.industry
-          FROM theeyebeta.instruments i
-          JOIN theeyebeta.exchanges e ON e.id = i.exchange_id
-         WHERE e.code = %s AND i.active
-         ORDER BY i.symbol
-        """,
-        (market,),
-    )
-    universe_rows = await cur.fetchall()
-    if not universe_rows:
-        raise ValueError(f"No active instruments for market {market!r}")
+        market_upper = market.upper()
+        if market_upper not in VALID_MARKETS:
+            msg = f"Unknown market {market!r}"
+            raise ValueError(msg)
 
-    instrument_ids = [r[0] for r in universe_rows]
-    universe = [
-        UniverseEntry(
-            instrument_id=r[0],
-            symbol=r[1],
-            sector=r[2],
-            industry=r[3],
-        )
-        for r in universe_rows
-    ]
-    log.debug("universe_loaded", market=market, count=len(universe))
+        as_of = datetime.combine(trade_date, time(23, 59, 59), tzinfo=UTC)
+        day_end = as_of
+        news_start = as_of - timedelta(hours=24)
 
-    # ── 2. Price window (last WINDOW_BARS bars per instrument ≤ trade_date) ──
-    cur2 = await conn.execute(
-        """
-        WITH ranked AS (
-            SELECT instrument_id, ts, open, high, low, close, adj_close, volume,
-                   ROW_NUMBER() OVER (
-                       PARTITION BY instrument_id ORDER BY ts DESC
-                   ) AS rn
-              FROM theeyebeta.prices_daily
-             WHERE instrument_id = ANY(%s)
-               AND ts <= (%s::date + interval '23:59:59')
-        )
-        SELECT instrument_id, ts, open, high, low, close, adj_close, volume
-          FROM ranked
-         WHERE rn <= %s
-         ORDER BY instrument_id, ts
-        """,
-        (instrument_ids, trade_date, WINDOW_BARS),
-    )
-    bars_rows = await cur2.fetchall()
-    log.debug("bars_fetched", market=market, rows=len(bars_rows))
+        async with self._pool.acquire() as conn:
+            universe_rows = await conn.fetch(_UNIVERSE_SQL, market_upper)
+            if not universe_rows:
+                msg = f"No active instruments for market {market_upper!r}"
+                raise ValueError(msg)
 
-    bars = pl.DataFrame(
-        bars_rows,
-        schema=["instrument_id", "ts", "open", "high", "low", "close", "adj_close", "volume"],
-        orient="row",
-    ).with_columns(
-        [
-            pl.col("instrument_id").cast(pl.Int64),
-            pl.col("open").cast(pl.Float64),
-            pl.col("high").cast(pl.Float64),
-            pl.col("low").cast(pl.Float64),
-            pl.col("close").cast(pl.Float64),
-            pl.col("adj_close").cast(pl.Float64),
-            pl.col("volume").cast(pl.Int64),
+            instrument_ids = [int(row["id"]) for row in universe_rows]
+            bars_rows = await conn.fetch(
+                """
+                WITH ranked AS (
+                    SELECT instrument_id, ts, open, high, low, close, adj_close, volume,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY instrument_id ORDER BY ts DESC
+                           ) AS rn
+                      FROM theeyebeta.prices_daily
+                     WHERE instrument_id = ANY($1::bigint[])
+                       AND ts <= $2
+                )
+                SELECT instrument_id, ts, open, high, low, close, adj_close, volume
+                  FROM ranked
+                 WHERE rn <= $3
+                 ORDER BY instrument_id, ts
+                """,
+                instrument_ids,
+                day_end,
+                WINDOW_BARS,
+            )
+
+            macro_rows = await conn.fetch(
+                """
+                SELECT DISTINCT ON (series_code) series_code, value
+                  FROM theeyebeta.macro_indicators
+                 WHERE ts <= $1
+                 ORDER BY series_code, ts DESC
+                """,
+                day_end,
+            )
+
+            news_rows = await conn.fetch(
+                """
+                SELECT id, headline, tickers, published_at
+                  FROM theeyebeta.news_articles
+                 WHERE published_at >= $1
+                   AND published_at <= $2
+                 ORDER BY published_at DESC
+                 LIMIT 50
+                """,
+                news_start,
+                day_end,
+            )
+
+        universe = [
+            PackagedUniverseEntry(
+                symbol=row["symbol"],
+                instrument_id=int(row["id"]),
+                sector=row["sector"],
+                industry=row["industry"],
+            )
+            for row in universe_rows
         ]
-    )
+        id_to_symbol = {int(row["id"]): row["symbol"] for row in universe_rows}
 
-    # ── 3. Compute technicals over the full window ────────────────────────────
-    enriched = add_technicals(bars)
+        bars_by_id: dict[int, list[tuple]] = {inst_id: [] for inst_id in instrument_ids}
+        for row in bars_rows:
+            bars_by_id[int(row["instrument_id"])].append(row)
 
-    # ── 4. Extract last bar per instrument (the as-of row) ───────────────────
-    latest = (
-        enriched.sort(["instrument_id", "ts"])
-        .group_by("instrument_id", maintain_order=True)
-        .last()
-    )
+        ohlc_series: list[np.ndarray] = []
+        ordered_ids: list[int] = []
+        for inst_id in instrument_ids:
+            rows = bars_by_id.get(inst_id, [])
+            if not rows:
+                ohlc_series.append(np.empty((0, 4), dtype=np.float64))
+                ordered_ids.append(inst_id)
+                continue
+            ohlc = np.empty((len(rows), 4), dtype=np.float64)
+            for index, bar in enumerate(rows):
+                close = float(bar["adj_close"] if bar["adj_close"] is not None else bar["close"])
+                ohlc[index, 0] = float(bar["open"])
+                ohlc[index, 1] = float(bar["high"])
+                ohlc[index, 2] = float(bar["low"])
+                ohlc[index, 3] = close
+            ohlc_series.append(ohlc)
+            ordered_ids.append(inst_id)
 
-    # ── 5. Build prices + technicals dicts keyed by symbol ───────────────────
-    id_to_symbol = {r[0]: r[1] for r in universe_rows}
-    prices: dict[str, PriceBlock] = {}
-    technicals: dict[str, TechnicalsBlock] = {}
+        technicals_last = snapshot_technicals_last(ohlc_series)
 
-    for row in latest.iter_rows(named=True):
-        sym = id_to_symbol[row["instrument_id"]]
-        prices[sym] = PriceBlock(
-            open=row["open"],
-            high=row["high"],
-            low=row["low"],
-            close=row["close"],
-            adj_close=row["adj_close"],
-            volume=int(row["volume"]),
+        prices: dict[str, PackagedPriceBar] = {}
+        technicals: dict[str, PackagedTechnicals] = {}
+        for inst_id, tech in zip(ordered_ids, technicals_last, strict=True):
+            symbol = id_to_symbol[inst_id]
+            rows = bars_by_id.get(inst_id, [])
+            if not rows:
+                continue
+            last = rows[-1]
+            prices[symbol] = PackagedPriceBar(
+                open=float(last["open"]),
+                high=float(last["high"]),
+                low=float(last["low"]),
+                close=float(last["close"]),
+                adj_close=float(last["adj_close"]) if last["adj_close"] is not None else None,
+                volume=int(last["volume"]),
+            )
+            technicals[symbol] = PackagedTechnicals(
+                atr14=_finite_or_none(tech.atr14),
+                adx14=_finite_or_none(tech.adx14),
+                rsi14=_finite_or_none(tech.rsi14),
+                zscore20=_finite_or_none(tech.zscore20),
+                bb_upper20_2=_finite_or_none(tech.bb_upper20_2),
+                bb_lower20_2=_finite_or_none(tech.bb_lower20_2),
+            )
+
+        macro = {
+            macro_key_for_series(row["series_code"]): float(row["value"]) for row in macro_rows
+        }
+        news_summary = [
+            PackagedNewsItem(
+                id=row["id"],
+                headline=row["headline"],
+                tickers=list(row["tickers"] or []),
+                published_at=row["published_at"],
+            )
+            for row in news_rows
+        ]
+
+        snapshot = PackagedSnapshotV1(
+            schema_version=PACKAGED_SCHEMA_VERSION,
+            market=market_upper,
+            snapshot_id=uuid7(),
+            as_of=as_of,
+            universe=universe,
+            prices=prices,
+            technicals=technicals,
+            macro=macro,
+            news_summary=news_summary,
         )
-        technicals[sym] = TechnicalsBlock(
-            atr14=row["atr14"],
-            rsi14=row["rsi14"],
-            zscore20=row["zscore20"],
-            bb_upper20_2=row["bb_upper20_2"],
-            bb_lower20_2=row["bb_lower20_2"],
-            sma20=row["sma20"],
-            sma50=row["sma50"],
-            sma200=row["sma200"],
+        log.info(
+            "snapshot_built",
+            market=market_upper,
+            trade_date=str(trade_date),
+            universe=len(universe),
+            news=len(news_summary),
         )
-
-    # ── 6. Macro (latest value ≤ trade_date per series) ───────────────────────
-    cur3 = await conn.execute(
-        """
-        SELECT DISTINCT ON (series_code) series_code, value
-          FROM theeyebeta.macro_indicators
-         WHERE ts <= (%s::date + interval '23:59:59')
-         ORDER BY series_code, ts DESC
-        """,
-        (trade_date,),
-    )
-    macro_rows = await cur3.fetchall()
-    macro = {r[0]: float(r[1]) for r in macro_rows}
-
-    # ── 7. Assemble ───────────────────────────────────────────────────────────
-    return Snapshot(
-        market=market,
-        snapshot_id=uuid4(),
-        as_of=datetime.combine(
-            trade_date,
-            datetime.max.time(),
-            tzinfo=timezone.utc,
-        ),
-        trade_date=str(trade_date),
-        universe=universe,
-        prices=prices,
-        technicals=technicals,
-        macro=macro,
-    )
+        return snapshot.model_dump(mode="json")

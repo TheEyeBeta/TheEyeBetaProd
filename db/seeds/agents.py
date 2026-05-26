@@ -32,30 +32,52 @@ def _build_dsn() -> str:
 def main() -> None:
     """Upsert the technical-analyst agent row."""
     dsn = _build_dsn()
+    agents = (
+        (
+            "technical-analyst",
+            "markets",
+            "Technical analysis on per-market snapshots",
+            "gpt-4o-mini",
+            None,
+            "agents/research/technical-analyst.agent.md",
+            True,
+        ),
+        (
+            "macro-lead",
+            "markets",
+            "Macro lead — cross-asset stance from packaged snapshots",
+            "claude-sonnet-4-6",
+            "gpt-5",
+            "agents/markets/macro-lead.agent.md",
+            True,
+        ),
+        (
+            "news-sentiment",
+            "markets",
+            "News sentiment from packaged snapshot news_summary",
+            "gpt-4o-mini",
+            None,
+            "agents/markets/news-sentiment.agent.md",
+            True,
+        ),
+    )
     with psycopg.connect(dsn) as conn:
-        conn.execute(
-            """
-            INSERT INTO theeyebeta.agents
-                (id, department, role, model_default, model_fallback,
-                 constitution_path, active)
-            VALUES
-                (%s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (id) DO UPDATE SET
-                model_default     = EXCLUDED.model_default,
-                constitution_path = EXCLUDED.constitution_path,
-                active            = true,
-                updated_at        = now()
-            """,
-            (
-                "technical-analyst",
-                "markets",
-                "Technical analysis on per-market snapshots",
-                "gpt-4o-mini",
-                None,
-                "agents/technical-analyst.md",
-                True,
-            ),
-        )
+        for row in agents:
+            conn.execute(
+                """
+                INSERT INTO theeyebeta.agents
+                    (id, department, role, model_default, model_fallback,
+                     constitution_path, active)
+                VALUES
+                    (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    model_default     = EXCLUDED.model_default,
+                    constitution_path = EXCLUDED.constitution_path,
+                    active            = true,
+                    updated_at        = now()
+                """,
+                row,
+            )
         conn.commit()
         row = conn.execute(
             "SELECT id, department, model_default, active FROM theeyebeta.agents"

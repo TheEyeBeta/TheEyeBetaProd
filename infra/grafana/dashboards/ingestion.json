@@ -1,0 +1,78 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "Ingestion records / min",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(ingestion_records_total[5m])) by (adapter, market)",
+          "legendFormat": "{{adapter}} / {{market}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "title": "Ingestion errors",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(ingestion_errors_total[5m])) by (adapter, reason)",
+          "legendFormat": "{{adapter}} — {{reason}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "title": "Ingestion duration p95",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(ingestion_duration_seconds_bucket[5m])) by (le, adapter, market))",
+          "legendFormat": "{{adapter}} / {{market}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "dateTimeFromNow" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "title": "Last successful ingest",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "ingestion_last_success_timestamp * 1000",
+          "legendFormat": "{{market}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["theeyebeta", "data-ingestion"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "Data Ingestion",
+  "uid": "theeyebeta-ingestion",
+  "version": 1
+}

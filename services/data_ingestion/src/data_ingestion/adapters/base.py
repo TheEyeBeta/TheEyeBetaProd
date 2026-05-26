@@ -1,78 +1,84 @@
-"""Base protocols and data models for data-ingestion adapters."""
+"""Adapter protocol, HTTP client factory, and instrument helpers."""
 
 from __future__ import annotations
 
-from datetime import date, datetime
-from typing import AsyncIterator, Protocol
+import os
+import re
+from collections.abc import AsyncIterator
+from datetime import date
+from pathlib import Path
+from typing import Any, Protocol
 
-from pydantic import BaseModel
+import httpx
+import structlog
+from zinc_schemas.ingestion import Record
 
+log = structlog.get_logger()
 
-class PriceBar(BaseModel):
-    """One OHLCV bar for a single instrument on a single day."""
+HTTP_TIMEOUT_SECONDS = 30.0
+_CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
 
-    instrument_id: int
-    ts: datetime  # timezone-aware UTC midnight
-    open: float
-    high: float
-    low: float
-    close: float
-    adj_close: float | None
-    volume: int
-    source: str
-
-
-class MacroPoint(BaseModel):
-    """One observation for a single macro time-series."""
-
-    series_code: str
-    ts: datetime  # timezone-aware UTC
-    value: float
-    source: str
+_YFINANCE_EXCHANGES = frozenset({"XNAS", "XNYS", "XTKS", "XHKG", "XTAI"})
+_CN_EXCHANGES = frozenset({"XSHG", "XSHE"})
+_US_EXCHANGES = frozenset({"XNAS", "XNYS"})
 
 
-class PriceAdapter(Protocol):
-    """Protocol for daily equity price adapters."""
+def make_http_client() -> httpx.AsyncClient:
+    """Return an async HTTP client with a 30s timeout."""
+    return httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS, follow_redirects=True)
+
+
+def ingest_dsn() -> str:
+    """Resolve a PostgreSQL DSN from INGEST_DATABASE_URL."""
+    raw = os.environ.get("INGEST_DATABASE_URL", "")
+    if not raw:
+        raise OSError("INGEST_DATABASE_URL is not set")
+    return re.sub(r"\+\w+", "", raw, count=1)
+
+
+async def load_active_instruments(
+    dsn: str | None = None,  # noqa: ARG001 — pool uses env DSN
+    *,
+    exchange_codes: frozenset[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Load active instruments via the shared asyncpg pool."""
+    from data_ingestion.writers.postgres_writer import get_pool  # noqa: PLC0415
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        if exchange_codes:
+            rows = await conn.fetch(
+                """
+                SELECT i.id, i.symbol, e.code AS exchange_code
+                FROM theeyebeta.instruments i
+                JOIN theeyebeta.exchanges e ON e.id = i.exchange_id
+                WHERE i.active = true AND e.code = ANY($1::text[])
+                ORDER BY i.symbol
+                """,
+                list(exchange_codes),
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT i.id, i.symbol, e.code AS exchange_code
+                FROM theeyebeta.instruments i
+                JOIN theeyebeta.exchanges e ON e.id = i.exchange_id
+                WHERE i.active = true
+                ORDER BY i.symbol
+                """
+            )
+
+    return [
+        {"instrument_id": r["id"], "symbol": r["symbol"], "exchange_code": r["exchange_code"]}
+        for r in rows
+    ]
+
+
+class DataAdapter(Protocol):
+    """Pluggable ingestion adapter."""
 
     name: str
 
-    async def fetch_daily(
-        self,
-        instruments: list[dict[str, object]],
-        target_date: date,
-    ) -> AsyncIterator[PriceBar]:
-        """Yield PriceBar objects for every instrument on target_date.
-
-        Args:
-            instruments: List of instrument dicts with keys ``instrument_id``,
-                ``symbol``, ``exchange_code``.
-            target_date: The calendar date to fetch prices for.
-
-        Yields:
-            PriceBar: One bar per instrument that had data on target_date.
-        """
-        ...  # pragma: no cover
-
-
-class MacroAdapter(Protocol):
-    """Protocol for macroeconomic series adapters."""
-
-    name: str
-
-    async def fetch(
-        self,
-        series: list[str],
-        start: date,
-        end: date,
-    ) -> AsyncIterator[MacroPoint]:
-        """Yield MacroPoint observations for each series in [start, end].
-
-        Args:
-            series: List of series codes to fetch.
-            start: First date (inclusive).
-            end: Last date (inclusive).
-
-        Yields:
-            MacroPoint: One point per observation across all series.
-        """
-        ...  # pragma: no cover
+    async def fetch(self, target_date: date) -> AsyncIterator[Record]:
+        """Yield normalized records for the given calendar date."""
+        ...

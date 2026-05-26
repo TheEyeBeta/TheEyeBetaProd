@@ -23,6 +23,11 @@ ALEMBIC        := $(UV) run alembic
 # ── C++ build preset (override: make build-cpp PRESET=linux-debug) ───────────
 PRESET         := linux-release
 BUILD_DIR      := build/$(PRESET)
+ifneq ($(findstring debug,$(PRESET)),)
+CONAN_BUILD_TYPE := Debug
+else
+CONAN_BUILD_TYPE := Release
+endif
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 # Parses ##@ section headings and ## target descriptions from this file.
@@ -211,17 +216,17 @@ endif
 
 .PHONY: build-cpp
 build-cpp: ## CMake configure + build (preset: linux-release)
-	@if [ ! -f cpp/CMakePresets.json ] && [ ! -f CMakePresets.json ]; then \
-	    printf "$(GREY)  No CMakePresets.json found — skipping C++ build$(RESET)\n"; \
+	@if [ ! -f cpp/CMakePresets.json ]; then \
+	    printf "$(GREY)  No cpp/CMakePresets.json found — skipping C++ build$(RESET)\n"; \
 	    exit 0; \
 	fi
 	@printf "$(BOLD)▶ conan install$(RESET)\n"
 	conan install cpp/ \
-	    --output-folder=$(BUILD_DIR)/conan \
+	    --output-folder=$(BUILD_DIR) \
 	    --build=missing \
-	    --settings=build_type=Release
+	    -s build_type=$(CONAN_BUILD_TYPE)
 	@printf "$(BOLD)▶ cmake --preset $(PRESET)$(RESET)\n"
-	cmake --preset $(PRESET)
+	cmake --preset $(PRESET) -S cpp
 	@printf "$(BOLD)▶ cmake --build --preset $(PRESET)$(RESET)\n"
 	cmake --build --preset $(PRESET) --parallel $$(nproc 2>/dev/null || echo 4)
 	@printf "$(GREEN)✔ C++ build complete — artefacts in $(BUILD_DIR)$(RESET)\n"
@@ -257,3 +262,33 @@ hooks-update: ## Bump all pre-commit hook revisions to latest
 hooks-run: ## Run all pre-commit hooks against every file (useful after changing config)
 	@printf "$(BOLD)▶ pre-commit run --all-files$(RESET)\n"
 	$(UV) run pre-commit run --all-files
+
+# ─────────────────────────────────────────────────────────────────────────────
+##@ Documentation
+# ─────────────────────────────────────────────────────────────────────────────
+
+DOCS_API_DIR := docs/api
+NPX          := npx
+
+# Services documented here:
+#   admin  → services/admin_service (port 7200, admin dashboard)
+#   oms    → services/oms (port 8009, order-management REST API)
+#
+# The main external API (services/main_api, port 7000) lives in the sibling
+# TheEyeBetaDataAPI repo and is not yet migrated here (see docs/api-gateway.md).
+
+.PHONY: docs-api
+docs-api: ## Generate OpenAPI JSON schemas + ReDoc HTML for admin and OMS APIs
+	@printf "$(BOLD)▶ Generating OpenAPI schemas$(RESET)\n"
+	@mkdir -p $(DOCS_API_DIR)
+	$(UV) run --no-sync python scripts/dump_openapi.py admin > $(DOCS_API_DIR)/admin.openapi.json
+	$(UV) run --no-sync python scripts/dump_openapi.py oms   > $(DOCS_API_DIR)/oms.openapi.json
+	@printf "$(BOLD)▶ Building ReDoc HTML (requires Node/npx)$(RESET)\n"
+	$(NPX) redoc-cli build $(DOCS_API_DIR)/admin.openapi.json -o $(DOCS_API_DIR)/admin.html --title "Admin API"
+	$(NPX) redoc-cli build $(DOCS_API_DIR)/oms.openapi.json   -o $(DOCS_API_DIR)/oms.html   --title "OMS API"
+	@printf "$(GREEN)✔ API docs written to $(DOCS_API_DIR)/$(RESET)\n"
+
+.PHONY: docs-api-check
+docs-api-check: ## CI: fail if docs/api/*.openapi.json are stale (fix: make docs-api)
+	@printf "$(BOLD)▶ Checking OpenAPI schemas are up-to-date$(RESET)\n"
+	@bash scripts/check_openapi.sh

@@ -1,0 +1,45 @@
+{#-
+  Agent rationale partial — two visual states driven by ``expanded``.
+
+  Returned by:
+   * ``GET /admin/orders/fragments/{id}/rationale``          → expanded=True
+   * ``GET /admin/orders/fragments/{id}/rationale-snippet``  → expanded=False
+
+  Always swaps into ``#rationale-{order.id}`` via ``hx-swap="innerHTML"``.
+-#}
+<div data-test-id="rationale-{% if expanded %}expanded{% else %}snippet{% endif %}" data-order-id="{{ order.id }}">
+  {% if order.rationale %}
+    {% if expanded %}
+      <p class="whitespace-pre-line text-sm text-slate-700 dark:text-slate-300">
+        {{ order.rationale }}
+      </p>
+      {% if order.rationale != order.rationale_short %}
+        <button
+          type="button"
+          hx-get="/admin/orders/fragments/{{ order.id }}/rationale-snippet"
+          hx-target="#rationale-{{ order.id }}"
+          hx-swap="innerHTML"
+          class="mt-2 text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+        >Hide ↑</button>
+      {% endif %}
+    {% else %}
+      <p class="text-sm text-slate-700 dark:text-slate-300">{{ order.rationale_short }}</p>
+      {% if order.rationale != order.rationale_short %}
+        <button
+          type="button"
+          hx-get="/admin/orders/fragments/{{ order.id }}/rationale"
+          hx-target="#rationale-{{ order.id }}"
+          hx-swap="innerHTML"
+          class="mt-1 text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+        >Show full rationale ↓</button>
+      {% endif %}
+    {% endif %}
+  {% else %}
+    <span class="text-xs italic text-slate-400">no rationale recorded</span>
+  {% endif %}
+  {% if order.status == 'rejected' and order.rejection_reason %}
+    <p class="mt-1 text-xs italic text-rose-600 dark:text-rose-400">
+      rejected: {{ order.rejection_reason }}
+    </p>
+  {% endif %}
+</div>

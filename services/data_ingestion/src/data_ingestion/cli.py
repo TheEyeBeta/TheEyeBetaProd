@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import sys
 from datetime import date
-from typing import Optional
 
 import structlog
 import typer
@@ -38,7 +37,7 @@ backfill_app = typer.Typer(
 app.add_typer(backfill_app, name="backfill")
 
 
-def _parse_date(date_str: Optional[str]) -> date:
+def _parse_date(date_str: str | None) -> date:
     """Parse a date string or return today.
 
     Args:
@@ -58,7 +57,7 @@ def _parse_date(date_str: Optional[str]) -> date:
 
 @app.command()
 def prices(
-    date_str: Optional[str] = typer.Option(
+    date_str: str | None = typer.Option(
         None,
         "--date",
         help="Target date YYYY-MM-DD (default: today)",
@@ -85,7 +84,7 @@ def prices(
 
 @app.command()
 def macro(
-    date_str: Optional[str] = typer.Option(
+    date_str: str | None = typer.Option(
         None,
         "--date",
         help="End date YYYY-MM-DD (default: today); lookback is 30 days",
@@ -112,7 +111,7 @@ def macro(
 
 @app.command(name="all")
 def all_ingest(
-    date_str: Optional[str] = typer.Option(
+    date_str: str | None = typer.Option(
         None,
         "--date",
         help="Target date YYYY-MM-DD (default: today)",
@@ -165,12 +164,12 @@ def _default_start() -> date:
 
 @backfill_app.command(name="prices")
 def backfill_prices(
-    start_str: Optional[str] = typer.Option(
+    start_str: str | None = typer.Option(
         None,
         "--start",
         help="Start date YYYY-MM-DD (default: 5 years ago)",
     ),
-    end_str: Optional[str] = typer.Option(
+    end_str: str | None = typer.Option(
         None,
         "--end",
         help="End date YYYY-MM-DD (default: today)",
@@ -197,12 +196,12 @@ def backfill_prices(
 
 @backfill_app.command(name="macro")
 def backfill_macro(
-    start_str: Optional[str] = typer.Option(
+    start_str: str | None = typer.Option(
         None,
         "--start",
         help="Start date YYYY-MM-DD (default: 5 years ago)",
     ),
-    end_str: Optional[str] = typer.Option(
+    end_str: str | None = typer.Option(
         None,
         "--end",
         help="End date YYYY-MM-DD (default: today)",
@@ -229,12 +228,12 @@ def backfill_macro(
 
 @backfill_app.command(name="all")
 def backfill_all(
-    start_str: Optional[str] = typer.Option(
+    start_str: str | None = typer.Option(
         None,
         "--start",
         help="Start date YYYY-MM-DD (default: 5 years ago)",
     ),
-    end_str: Optional[str] = typer.Option(
+    end_str: str | None = typer.Option(
         None,
         "--end",
         help="End date YYYY-MM-DD (default: today)",

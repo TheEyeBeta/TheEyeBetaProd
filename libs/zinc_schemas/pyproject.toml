@@ -3,7 +3,16 @@ name = "zinc-schemas"
 version = "0.1.0"
 description = "Shared Pydantic models for theeyebeta data contracts"
 requires-python = ">=3.12"
-dependencies = ["pydantic>=2.7"]
+dependencies = [
+    "pydantic>=2.7",
+    "jsonschema>=4.23",
+    "httpx>=0.27",
+    "tenacity>=9.0",
+    "opentelemetry-api>=1.27",
+    "psycopg[binary]>=3.2",
+    "structlog>=24.4",
+    "python-frontmatter>=1.1",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -11,3 +20,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/zinc_schemas"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/zinc_schemas/snapshot_schema_v1.json" = "zinc_schemas/snapshot_schema_v1.json"
+"src/zinc_schemas/agent_output_schema_v1.json" = "zinc_schemas/agent_output_schema_v1.json"
+"src/zinc_schemas/agent_output_schema_v2.json" = "zinc_schemas/agent_output_schema_v2.json"
+"restricted.yaml" = "zinc_schemas/restricted.yaml"

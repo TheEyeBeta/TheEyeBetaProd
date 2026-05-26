@@ -1,0 +1,72 @@
+{#-
+  Reject-reason modal.
+
+  Returned by ``GET /admin/orders/fragments/{id}/reject-modal`` and swapped
+  into the global ``#modal`` element via ``hx-target="#modal" hx-swap="innerHTML"``.
+
+  ``static/js/app.js`` toggles ``#modal`` visible after a non-empty swap and
+  handles ESC / backdrop dismissal.
+-#}
+<div
+  data-test-id="order-reject-modal"
+  data-order-id="{{ order.id }}"
+  class="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900"
+>
+  <header class="mb-3 flex items-start justify-between gap-3">
+    <div>
+      <h2 class="text-lg font-semibold tracking-tight">Reject order</h2>
+      <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+        {{ order.symbol }} · {{ order.side|upper }}
+        {{ "%.4f" | format(order.qty | float) }}
+        {% if order.limit_price is not none %}
+          @ ${{ "%.2f" | format(order.limit_price | float) }}
+        {% else %}
+          @ market
+        {% endif %}
+        · <span class="font-mono">{{ order.client_order_id }}</span>
+      </p>
+    </div>
+    <button
+      type="button"
+      data-modal-close="true"
+      onclick="document.getElementById('modal').classList.add('hidden'); document.getElementById('modal').innerHTML='';"
+      class="rounded-md p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+      aria-label="Close"
+    >✕</button>
+  </header>
+
+  <form
+    hx-post="/admin/orders/fragments/{{ order.id }}/reject"
+    hx-target="#order-row-{{ order.id }}"
+    hx-swap="outerHTML"
+    hx-on::after-request="if (event.detail.successful) { document.getElementById('modal').classList.add('hidden'); document.getElementById('modal').innerHTML=''; }"
+    class="space-y-3"
+  >
+    <label class="block text-sm font-medium text-slate-700 dark:text-slate-200" for="reject-reason-{{ order.id }}">
+      Reason
+    </label>
+    <textarea
+      id="reject-reason-{{ order.id }}"
+      name="rejection_reason"
+      required
+      minlength="1"
+      maxlength="2000"
+      rows="4"
+      placeholder="e.g. risk limit breach, off-thesis, duplicate signal…"
+      class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+    ></textarea>
+
+    <div class="flex items-center justify-end gap-2">
+      <button
+        type="button"
+        data-modal-close="true"
+        onclick="document.getElementById('modal').classList.add('hidden'); document.getElementById('modal').innerHTML='';"
+        class="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+      >Cancel</button>
+      <button
+        type="submit"
+        class="rounded-md bg-rose-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-rose-500"
+      >Reject order</button>
+    </div>
+  </form>
+</div>

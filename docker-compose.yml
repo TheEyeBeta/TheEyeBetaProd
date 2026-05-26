@@ -126,7 +126,13 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
+    depends_on:
+      alertmanager:
+        condition: service_healthy
+      blackbox-exporter:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy"]
       interval: 10s
@@ -140,6 +146,52 @@ services:
   # ───────────────────────────────────────────────────────────────────────────
   # Loki (log aggregation)
   # ───────────────────────────────────────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:latest
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--config.expand-env"
+      - "--storage.path=/alertmanager"
+    environment:
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-alerts@theeyebeta.local}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-ops@theeyebeta.local}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./infra/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9093/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - theeyebeta-net
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    command:
+      - "--config.file=/etc/blackbox_exporter/config.yml"
+    ports:
+      - "127.0.0.1:9115:9115"
+    volumes:
+      - ./infra/prometheus/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9115/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - theeyebeta-net
+
   loki:
     image: grafana/loki:latest
     command: -config.file=/etc/loki/local-config.yaml
@@ -229,8 +281,11 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/etc/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     depends_on:
+      postgres:
+        condition: service_healthy
       prometheus:
         condition: service_healthy
       loki:
@@ -247,7 +302,250 @@ services:
     networks:
       - theeyebeta-net
 
+  # ───────────────────────────────────────────────────────────────────────────
+  # Data ingestion (FastAPI + APScheduler)
+  # ───────────────────────────────────────────────────────────────────────────
+  data-ingestion:
+    build:
+      context: .
+      dockerfile: services/data_ingestion/Dockerfile
+    command: ["uvicorn", "main:app", "--host", "127.0.0.1", "--port", "7010"]
+    ports:
+      - "127.0.0.1:7010:443"
+    environment:
+      INGEST_DATABASE_URL: >-
+        postgresql://${POSTGRES_USER:-theeyebeta}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-theeyebeta}
+      FRED_API_KEY: ${FRED_API_KEY:-}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD_BCRYPT: ${ADMIN_PASSWORD_BCRYPT:-}
+      NATS_URL: nats://nats:4222
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_SNAPSHOT_BUCKET: theeyebeta-snapshots
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      CADDY_TLS_CA_PATH: /caddy/caddy/pki/authorities/local/root.crt
+      CADDY_TLS_CERT_PATH: /caddy/caddy/certificates/local/data-ingestion.theeyebeta.internal/data-ingestion.theeyebeta.internal.crt
+      CADDY_TLS_KEY_PATH: /caddy/caddy/certificates/local/data-ingestion.theeyebeta.internal/data-ingestion.theeyebeta.internal.key
+      SSL_CERT_FILE: /caddy/caddy/pki/authorities/local/root.crt
+    volumes:
+      - caddy_data:/caddy:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:7010/health')\""]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      theeyebeta-net:
+        aliases:
+          - data-ingestion.theeyebeta.internal
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Snapshot packager (NATS consumer + agent-ready JSON)
+  # ───────────────────────────────────────────────────────────────────────────
+  caddy-data-ingestion:
+    image: caddy:2.10-alpine
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    network_mode: "service:data-ingestion"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      data-ingestion:
+        condition: service_healthy
+    restart: unless-stopped
+
+  snapshot-packager:
+    build:
+      context: .
+      dockerfile: services/snapshot_packager/Dockerfile
+    command: ["uvicorn", "main:app", "--host", "127.0.0.1", "--port", "7011"]
+    ports:
+      - "127.0.0.1:7011:443"
+    environment:
+      INGEST_DATABASE_URL: >-
+        postgresql://${POSTGRES_USER:-theeyebeta}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-theeyebeta}
+      NATS_URL: nats://nats:4222
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_SNAPSHOT_BUCKET: theeyebeta-snapshots
+      SNAPSHOT_PACKAGER_HOST: 0.0.0.0
+      SNAPSHOT_PACKAGER_PORT: "7011"
+      CADDY_TLS_CA_PATH: /caddy/caddy/pki/authorities/local/root.crt
+      CADDY_TLS_CERT_PATH: /caddy/caddy/certificates/local/snapshot-packager.theeyebeta.internal/snapshot-packager.theeyebeta.internal.crt
+      CADDY_TLS_KEY_PATH: /caddy/caddy/certificates/local/snapshot-packager.theeyebeta.internal/snapshot-packager.theeyebeta.internal.key
+      SSL_CERT_FILE: /caddy/caddy/pki/authorities/local/root.crt
+    volumes:
+      - caddy_data:/caddy:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      data-ingestion:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:7011/health')\""]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      theeyebeta-net:
+        aliases:
+          - snapshot-packager.theeyebeta.internal
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # LLM gateway (LiteLLM proxy — OpenAI-compatible API + virtual keys)
+  # ───────────────────────────────────────────────────────────────────────────
+  caddy-snapshot-packager:
+    image: caddy:2.10-alpine
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    network_mode: "service:snapshot-packager"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      snapshot-packager:
+        condition: service_healthy
+    restart: unless-stopped
+
+  llm-gateway:
+    build:
+      context: .
+      dockerfile: services/llm_gateway/Dockerfile
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--host", "127.0.0.1"]
+    ports:
+      - "127.0.0.1:7020:443"
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY must be set in .env}
+      LITELLM_DATABASE_URL: >-
+        postgresql://litellm:${LITELLM_DB_PASSWORD:?LITELLM_DB_PASSWORD must be set}@postgres:5432/litellm
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      CADDY_TLS_CA_PATH: /caddy/caddy/pki/authorities/local/root.crt
+      CADDY_TLS_CERT_PATH: /caddy/caddy/certificates/local/llm-gateway.theeyebeta.internal/llm-gateway.theeyebeta.internal.crt
+      CADDY_TLS_KEY_PATH: /caddy/caddy/certificates/local/llm-gateway.theeyebeta.internal/llm-gateway.theeyebeta.internal.key
+      SSL_CERT_FILE: /caddy/caddy/pki/authorities/local/root.crt
+    volumes:
+      - caddy_data:/caddy:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4000/health || wget -qO- http://127.0.0.1:4000/health/liveliness"]
+      interval: 15s
+      timeout: 10s
+      start_period: 90s
+      retries: 8
+    restart: unless-stopped
+    networks:
+      theeyebeta-net:
+        aliases:
+          - llm-gateway.theeyebeta.internal
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Admin service (FastAPI + JWT, htmx backend — port 7200)
+  # ───────────────────────────────────────────────────────────────────────────
+  caddy-llm-gateway:
+    image: caddy:2.10-alpine
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    network_mode: "service:llm-gateway"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      llm-gateway:
+        condition: service_healthy
+    restart: unless-stopped
+
+  admin-service:
+    build:
+      context: .
+      dockerfile: services/admin_service/Dockerfile
+    command: ["uvicorn", "main:app", "--host", "127.0.0.1", "--port", "7200"]
+    ports:
+      - "127.0.0.1:7200:443"
+    environment:
+      ADMIN_DATABASE_URL: >-
+        postgresql://${POSTGRES_USER:-theeyebeta}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-theeyebeta}
+      NATS_URL: nats://nats:4222
+      REDIS_URL: redis://redis:6379/1
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD_BCRYPT: ${ADMIN_PASSWORD_BCRYPT:-}
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:-}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:-}
+      ADMIN_CORS_CLOUDFLARE_ORIGIN: ${ADMIN_CORS_CLOUDFLARE_ORIGIN:-https://admin.theeyebeta.store}
+      ADMIN_CORS_TAILSCALE_ORIGIN: ${ADMIN_CORS_TAILSCALE_ORIGIN:-http://127.0.0.1:7200}
+      DOCKER_HOST: unix:///var/run/docker.sock
+      AUDIT_SERVICE_URL: https://audit-service.theeyebeta.internal
+      AGENT_RUNTIME_URL: https://agent-runtime.theeyebeta.internal
+      BACKTEST_ENGINE_URL: https://backtest-engine.theeyebeta.internal
+      CADDY_TLS_CA_PATH: /caddy/caddy/pki/authorities/local/root.crt
+      CADDY_TLS_CERT_PATH: /caddy/caddy/certificates/local/admin-service.theeyebeta.internal/admin-service.theeyebeta.internal.crt
+      CADDY_TLS_KEY_PATH: /caddy/caddy/certificates/local/admin-service.theeyebeta.internal/admin-service.theeyebeta.internal.key
+      SSL_CERT_FILE: /caddy/caddy/pki/authorities/local/root.crt
+    volumes:
+      - caddy_data:/caddy:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      llm-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:7200/admin/health')\""]
+      interval: 10s
+      timeout: 5s
+      start_period: 45s
+      retries: 6
+    restart: unless-stopped
+    networks:
+      theeyebeta-net:
+        aliases:
+          - admin-service.theeyebeta.internal
+
 # ─────────────────────────────────────────────────────────────────────────────
+  caddy-admin-service:
+    image: caddy:2.10-alpine
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    network_mode: "service:admin-service"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      admin-service:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   pg_data:
   redis_data:
@@ -257,6 +555,8 @@ volumes:
   loki_data:
   tempo_data:
   grafana_data:
+  caddy_data:
+  caddy_config:
 
 networks:
   theeyebeta-net:

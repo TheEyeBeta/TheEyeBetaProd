@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theeyebeta.local/schemas/snapshot/v1.json",
+  "title": "PackagedSnapshotV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "market",
+    "snapshot_id",
+    "as_of",
+    "universe",
+    "prices",
+    "technicals",
+    "macro",
+    "news_summary"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "market": {
+      "type": "string",
+      "enum": ["US", "HK", "JP", "TW", "CN"]
+    },
+    "snapshot_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "as_of": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "universe": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/universeEntry" }
+    },
+    "prices": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/priceBar" }
+    },
+    "technicals": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/technicals" }
+    },
+    "macro": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "news_summary": {
+      "type": "array",
+      "maxItems": 50,
+      "items": { "$ref": "#/$defs/newsItem" }
+    }
+  },
+  "$defs": {
+    "universeEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symbol", "instrument_id"],
+      "properties": {
+        "symbol": { "type": "string", "minLength": 1 },
+        "instrument_id": { "type": "integer" },
+        "sector": { "type": ["string", "null"] },
+        "industry": { "type": ["string", "null"] }
+      }
+    },
+    "priceBar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["open", "high", "low", "close", "volume"],
+      "properties": {
+        "open": { "type": "number" },
+        "high": { "type": "number" },
+        "low": { "type": "number" },
+        "close": { "type": "number" },
+        "adj_close": { "type": ["number", "null"] },
+        "volume": { "type": "integer" }
+      }
+    },
+    "technicals": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "atr14": { "type": ["number", "null"] },
+        "adx14": { "type": ["number", "null"] },
+        "rsi14": { "type": ["number", "null"] },
+        "zscore20": { "type": ["number", "null"] },
+        "bb_upper20_2": { "type": ["number", "null"] },
+        "bb_lower20_2": { "type": ["number", "null"] }
+      }
+    },
+    "newsItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "headline", "tickers", "published_at"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "headline": { "type": "string", "minLength": 1 },
+        "tickers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "published_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

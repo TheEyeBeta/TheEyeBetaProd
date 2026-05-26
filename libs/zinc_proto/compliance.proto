@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package zinc.compliance;
+
+option py_generic_services = true;
+
+// Pre-trade compliance rule checks (Part 9.2).
+service Compliance {
+  rpc CheckOrder(ComplianceCheckRequest) returns (ComplianceDecision);
+}
+
+message ComplianceCheckRequest {
+  string order_id = 1;
+  string portfolio_id = 2;
+  int64 instrument_id = 3;
+  string symbol = 4;
+  string side = 5;
+  double qty = 6;
+  double limit_price = 7;
+  string market = 8;
+}
+
+enum ComplianceOutcome {
+  PASS = 0;
+  WARN = 1;
+  BLOCK = 2;
+}
+
+message RuleOutcome {
+  string rule_id = 1;
+  ComplianceOutcome outcome = 2;
+  string detail = 3;
+}
+
+message ComplianceDecision {
+  ComplianceOutcome outcome = 1;
+  string reason = 2;
+  repeated RuleOutcome rule_results = 3;
+  repeated string failed_rules = 4;
+  bool approved = 5;
+}

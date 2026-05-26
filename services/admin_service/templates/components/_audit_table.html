@@ -1,0 +1,56 @@
+{#-
+  Full audit-log table — returned both on initial page load and as the
+  filter-form swap target (``hx-target="#audit-table" hx-swap="outerHTML"``).
+
+  The pagination button at the bottom appends additional rows via the
+  ``_audit_rows.html`` partial (``append=True`` query param on the fragment
+  endpoint switches templates server-side).
+-#}
+<div
+  id="audit-table"
+  data-test-id="audit-table"
+  data-row-count="{{ rows | length }}"
+  class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+>
+  <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
+    <thead class="bg-slate-50 dark:bg-slate-950">
+      <tr class="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <th scope="col" class="px-4 py-2">When (UTC)</th>
+        <th scope="col" class="px-4 py-2">Actor</th>
+        <th scope="col" class="px-4 py-2">Action</th>
+        <th scope="col" class="px-4 py-2">Entity</th>
+        <th scope="col" class="px-4 py-2">Payload</th>
+        <th scope="col" class="px-4 py-2 text-right">#id</th>
+      </tr>
+    </thead>
+    <tbody
+      id="audit-rows"
+      class="divide-y divide-slate-200 text-sm dark:divide-slate-800"
+    >
+      {% include "components/_audit_rows.html" %}
+    </tbody>
+  </table>
+
+  <div class="flex items-center justify-between border-t border-slate-200 px-4 py-2 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+    <span>
+      Showing {{ rows | length }} row{% if rows | length != 1 %}s{% endif %}
+      (page size {{ limit }}).
+    </span>
+    {% if next_cursor is not none %}
+      <button
+        type="button"
+        id="audit-load-more"
+        hx-get="/admin/audit/fragments/log?append=true&cursor={{ next_cursor }}&limit={{ limit }}{% if filters.entity_id %}&entity_id={{ filters.entity_id | urlencode }}{% endif %}{% if filters.actor %}&actor={{ filters.actor | urlencode }}{% endif %}{% if filters.since_input %}&since={{ filters.since_input | urlencode }}{% endif %}"
+        hx-target="#audit-rows"
+        hx-swap="beforeend"
+        hx-indicator="#load-more-spinner"
+        class="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+      >
+        Load older →
+        <span id="load-more-spinner" class="htmx-indicator">…</span>
+      </button>
+    {% else %}
+      <span class="italic text-slate-400">end of log</span>
+    {% endif %}
+  </div>
+</div>

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Guard violations{% endblock %}
+
+{% block content %}
+  <section class="space-y-4" data-page="violations">
+    <header class="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-semibold tracking-tight">Guard violations</h1>
+        <p class="text-sm text-slate-600 dark:text-slate-400">
+          Append-only stream from <code>theeyebeta.guard_violations</code>.
+          Click any row to expand the JSON detail; use the "Resolve" button
+          to mark a violation as handled.
+        </p>
+      </div>
+    </header>
+
+    {#- Filter form. -#}
+    <section
+      aria-label="Filters"
+      class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+    >
+      <form
+        id="violations-filter-form"
+        hx-get="/admin/violations/fragments/list"
+        hx-target="#violations-table"
+        hx-swap="outerHTML"
+        hx-trigger="submit, change from:input delay:400ms, change from:select delay:0ms, change from:[type=checkbox] delay:0ms"
+        hx-indicator="#violations-spinner"
+        class="grid grid-cols-1 gap-3 sm:grid-cols-4"
+      >
+        <label class="flex flex-col text-xs font-medium text-slate-600 dark:text-slate-400">
+          Agent ID
+          <input
+            type="text"
+            name="agent_id"
+            placeholder="technical-analyst"
+            value="{{ filters.agent_id or '' }}"
+            class="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+          />
+        </label>
+        <label class="flex flex-col text-xs font-medium text-slate-600 dark:text-slate-400">
+          Severity
+          <select
+            name="severity"
+            class="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+          >
+            <option value="">all</option>
+            {% for sev in valid_severities %}
+              <option value="{{ sev }}"{% if filters.severity == sev %} selected{% endif %}>{{ sev }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="flex flex-col text-xs font-medium text-slate-600 dark:text-slate-400">
+          Page size
+          <select
+            name="limit"
+            class="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+          >
+            {% for size in [25, 50, 100, 200, 500] %}
+              <option value="{{ size }}"{% if size == filters.limit %} selected{% endif %}>{{ size }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="flex flex-col text-xs font-medium text-slate-600 dark:text-slate-400">
+          <span class="invisible select-none">spacer</span>
+          <span class="mt-1 inline-flex items-center gap-2 rounded-md border border-slate-300 px-2 py-1 text-sm dark:border-slate-700">
+            <input
+              type="checkbox"
+              name="unresolved_only"
+              value="true"
+              {% if filters.unresolved_only %}checked{% endif %}
+              class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span class="text-slate-700 dark:text-slate-200">Unresolved only</span>
+          </span>
+        </label>
+
+        <div class="sm:col-span-4 flex items-center justify-between">
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            Filters apply automatically.
+            <span id="violations-spinner" class="htmx-indicator">refreshing…</span>
+          </p>
+          <button
+            type="reset"
+            hx-get="/admin/violations/fragments/list?unresolved_only=true&limit={{ filters.limit }}"
+            hx-target="#violations-table"
+            hx-swap="outerHTML"
+            class="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          >Reset</button>
+        </div>
+      </form>
+    </section>
+
+    {#- Violations table (replaced on filter change, appended on paginate). -#}
+    {% include "components/_violations_table.html" %}
+  </section>
+{% endblock %}

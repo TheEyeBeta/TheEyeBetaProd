@@ -71,11 +71,11 @@ Redis 7, and NATS 2 JetStream. Performance-critical paths use C++20 via nanobind
 | `risk-service` | 8007 | 127.0.0.1 | |
 | `compliance-service` | 8008 | 127.0.0.1 | |
 | `oms` | 8009 | 127.0.0.1 | |
-| `broker-adapter-alpaca` | 8010 | 127.0.0.1 | |
-| `backtest-engine` | 8011 | 127.0.0.1 | |
-| `audit-service` | 8012 | 127.0.0.1 | |
-| `rnd-agent` | 8013 | 127.0.0.1 | |
-| `admin-service` | 8080 | 0.0.0.0 | Tailscale-accessible |
+| `broker-adapter-alpaca` | 7090 | 127.0.0.1 | |
+| `backtest-engine` | 7100 | 127.0.0.1 | |
+| `audit-service` | 7110 | 127.0.0.1 | Hash-chained audit log + WORM checkpoints |
+| `rnd-agent` | 7120 | 127.0.0.1 | Nightly R&D proposals (`tb_rnd_readonly`) |
+| `admin-service` | 7200 | 0.0.0.0 | Tailscale + Cloudflare (`/admin/*`) |
 | PostgreSQL | 5432 | 127.0.0.1 | |
 | Redis | 6379 | 127.0.0.1 | |
 | NATS client | 4222 | 127.0.0.1 | |

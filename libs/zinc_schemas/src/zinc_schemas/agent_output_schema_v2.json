@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RndProposalOutputV2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["proposals"],
+  "properties": {
+    "proposals": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "category",
+          "target",
+          "current_value",
+          "proposed_value",
+          "rationale",
+          "evidence"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "strategy_param",
+              "agent_constitution",
+              "risk_rule",
+              "compliance_rule_nonregulatory",
+              "new_strategy",
+              "architecture"
+            ]
+          },
+          "target": { "type": "string", "minLength": 1 },
+          "current_value": { "type": "object" },
+          "proposed_value": { "type": "object" },
+          "rationale": { "type": "string", "maxLength": 4000 },
+          "evidence": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "estimated_impact": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+              "expected_direction": {
+                "type": "string",
+                "enum": ["improve", "neutral", "uncertain", "degrade"]
+              },
+              "summary": { "type": "string", "maxLength": 500 }
+            }
+          },
+          "validation_backtest_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          }
+        }
+      }
+    }
+  }
+}

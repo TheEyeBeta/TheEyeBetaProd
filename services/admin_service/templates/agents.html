@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Agents{% endblock %}
+
+{% block head_extra %}
+  {#- markdown-it for client-side constitution rendering. -#}
+  <script
+    src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"
+    crossorigin="anonymous"
+  ></script>
+
+  {#- highlight.js for syntax-highlighted JSON code blocks. -#}
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/styles/github-dark.min.css"
+    crossorigin="anonymous"
+  />
+  <script
+    src="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/lib/core.min.js"
+    crossorigin="anonymous"
+  ></script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/lib/languages/json.min.js"
+    crossorigin="anonymous"
+  ></script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/lib/languages/yaml.min.js"
+    crossorigin="anonymous"
+  ></script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/lib/languages/python.min.js"
+    crossorigin="anonymous"
+  ></script>
+{% endblock %}
+
+{% block content %}
+  <section class="space-y-4" data-page="agents">
+    <header class="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-semibold tracking-tight">Agents</h1>
+        <p class="text-sm text-slate-600 dark:text-slate-400">
+          {{ agents | length }} registered agent{% if agents | length != 1 %}s{% endif %}.
+          Pick one on the left to inspect recent runs and its constitution.
+        </p>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-1 gap-4 lg:grid-cols-[20rem,1fr]">
+      {#- Left pane: agent list. -#}
+      {% include "components/_agent_list.html" %}
+
+      {#- Right pane: detail. Replaced by fragment endpoints via hx-target. -#}
+      <div
+        id="agent-detail"
+        class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+      >
+        <div class="text-sm text-slate-500 dark:text-slate-400">
+          Select an agent from the list to inspect its recent runs and constitution.
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}
+
+{% block body_extra %}
+  <script>
+    (function () {
+      "use strict";
+
+      function renderConstitutionMarkdown(root) {
+        var source = root.querySelector("[data-constitution-source]");
+        var target = root.querySelector("[data-constitution-target]");
+        if (!source || !target) return;
+        if (!window.markdownit) {
+          target.textContent = source.textContent;
+          return;
+        }
+        var md = window.markdownit({
+          html: false,
+          linkify: true,
+          highlight: function (str, lang) {
+            if (window.hljs && lang && window.hljs.getLanguage(lang)) {
+              try {
+                return (
+                  '<pre class="hljs"><code class="hljs language-' +
+                  lang +
+                  '">' +
+                  window.hljs.highlight(str, {
+                    language: lang,
+                    ignoreIllegals: true,
+                  }).value +
+                  "</code></pre>"
+                );
+              } catch (e) {
+                /* fall through */
+              }
+            }
+            return (
+              '<pre class="hljs"><code class="hljs">' +
+              md.utils.escapeHtml(str) +
+              "</code></pre>"
+            );
+          },
+        });
+        target.innerHTML = md.render(source.textContent || "");
+        target.classList.add("prose-constitution");
+      }
+
+      function processAfterSwap(target) {
+        if (!target) return;
+        renderConstitutionMarkdown(target);
+      }
+
+      document.addEventListener("htmx:afterSwap", function (evt) {
+        processAfterSwap(evt.detail.target);
+      });
+
+      document.addEventListener("DOMContentLoaded", function () {
+        processAfterSwap(document.body);
+      });
+    })();
+  </script>
+{% endblock %}

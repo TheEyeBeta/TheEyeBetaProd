@@ -1,0 +1,91 @@
+name: Nightly Paper Smoke
+
+# Runs every weekday at 06:00 UTC (after US market open data is available).
+# Also triggerable manually via workflow_dispatch for ad-hoc runs.
+# Graduation criterion: passes 7 consecutive nights → 90-day paper period begins.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1-5"
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.12"
+  UV_CACHE_DIR: /tmp/.uv-cache
+  FORCE_COLOR: "1"
+
+jobs:
+  paper-smoke:
+    name: Paper trade smoke test
+    runs-on: [self-hosted, production]
+    timeout-minutes: 30
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      NATS_URL: ${{ secrets.NATS_URL }}
+      REDIS_URL: ${{ secrets.REDIS_URL }}
+      ALPACA_API_KEY_PAPER: ${{ secrets.ALPACA_API_KEY_PAPER }}
+      ALPACA_API_SECRET_PAPER: ${{ secrets.ALPACA_API_SECRET_PAPER }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install workspace (dev group)
+        run: uv sync --group dev
+
+      - name: Run paper smoke test
+        id: smoke
+        run: |
+          mkdir -p reports
+          uv run pytest tests/e2e/test_paper_smoke.py \
+            -m smoke \
+            --tb=short \
+            -v \
+            --junitxml=reports/paper-smoke.xml
+        continue-on-error: true
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-smoke-report-${{ github.run_id }}
+          path: reports/paper-smoke.xml
+          retention-days: 30
+
+      - name: Open GitHub issue on failure
+        if: steps.smoke.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATE=$(date -u +%Y-%m-%d)
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          gh issue create \
+            --title "[Smoke] Paper trade failed – ${DATE}" \
+            --label "smoke-failure,p1" \
+            --body "## Paper Trade Smoke Failure
+
+          **Date:** ${DATE}
+          **Run:** ${RUN_URL}
+
+          The nightly paper-trade smoke test failed.
+          This resets the 7-consecutive-nights graduation counter.
+
+          ### Next Steps
+          1. Check the [run logs](${RUN_URL}) for the failure reason.
+          2. Inspect master-orchestrator, OMS, and broker-adapter logs on the production host.
+          3. Confirm Alpaca paper account is not rate-limited or flagged.
+          4. Fix the root cause and confirm the test passes before the next nightly run.
+
+          ---
+          *Graduation criterion: 7 consecutive passing nights → 90-day paper validation begins.*"
+
+      - name: Fail workflow if smoke failed
+        if: steps.smoke.outcome == 'failure'
+        run: exit 1

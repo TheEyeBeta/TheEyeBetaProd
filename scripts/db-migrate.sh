@@ -18,7 +18,17 @@ run_migrations() {
     fi
 }
 
-echo "Running database migrations for all services..."
+echo "Running database migrations..."
+echo ""
+
+if [[ -f "$REPO_ROOT/db/alembic.ini" ]]; then
+    echo "→ Migrating central schema (db/)"
+    (cd "$REPO_ROOT/db" && uv run alembic upgrade head)
+    echo "  ✓ central migrations complete"
+fi
+
+echo ""
+echo "Running per-service migrations..."
 echo ""
 
 for svc_dir in "$REPO_ROOT"/services/*/; do

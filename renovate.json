@@ -1,0 +1,22 @@
+{
+  "extends": ["config:base"],
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
+    },
+    {
+      "matchPackagePatterns": ["^anthropic", "^openai", "^litellm"],
+      "automerge": false
+    },
+    {
+      "matchPackagePatterns": ["^alpaca"],
+      "automerge": false
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true
+  }
+}

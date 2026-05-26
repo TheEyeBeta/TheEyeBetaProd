@@ -1,0 +1,115 @@
+{
+	debug
+	cert_lifetime 12h
+	renewal_window_ratio 0.25
+
+	pki {
+		ca local {
+			name "TheEyeBeta Internal CA"
+			root_cn "TheEyeBeta Internal Root CA"
+			intermediate_cn "TheEyeBeta Internal Intermediate CA"
+			intermediate_lifetime 24h
+			maintenance_interval 10m
+		}
+	}
+}
+
+(theeyebeta_mtls) {
+	tls {
+		issuer internal {
+			ca local
+			lifetime 12h
+		}
+		client_auth {
+			mode require_and_verify
+			trust_pool pki_root {
+				authority local
+			}
+		}
+	}
+}
+
+data-ingestion.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy 127.0.0.1:7010
+}
+
+snapshot-packager.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy 127.0.0.1:7011
+}
+
+llm-gateway.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy 127.0.0.1:4000
+}
+
+admin-service.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy 127.0.0.1:7200
+}
+
+agent-runtime.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy 127.0.0.1:8004
+}
+
+audit-service.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy 127.0.0.1:7110
+}
+
+backtest-engine.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy 127.0.0.1:7100
+}
+
+master-orchestrator.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy 127.0.0.1:7050
+}
+
+oms.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy 127.0.0.1:7080
+}
+
+rnd-agent.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy 127.0.0.1:7120
+}
+
+broker-adapter-alpaca.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy 127.0.0.1:7090
+}
+
+guard-service.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy 127.0.0.1:8005
+}
+
+risk-service.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy 127.0.0.1:8007
+}
+
+compliance-service.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy 127.0.0.1:8008
+}
+
+guard-service-grpc.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy h2c://127.0.0.1:7040
+}
+
+risk-service-grpc.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy h2c://127.0.0.1:7060
+}
+
+compliance-service-grpc.theeyebeta.internal {
+	import theeyebeta_mtls
+	reverse_proxy h2c://127.0.0.1:7070
+}

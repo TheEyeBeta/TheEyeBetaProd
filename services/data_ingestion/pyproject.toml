@@ -4,18 +4,36 @@ version = "0.1.0"
 description = "theeyebeta data ingestion service (prices + macro)"
 requires-python = ">=3.12"
 dependencies = [
+    "zinc-schemas",
+    "httpx>=0.27",
+    "asyncpg>=0.30",
+    "nats-py>=2.8",
+    "minio>=7.2",
+    "prometheus-client>=0.21",
+    "opentelemetry-api>=1.27",
+    "opentelemetry-sdk>=1.27",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.27",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.4",
+    "apscheduler>=3.10",
     "yfinance>=0.2.50",
     "fredapi>=0.5.2",
+    "alpaca-py>=0.33",
     "polars[rtcompat]>=1.12",
     "pyarrow>=18.0",
     "tenacity>=9.0",
     "structlog>=24.4",
+    "feedparser>=6.0",
     "pyyaml>=6.0",
     "typer>=0.15",
-    "psycopg[binary]>=3.2",
-    "pydantic>=2.7",
     "python-dotenv>=1.0",
+    "bcrypt>=4.2",
 ]
+
+[tool.uv.sources]
+zinc-schemas = { workspace = true }
 
 [project.scripts]
 tb-ingest = "data_ingestion.cli:app"

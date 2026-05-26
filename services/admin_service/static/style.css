@@ -1,0 +1,173 @@
+/*
+ * Admin shell — non-Tailwind utilities only.
+ *
+ * Tailwind Play CDN handles the layout system; this file is for things
+ * Tailwind can't express ergonomically: the severity colour palette used
+ * by ``guard_violations.severity`` badges, the htmx loading indicator,
+ * and the modal dismissal animation.
+ *
+ * Palette (matches docs/admin-service.md):
+ *   low      = #16a34a  (green-600)
+ *   medium   = #ca8a04  (yellow-600)
+ *   high     = #dc2626  (red-600)
+ *   critical = #a21caf  (fuchsia-700)
+ */
+
+:root {
+  --severity-low: #16a34a;
+  --severity-medium: #ca8a04;
+  --severity-high: #dc2626;
+  --severity-critical: #a21caf;
+}
+
+.severity-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #ffffff;
+  line-height: 1.25rem;
+}
+
+.severity-low {
+  background-color: var(--severity-low);
+}
+
+.severity-medium {
+  background-color: var(--severity-medium);
+}
+
+.severity-high {
+  background-color: var(--severity-high);
+}
+
+.severity-critical {
+  background-color: var(--severity-critical);
+}
+
+/* Text-only variant for tables where a coloured cell is too heavy. */
+.severity-text-low {
+  color: var(--severity-low);
+}
+
+.severity-text-medium {
+  color: var(--severity-medium);
+}
+
+.severity-text-high {
+  color: var(--severity-high);
+}
+
+.severity-text-critical {
+  color: var(--severity-critical);
+}
+
+/* htmx loading indicator — show during in-flight requests only. */
+.htmx-indicator {
+  opacity: 0;
+  transition: opacity 150ms ease-in-out;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  opacity: 1;
+}
+
+/*
+ * Constitution markdown — Tailwind Play CDN ships without the @tailwindcss/typography
+ * plugin, so we provide the minimum set of rules markdown-it output needs to look
+ * sane (headings spacing, code blocks, lists, blockquotes).
+ */
+.prose-constitution h1 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid rgb(148 163 184 / 0.4);
+  padding-bottom: 0.25rem;
+}
+.prose-constitution h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.prose-constitution h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+.prose-constitution p {
+  margin: 0.5rem 0;
+  line-height: 1.55;
+}
+.prose-constitution ul,
+.prose-constitution ol {
+  margin: 0.5rem 0 0.5rem 1.5rem;
+  list-style-position: outside;
+}
+.prose-constitution ul {
+  list-style-type: disc;
+}
+.prose-constitution ol {
+  list-style-type: decimal;
+}
+.prose-constitution li {
+  margin: 0.15rem 0;
+}
+.prose-constitution code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-size: 0.85em;
+  padding: 0.1em 0.3em;
+  background: rgb(148 163 184 / 0.15);
+  border-radius: 4px;
+}
+.prose-constitution pre {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  background: rgb(15 23 42); /* slate-900 — overridden by .hljs when highlighted */
+  color: #f8fafc;
+}
+.prose-constitution pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.8rem;
+}
+.prose-constitution blockquote {
+  border-left: 3px solid rgb(99 102 241);
+  padding-left: 0.75rem;
+  color: rgb(71 85 105);
+  margin: 0.75rem 0;
+}
+.prose-constitution table {
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+}
+.prose-constitution th,
+.prose-constitution td {
+  border: 1px solid rgb(148 163 184 / 0.3);
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+/* Modal: revealed by static/js/app.js by removing .hidden + adding .is-open. */
+#modal.is-open {
+  display: flex;
+  animation: modal-fade-in 120ms ease-out;
+}
+
+@keyframes modal-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

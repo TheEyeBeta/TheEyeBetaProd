@@ -1,0 +1,59 @@
+{#-
+  Read-only SELECT result.
+
+  Context:
+   * ``result``    — :class:`SqlQueryResponse`.
+   * ``max_rows``  — server-side row cap (passed through for the banner).
+-#}
+<div
+  data-test-id="sql-query-result"
+  data-row-count="{{ result.row_count }}"
+  class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+>
+  <header class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs dark:border-slate-800 dark:bg-slate-950">
+    <div class="flex items-center gap-2">
+      <span class="severity-badge severity-low">SELECT</span>
+      <span class="text-slate-600 dark:text-slate-400">
+        {{ result.row_count }} row{% if result.row_count != 1 %}s{% endif %}
+        · {{ result.elapsed_ms }} ms
+      </span>
+    </div>
+    {% if result.truncated %}
+      <span class="severity-badge severity-medium">
+        truncated at {{ max_rows }} rows
+      </span>
+    {% endif %}
+  </header>
+  {% if result.rows %}
+    <div class="max-h-96 overflow-auto">
+      <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
+        <thead class="sticky top-0 bg-slate-100 dark:bg-slate-950">
+          <tr class="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {% for col in result.columns %}
+              <th scope="col" class="px-3 py-2 font-mono">{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 text-sm dark:divide-slate-800">
+          {% for row in result.rows %}
+            <tr>
+              {% for value in row %}
+                <td class="px-3 py-1.5 font-mono text-xs">
+                  {% if value is none %}
+                    <span class="italic text-slate-400">null</span>
+                  {% else %}
+                    {{ value }}
+                  {% endif %}
+                </td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="px-4 py-8 text-center text-sm text-slate-500">
+      Query returned 0 rows.
+    </p>
+  {% endif %}
+</div>

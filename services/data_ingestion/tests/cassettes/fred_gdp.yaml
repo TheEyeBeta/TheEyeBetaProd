@@ -1,0 +1,21 @@
+interactions:
+  - request:
+      method: GET
+      uri: https://api.stlouisfed.org/fred/series/observations
+      body: ""
+      headers: {}
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        Content-Type:
+          - application/json
+      body:
+        string: |
+          {
+            "observations": [
+              {"date": "2024-01-01", "value": "28624.069"},
+              {"date": "2024-04-01", "value": "."}
+            ]
+          }

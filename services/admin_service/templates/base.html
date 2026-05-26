@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}{{ page_title | default("Admin") }}{% endblock %} · theeyebeta</title>
+
+    <link rel="icon" href="data:," />
+
+    {# Severity colour palette + small UI overrides. Tailwind utilities handle the rest. #}
+    <link rel="stylesheet" href="{{ static_url }}/style.css" />
+
+    {#-
+      Tailwind CSS via Play CDN. Version pinned per .cursor/rules/frontend-htmx.mdc.
+      The dark-mode strategy must be set BEFORE the CDN script runs.
+    -#}
+    <script src="{{ static_url }}/js/tailwind-config.js"></script>
+    <script src="https://cdn.tailwindcss.com/3.4.10"></script>
+
+    {#- htmx 2.x — pinned to a specific tag, never @latest. -#}
+    <script src="https://unpkg.com/htmx.org@2.0.3" crossorigin="anonymous"></script>
+
+    {#- Chart.js — pinned. Charts are wired up via data-* attributes in static/js. -#}
+    <script
+      src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"
+      crossorigin="anonymous"
+    ></script>
+
+    {#- Admin shell JS: dark-mode toggle, JWT injection, htmx redirect handling. -#}
+    <script defer src="{{ static_url }}/js/app.js"></script>
+
+    {% block head_extra %}{% endblock %}
+  </head>
+
+  <body
+    class="h-full bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100"
+    hx-boost="true"
+    hx-headers='{"X-Requested-With": "htmx"}'
+  >
+    {% include "_nav.html" %}
+
+    <main id="main" class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      {% block content %}{% endblock %}
+    </main>
+
+    {#- htmx modal target — every confirm/detail modal swaps innerHTML here. -#}
+    {% include "_modal.html" %}
+
+    {#- Toast / flash region for transient HX-Trigger events. -#}
+    <div
+      id="flash"
+      class="pointer-events-none fixed bottom-4 right-4 z-40 flex flex-col gap-2"
+      role="status"
+      aria-live="polite"
+    ></div>
+
+    {% block body_extra %}{% endblock %}
+  </body>
+</html>

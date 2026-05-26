@@ -1,0 +1,55 @@
+# LiteLLM proxy config — theeyebeta llm-gateway (port 7020 → container 4000)
+# Docs: https://docs.litellm.ai/docs/proxy/configs
+
+model_list:
+  - model_name: claude-sonnet-4-6
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-haiku-4-5
+    litellm_params:
+      model: anthropic/claude-haiku-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: gpt-5
+    litellm_params:
+      model: openai/gpt-5
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: text-embedding-3-large
+    litellm_params:
+      model: openai/text-embedding-3-large
+      api_key: os.environ/OPENAI_API_KEY
+
+router_settings:
+  routing_strategy: simple-shuffle
+  fallbacks:
+    - claude-sonnet-4-6:
+        - gpt-5
+    - gpt-5:
+        - claude-sonnet-4-6
+    - claude-haiku-4-5:
+        - claude-sonnet-4-6
+  cooldown_time: 30
+  allowed_fails: 3
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+  cache: true
+  cache_params:
+    type: redis
+    host: os.environ/REDIS_HOST
+    port: os.environ/REDIS_PORT
+    ttl: 300
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/LITELLM_DATABASE_URL
+  store_audit_logs: true
+  proxy_batch_write_at: 60
+
+environment_variables:
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"

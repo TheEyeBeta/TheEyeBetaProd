@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package zinc.risk;
+
+option py_generic_services = true;
+
+// Pre-trade risk validation and portfolio metric computation.
+service Risk {
+  rpc ValidateOrder(RiskCheckRequest) returns (RiskDecision);
+  rpc ComputePortfolioMetrics(PortfolioRequest) returns (PortfolioMetrics);
+}
+
+message RiskCheckRequest {
+  string portfolio_id = 1;
+  int64 instrument_id = 2;
+  string side = 3;
+  double qty = 4;
+  double limit_price = 5;
+  // Optional intent label: BUY | SELL | REDUCE | EXIT (drawdown circuit breaker).
+  string order_intent = 6;
+  string sector = 7;
+  string cluster = 8;
+}
+
+enum RiskOutcome {
+  ALLOW = 0;
+  WARN = 1;
+  BLOCK = 2;
+}
+
+message RiskDecision {
+  RiskOutcome outcome = 1;
+  string reason = 2;
+  map<string, double> metrics = 3;
+  repeated string failed_checks = 4;
+  bool approved = 5;
+}
+
+message PortfolioRequest {
+  string portfolio_id = 1;
+}
+
+message PortfolioMetrics {
+  string portfolio_id = 1;
+  double var_95 = 2;
+  double cvar_95 = 3;
+  double max_drawdown = 4;
+  double gross_exposure = 5;
+  double net_exposure = 6;
+  double beta_spy = 7;
+  double concentration_hhi = 8;
+}

@@ -1,0 +1,4 @@
+# Delisted or hard-to-fetch A-shares: try US-listed ADR tickers via yfinance.
+fallbacks:
+  - { symbol: "600519", exchange_code: "XSHG", adr_ticker: "MOUTF" }
+  - { symbol: "000858", exchange_code: "XSHE", adr_ticker: "WFGFY" }

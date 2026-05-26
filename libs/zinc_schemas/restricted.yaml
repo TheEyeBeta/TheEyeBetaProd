@@ -1,0 +1,21 @@
+# Pre-trade restricted securities (Part 9.2 — restricted_list rule).
+# Updated without code deploy; compliance-service reloads on process start.
+
+sanctions:
+  - symbol: SANCTIONED
+    list_type: blacklist
+    reason: OFAC SDN list
+  - symbol: EMBARGOED
+    list_type: blacklist
+    reason: Sanctions program
+
+insider_restricted:
+  - symbol: INSIDERX
+    list_type: blacklist
+    reason: Active insider trading restriction window
+  - symbol: GREYCO
+    list_type: grey_list
+    reason: Pending insider clearance
+  - symbol: WATCHCO
+    list_type: watch_list
+    reason: Elevated insider monitoring
