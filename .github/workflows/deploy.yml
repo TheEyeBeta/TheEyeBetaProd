@@ -1,50 +1,26 @@
-name: Deploy to Production
+name: Deploy → TheEyeBetaProd
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
-# Never cancel a live deploy — queue the next one instead.
+# Never run two deploys simultaneously.
+# If a second push lands while a deploy is in flight, it queues — never cancels.
 concurrency:
-  group: deploy-production
+  group: production-deploy
   cancel-in-progress: false
 
-env:
-  DEPLOY_DIR: "~/theeyebeta"
-  SSH_KEY_FILE: ${{ runner.temp }}/deploy_key
-  SSH_KNOWN_HOSTS: ${{ runner.temp }}/known_hosts
-  # SSH options reused across all ssh/scp calls
-  SSH_OPTS: >-
-    -i ${{ runner.temp }}/deploy_key
-    -o UserKnownHostsFile=${{ runner.temp }}/known_hosts
-    -o StrictHostKeyChecking=accept-new
-    -o ConnectTimeout=15
-    -o ServerAliveInterval=30
-    -o ServerAliveCountMax=6
-    -o BatchMode=yes
-
 jobs:
-
-  # ═══════════════════════════════════════════════════════════════════════════
-  # deploy — SSH over Tailscale to the Mac mini, pull + restart, healthcheck.
-  # On failure: rollback to pre-deploy git commit + open GitHub Issue.
-  # ═══════════════════════════════════════════════════════════════════════════
   deploy:
-    name: Deploy → ${{ secrets.SSH_HOST }} (production)
+    name: Deploy to Mac Mini (bare metal)
     runs-on: ubuntu-latest
-    environment: production       # wired to GitHub Environments (approval gate)
-    timeout-minutes: 20           # hard cap — prevents a hung deploy blocking the queue
-
-    permissions:
-      contents: read
-      issues: write               # required to open rollback issue
 
     steps:
-      # ── 1. Code on the runner (for scripts and composite actions) ──────────
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # ── 2. Join the Tailscale network ─────────────────────────────────────
+      # ── 1. Tailscale ────────────────────────────────────────────────────────
+      # Spins up an ephemeral node tagged tag:ci.
+      # ACL allows tag:ci → tag:server:22 only.
+      # Node is removed from the tailnet automatically when the job ends.
       - name: Connect to Tailscale
         uses: tailscale/github-action@v2
         with:
@@ -52,227 +28,46 @@ jobs:
           oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
           tags:            tag:ci
 
-      # ── 3. Install the deploy SSH private key ─────────────────────────────
-      - name: Install SSH key
-        run: |
-          install -m 600 /dev/null "$SSH_KEY_FILE"
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > "$SSH_KEY_FILE"
-          touch "$SSH_KNOWN_HOSTS"
-
-      # ── 4. Wait for the Mac mini to be reachable over Tailscale SSH ───────
-      - name: Wait for SSH connectivity
-        run: |
-          echo "Waiting for SSH on ${{ secrets.SSH_HOST }}…"
-          for i in $(seq 1 18); do
-            if ssh ${{ env.SSH_OPTS }} \
-                 "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-                 'echo connected' 2>/dev/null; then
-              echo "SSH is ready."
-              exit 0
-            fi
-            echo "  attempt $i/18 — retrying in 10s"
-            sleep 10
-          done
-          echo "✖ SSH timeout after 3 minutes." >&2
-          exit 1
-
-      # ── 5. Capture pre-deploy git SHA (rollback anchor) ───────────────────
-      - name: Capture pre-deploy state
-        id: pre
-        run: |
-          PREVIOUS_SHA=$(ssh ${{ env.SSH_OPTS }} \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            "cd ${{ env.DEPLOY_DIR }} && git rev-parse HEAD 2>/dev/null || echo unknown")
-          echo "sha=${PREVIOUS_SHA}" >> "$GITHUB_OUTPUT"
-          echo "Pre-deploy commit: ${PREVIOUS_SHA}"
-
-      # ── 6. Write the deploy script to a temp file on the runner ───────────
-      #    Using bash -s < script ensures secrets never appear as bare CLI args.
-      - name: Write deploy script
-        run: |
-          cat > "${{ runner.temp }}/deploy.sh" << 'SCRIPT'
-          #!/usr/bin/env bash
-          set -euo pipefail
-
-          TARGET_DIR="$1"
-
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  theeyebeta deploy — $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-          # ── Pull latest code ────────────────────────────────────
-          echo "▶ Updating code in ${TARGET_DIR}..."
-          cd "${TARGET_DIR}"
-          git fetch origin
-          git reset --hard origin/main
-          echo "  HEAD: $(git log -1 --oneline)"
-
-          # ── Docker login ────────────────────────────────────────
-          echo "▶ Authenticating with ghcr.io..."
-          echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GH_USER}" --password-stdin
-
-          # ── Pull new images ─────────────────────────────────────
-          echo "▶ Pulling new images..."
-          docker compose pull
-
-          # ── Restart services ────────────────────────────────────
-          echo "▶ Applying changes (--remove-orphans)..."
-          docker compose up -d --remove-orphans
-
-          # ── Wait for containers to initialise ────────────────────
-          echo "▶ Waiting 30s for services to stabilise..."
-          sleep 30
-
-          # ── Health check ────────────────────────────────────────
-          echo "▶ Running health check..."
-          tb status
-          # tb status must exit 0 for "all-green"; any non-zero exits here
-          # and the outer set -e will propagate the failure.
-
-          echo ""
-          echo "✔ Deploy succeeded — $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-          SCRIPT
-          chmod +x "${{ runner.temp }}/deploy.sh"
-
-      # ── 7. Execute deploy on the Mac mini ─────────────────────────────────
-      - name: Deploy
-        id: deploy
-        env:
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          GH_USER:    ${{ secrets.GH_USER }}
-        run: |
-          ssh ${{ env.SSH_OPTS }} \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            env \
-              GHCR_TOKEN="$GHCR_TOKEN" \
-              GH_USER="$GH_USER" \
-              bash -s -- "${{ env.DEPLOY_DIR }}" \
-            < "${{ runner.temp }}/deploy.sh"
-
-      # ── 8. Write the rollback script ──────────────────────────────────────
-      - name: Write rollback script
-        if: failure()
-        run: |
-          cat > "${{ runner.temp }}/rollback.sh" << 'SCRIPT'
-          #!/usr/bin/env bash
-          set -uo pipefail    # -e intentionally omitted so we capture all output
-
-          TARGET_DIR="$1"
-          PREVIOUS_SHA="$2"
-
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  theeyebeta ROLLBACK — $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-          echo "  Reverting to: ${PREVIOUS_SHA}"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-          cd "${TARGET_DIR}"
-
-          if [ "${PREVIOUS_SHA}" = "unknown" ]; then
-            echo "⚠️  Previous SHA unknown — skipping git rollback. Doing force-recreate."
-          else
-            echo "▶ Reverting code to ${PREVIOUS_SHA}..."
-            git reset --hard "${PREVIOUS_SHA}"
-          fi
-
-          echo "▶ Force-recreating containers from rolled-back images..."
-          docker compose up -d --force-recreate
-
-          echo "▶ Waiting 30s..."
-          sleep 30
-
-          echo "▶ Post-rollback health check..."
-          if tb status; then
-            echo "✔ Rollback healthy."
-            exit 0
-          else
-            echo "✖ ROLLBACK UNHEALTHY — manual intervention required!"
-            exit 2
-          fi
-          SCRIPT
-          chmod +x "${{ runner.temp }}/rollback.sh"
-
-      # ── 9. Rollback on deploy failure ─────────────────────────────────────
-      - name: Rollback
-        if: failure() && steps.deploy.outcome == 'failure'
-        run: |
-          echo "Deploy failed — attempting rollback to ${{ steps.pre.outputs.sha }}"
-          ssh ${{ env.SSH_OPTS }} \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            bash -s -- "${{ env.DEPLOY_DIR }}" "${{ steps.pre.outputs.sha }}" \
-            < "${{ runner.temp }}/rollback.sh" \
-          || echo "⚠️  Rollback script exited non-zero — see issue."
-
-      # ── 10. Collect service logs from the Mac mini ────────────────────────
-      - name: Collect logs
-        if: failure()
-        run: |
-          ssh ${{ env.SSH_OPTS }} \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            "cd ${{ env.DEPLOY_DIR }} \
-             && docker compose logs --no-color --tail=250 2>&1 \
-             && echo '--- tb status ---' \
-             && tb status 2>&1 || true" \
-          > "${{ runner.temp }}/deploy-failure.log" 2>&1 || true
-
-          echo "--- runner-side log preview (last 40 lines) ---"
-          tail -40 "${{ runner.temp }}/deploy-failure.log" || true
-
-      - name: Upload failure logs as artifact
-        if: failure()
-        uses: actions/upload-artifact@v4
+      # ── 2. Deploy ───────────────────────────────────────────────────────────
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          name: deploy-failure-logs-${{ github.sha }}
-          path: ${{ runner.temp }}/deploy-failure.log
-          retention-days: 14
+          host:     ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          timeout:  120s
+          script: |
+            set -euo pipefail
+            REPO="$HOME/TheEyeBeta2025/TheEyeBetaProd"
 
-      # ── 11. Open a GitHub Issue on failure ────────────────────────────────
-      - name: Open rollback issue
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          LOG_SNIPPET=$(tail -60 "${{ runner.temp }}/deploy-failure.log" 2>/dev/null \
-                        | head -c 6000 \
-                        || echo "(no log captured)")
+            echo "━━━ Pull latest ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            cd "$REPO"
+            git fetch --all
+            git reset --hard origin/main
+            echo "HEAD: $(git log --oneline -1)"
 
-          ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "━━━ Sync dependencies ━━━━━━━━━━━━━━━━━━━━━━━━"
+            # --frozen: fail if uv.lock is out of date rather than silently updating it.
+            # Update the lock file locally and commit before merging to main.
+            uv sync --frozen
 
-          gh issue create \
-            --repo "${{ github.repository }}" \
-            --title "🚨 Deploy failed — ${{ github.sha }} ($(date -u '+%Y-%m-%d'))" \
-            --label "deploy-failure,incident" \
-            --body "## Deploy Failure
+            echo "━━━ Restart services ━━━━━━━━━━━━━━━━━━━━━━━━━"
+            sudo systemctl restart theeyebeta-admin theeyebeta-litellm
 
-          **Run:** [${{ github.run_id }}](${ARTIFACT_URL})
-          **Commit:** \`${{ github.sha }}\` — ${{ github.event.head_commit.message }}
-          **Actor:** @${{ github.actor }}
-          **Pre-deploy SHA:** \`${{ steps.pre.outputs.sha }}\`
-          **Timestamp:** $(date -u '+%Y-%m-%dT%H:%M:%SZ')
+            echo "━━━ Health check ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            sleep 3
+            FAILED=0
+            for svc in theeyebeta-admin theeyebeta-litellm; do
+              if systemctl is-active --quiet "$svc"; then
+                echo "  ✓  $svc"
+              else
+                echo "  ✗  $svc — dumping status:"
+                sudo systemctl status "$svc" --no-pager --lines=30
+                FAILED=1
+              fi
+            done
+            [ "$FAILED" -eq 0 ] || exit 1
 
-          ### What happened
-          The automated deploy to \`${{ secrets.SSH_HOST }}\` failed.
-          A rollback to \`${{ steps.pre.outputs.sha }}\` was attempted.
-
-          ### Log tail (last 60 lines)
-          \`\`\`
-          ${LOG_SNIPPET}
-          \`\`\`
-
-          ### Full logs
-          [Download artifact](${ARTIFACT_URL}) → \`deploy-failure-logs-${{ github.sha }}\`
-
-          ### Manual recovery steps
-          \`\`\`bash
-          # SSH to the Mac mini
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
-          cd ${{ env.DEPLOY_DIR }}
-
-          # Check service state
-          docker compose ps
-          tb status
-
-          # Hard rollback to the known-good commit
-          git reset --hard ${{ steps.pre.outputs.sha }}
-          docker compose up -d --force-recreate
-          \`\`\`
-          "
+            echo "━━━ Deploy complete ━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Deployed at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "Commit:      $(git log --oneline -1)"
