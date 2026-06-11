@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly theeyebeta database backup (02:00 UTC, off-pipeline hours)
+
+[Timer]
+OnCalendar=*-*-* 02:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+Unit=theeye-backup.service
+
+[Install]
+WantedBy=timers.target

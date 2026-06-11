@@ -1,0 +1,14 @@
+[Unit]
+Description=TheEyeBeta nightly pg_dump backup with rotation
+Wants=network-online.target
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=the-eye-beta
+Group=the-eye-beta
+ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/scripts/backup_db.sh
+TimeoutStartSec=3600
+
+[Install]
+WantedBy=multi-user.target
