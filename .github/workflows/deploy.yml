@@ -50,7 +50,7 @@ jobs:
             # --frozen: fail if uv.lock is out of date rather than silently updating it.
             # Update the lock file locally and commit before merging to main.
             export PATH="$HOME/.local/bin:$PATH"
-            uv sync --frozen
+            uv sync --frozen --all-packages
 
             echo "━━━ Restart services ━━━━━━━━━━━━━━━━━━━━━━━━━"
             sudo systemctl restart theeyebeta-admin theeyebeta-litellm
