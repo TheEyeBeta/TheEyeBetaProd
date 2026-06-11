@@ -49,6 +49,7 @@ jobs:
             echo "━━━ Sync dependencies ━━━━━━━━━━━━━━━━━━━━━━━━"
             # --frozen: fail if uv.lock is out of date rather than silently updating it.
             # Update the lock file locally and commit before merging to main.
+            export PATH="$HOME/.local/bin:$PATH"
             uv sync --frozen
 
             echo "━━━ Restart services ━━━━━━━━━━━━━━━━━━━━━━━━━"
