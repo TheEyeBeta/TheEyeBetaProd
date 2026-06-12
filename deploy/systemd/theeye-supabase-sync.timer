@@ -1,0 +1,10 @@
+[Unit]
+Description=TheEyeBeta Supabase sync v2 (after nightly chain)
+
+[Timer]
+OnCalendar=Mon..Fri 22:20 UTC
+Persistent=false
+Unit=theeye-supabase-sync.service
+
+[Install]
+WantedBy=timers.target

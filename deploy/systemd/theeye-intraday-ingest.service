@@ -1,0 +1,16 @@
+[Unit]
+Description=TheEyeBeta 15-minute intraday price ingestion
+Wants=network-online.target
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=the-eye-beta
+Group=the-eye-beta
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+ExecStart=/home/the-eye-beta/.local/bin/uv run python -m workers.intraday_ingestion_worker --once
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

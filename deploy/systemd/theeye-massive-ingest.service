@@ -10,7 +10,9 @@ Group=the-eye-beta
 WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
 EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
 ExecStart=/home/the-eye-beta/.local/bin/uv run python -m workers.massive_ingestion_worker --run-type scheduled
-TimeoutStartSec=1800
+ExecStart=/home/the-eye-beta/.local/bin/uv run python -m workers.theeyebeta_indicator_worker --run-type scheduled
+ExecStart=/home/the-eye-beta/.local/bin/uv run python -m workers.sector_aggregation_worker --run-type scheduled
+TimeoutStartSec=3600
 
 [Install]
 WantedBy=multi-user.target

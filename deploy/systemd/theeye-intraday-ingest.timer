@@ -1,0 +1,11 @@
+[Unit]
+Description=TheEyeBeta intraday ingest every 15 minutes (market hours)
+
+[Timer]
+OnCalendar=Mon..Fri *:05,20,35,50 UTC
+Persistent=false
+RandomizedDelaySec=20
+Unit=theeye-intraday-ingest.service
+
+[Install]
+WantedBy=timers.target
