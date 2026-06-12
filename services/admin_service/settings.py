@@ -59,11 +59,6 @@ class Settings(BaseSettings):
         description="Filesystem root used to resolve agent constitution_path values.",
     )
 
-    docker_host: str = Field(
-        default="unix:///var/run/docker.sock",
-        validation_alias="DOCKER_HOST",
-    )
-
     grafana_overview_url: str = Field(
         default="http://grafana:3000/d/overview?orgId=1&kiosk=tv&theme=light",
         validation_alias="ADMIN_GRAFANA_OVERVIEW_URL",

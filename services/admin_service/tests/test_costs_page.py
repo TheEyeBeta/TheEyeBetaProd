@@ -270,7 +270,6 @@ async def test_costs_page_requires_auth(
     with (
         patch("deps.init_resources", _init_test_resources),
         patch("deps.close_resources", _close_test_resources),
-        patch("deps.docker.DockerClient", side_effect=RuntimeError("docker disabled")),
     ):
         app = create_app(settings)
         transport = ASGITransport(app=app, lifespan="on")

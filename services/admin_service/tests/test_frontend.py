@@ -98,7 +98,7 @@ class _InMemoryRedisStub:
 
 
 async def _init_frontend_resources(settings: object) -> None:
-    """asyncpg pool + recording NATS + in-memory Redis (no Docker socket)."""
+    """asyncpg pool + recording NATS + in-memory Redis."""
     import asyncpg  # noqa: PLC0415
     import deps  # noqa: PLC0415
 
@@ -109,7 +109,6 @@ async def _init_frontend_resources(settings: object) -> None:
         command_timeout=60,
     )
     deps._nats = _RecordingNats()  # noqa: SLF001
-    deps._docker = None  # noqa: SLF001
     deps._redis = _InMemoryRedisStub()  # noqa: SLF001
 
 
@@ -123,7 +122,6 @@ async def _close_frontend_resources() -> None:
         await deps._redis.aclose()
         deps._redis = None
     deps._nats = None
-    deps._docker = None
 
 
 # --------------------------------------------------------------------------- #
@@ -207,8 +205,7 @@ def frontend_app_server(frontend_seeded_dsn: str) -> Iterator[dict[str, str]]:
     """Start uvicorn against the seeded DSN; yield ``{base_url, password}``.
 
     JWT keys and the bcrypt password are minted in-memory so the **real** login
-    flow can be exercised (no FastAPI dependency override is installed). The
-    docker side-channel is mocked because we have no Docker socket in tests.
+    flow can be exercised (no FastAPI dependency override is installed).
     """
     import bcrypt
     import uvicorn
@@ -238,12 +235,6 @@ def frontend_app_server(frontend_seeded_dsn: str) -> Iterator[dict[str, str]]:
     with ExitStack() as stack:
         stack.enter_context(patch("deps.init_resources", _init_frontend_resources))
         stack.enter_context(patch("deps.close_resources", _close_frontend_resources))
-        stack.enter_context(
-            patch(
-                "deps.docker.DockerClient",
-                side_effect=RuntimeError("docker disabled in frontend tests"),
-            ),
-        )
 
         app = create_app(settings)
 

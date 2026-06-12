@@ -1,335 +1,320 @@
-"""Integration tests for admin services (Docker control) API."""
+"""Integration tests for admin services (systemd) API."""
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from collections.abc import AsyncIterator
-from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import psycopg
 import pytest
-from docker.errors import NotFound
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 
-_SERVICE_ROOT = Path(__file__).resolve().parents[1]
-_TESTS_DIR = Path(__file__).resolve().parent
-if str(_SERVICE_ROOT) not in sys.path:
-    sys.path.insert(0, str(_SERVICE_ROOT))
-
-_conf_spec = importlib.util.spec_from_file_location(
-    "admin_test_conftest",
-    _TESTS_DIR / "conftest.py",
-)
-assert _conf_spec is not None and _conf_spec.loader is not None
-_admin_conf = importlib.util.module_from_spec(_conf_spec)
-_conf_spec.loader.exec_module(_admin_conf)
-_normalize_psycopg_dsn = _admin_conf._normalize_psycopg_dsn
+from api.services import ALL_UNITS, RESTARTABLE_SERVICES
 
 
-def _audit_count(dsn: str, entity_id: str, action: str) -> int:
-    with psycopg.connect(_normalize_psycopg_dsn(dsn), autocommit=True) as conn:
-        row = conn.execute(
-            """
-            SELECT COUNT(*)::int
-              FROM theeyebeta.audit_log
-             WHERE entity_id = %s AND action = %s
-            """,
-            (entity_id, action),
-        ).fetchone()
-    return int(row[0]) if row else 0
+def _fake_proc(
+    returncode: int = 0,
+    stdout: bytes = b"",
+    stderr: bytes = b"",
+) -> MagicMock:
+    """Mock subprocess whose communicate() resolves immediately."""
+    proc = MagicMock()
+    proc.returncode = returncode
+    proc.communicate = AsyncMock(return_value=(stdout, stderr))
+    return proc
 
 
-class _FakeContainer:
-    """Minimal docker-py container stub."""
-
-    def __init__(
-        self,
-        *,
-        name: str,
-        image: str,
-        state: str = "running",
-        health: str | None = "healthy",
-    ) -> None:
-        self.id = f"id-{name}"
-        self.name = name
-        started = (datetime.now(tz=UTC) - timedelta(minutes=5)).isoformat().replace("+00:00", "Z")
-        health_block = {"Status": health} if health else None
-        self.attrs: dict[str, Any] = {
-            "Id": self.id,
-            "Name": f"/{name}",
-            "Image": image,
-            "Config": {"Image": image},
-            "State": {
-                "Status": state,
-                "Running": state == "running",
-                "StartedAt": started,
-                "Health": health_block,
-            },
-        }
-        self.restart_calls: list[dict[str, Any]] = []
-
-    def restart(self, *, timeout: int = 10) -> None:
-        self.restart_calls.append({"timeout": timeout})
-        self.attrs["State"]["Status"] = "running"
-        self.attrs["State"]["Running"] = True
-
-    def reload(self) -> None:
-        return None
+def _show_stdout(
+    active: str = "active",
+    sub: str = "running",
+    ts: str = "Thu 2026-06-12 10:00:00 UTC",
+) -> bytes:
+    """Simulate ``systemctl show`` stdout for a healthy unit."""
+    return (
+        f"ActiveState={active}\n"
+        f"SubState={sub}\n"
+        f"ActiveEnterTimestamp={ts}\n"
+    ).encode()
 
 
-class _FakeNetwork:
-    def __init__(self, container_ids: list[str]) -> None:
-        self.attrs = {"Containers": dict.fromkeys(container_ids, {})}
-
-    def reload(self) -> None:
-        return None
-
-
-class _FakeContainersCollection:
-    def __init__(self, containers: list[_FakeContainer]) -> None:
-        self._by_id = {c.id: c for c in containers}
-        self._by_name = {c.name: c for c in containers}
-        self._all = containers
-
-    def list(self, *, all: bool = False) -> list[_FakeContainer]:  # noqa: A002 — match docker-py
-        del all
-        return list(self._all)
-
-    def get(self, key: str) -> _FakeContainer:
-        if key in self._by_id:
-            return self._by_id[key]
-        if key in self._by_name:
-            return self._by_name[key]
-        raise NotFound(f"container {key} not found")
-
-
-class _FakeNetworksCollection:
-    def __init__(self, network: _FakeNetwork | None) -> None:
-        self._network = network
-
-    def get(self, name: str) -> _FakeNetwork:
-        if self._network is None or name != "theeyebeta-net":
-            raise NotFound(f"network {name} not found")
-        return self._network
-
-
-class _FakeDockerClient:
-    def __init__(
-        self,
-        containers: list[_FakeContainer],
-        *,
-        with_network: bool = True,
-    ) -> None:
-        self.containers = _FakeContainersCollection(containers)
-        network = _FakeNetwork([c.id for c in containers]) if with_network else None
-        self.networks = _FakeNetworksCollection(network)
-
-    def ping(self) -> bool:
-        return True
-
-    def close(self) -> None:
-        return None
-
-
-def _seed_containers() -> list[_FakeContainer]:
-    return [
-        _FakeContainer(
-            name="oms",
-            image="ghcr.io/theeyebeta/oms:latest",
-            state="running",
-            health="healthy",
-        ),
-        _FakeContainer(
-            name="risk-service",
-            image="ghcr.io/theeyebeta/risk-service:latest",
-            state="running",
-            health=None,
-        ),
-    ]
-
-
-async def _services_client(
-    dsn: str,
-    docker_client: _FakeDockerClient,
-) -> AsyncIterator[AsyncClient]:
-    """Yield an httpx client wired to ``dsn`` and a fake Docker client."""
-    from auth import get_current_user  # noqa: PLC0415
-    from deps import get_docker  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
-    from settings import Settings, get_settings  # noqa: PLC0415
-
-    _close = _admin_conf._close_test_resources
-    _init = _admin_conf._init_test_resources
-
-    get_settings.cache_clear()
-    settings = Settings(database_url=dsn)
-    with (
-        patch("deps.init_resources", _init),
-        patch("deps.close_resources", _close),
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_status_lists_all_units(
+    admin_client: tuple[AsyncClient, Any],
+    auth_headers: dict[str, str],
+) -> None:
+    """GET /admin/services/status returns all known systemd units."""
+    client, _ = admin_client
+    show = _fake_proc(stdout=_show_stdout())
+    with patch(
+        "api.services.asyncio.create_subprocess_exec",
+        new=AsyncMock(return_value=show),
     ):
-        app = create_app(settings)
+        resp = await client.get("/admin/services/status", headers=auth_headers)
 
-        async def _fake_user() -> dict[str, str]:
-            return {"sub": "test-operator"}
-
-        app.dependency_overrides[get_current_user] = _fake_user
-        app.dependency_overrides[get_docker] = lambda: docker_client
-
-        transport = ASGITransport(app=app, lifespan="on")
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            yield client
-        app.dependency_overrides.clear()
-
-
-@pytest.fixture
-async def services_client(
-    admin_integration_dsn: str,
-) -> AsyncIterator[tuple[AsyncClient, _FakeDockerClient]]:
-    """Authed httpx client + fake Docker client (seeded)."""
-    fake = _FakeDockerClient(_seed_containers())
-    async for client in _services_client(admin_integration_dsn, fake):
-        yield client, fake
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["network"] == "systemd"
+    assert len(body["services"]) == len(ALL_UNITS)
+    assert {s["name"] for s in body["services"]} == set(ALL_UNITS.keys())
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_status_happy(
-    services_client: tuple[AsyncClient, _FakeDockerClient],
+async def test_status_active_unit_is_healthy(
+    admin_client: tuple[AsyncClient, Any],
     auth_headers: dict[str, str],
 ) -> None:
-    """GET /admin/services/status returns containers on theeyebeta-net."""
-    client, _ = services_client
-    response = await client.get("/admin/services/status", headers=auth_headers)
-    assert response.status_code == 200
-    body = response.json()
-    assert body["network"] == "theeyebeta-net"
-    names = {row["name"] for row in body["services"]}
-    assert {"oms", "risk-service"} <= names
-    oms_row = next(row for row in body["services"] if row["name"] == "oms")
-    assert oms_row["state"] == "running"
-    assert oms_row["health"] == "healthy"
-    assert oms_row["uptime_seconds"] is not None
-    assert oms_row["uptime_seconds"] >= 0
+    """Active units report healthy in the status response."""
+    client, _ = admin_client
+    show = _fake_proc(stdout=_show_stdout(active="active", sub="running"))
+    with patch(
+        "api.services.asyncio.create_subprocess_exec",
+        new=AsyncMock(return_value=show),
+    ):
+        resp = await client.get("/admin/services/status", headers=auth_headers)
+
+    entries = {s["name"]: s for s in resp.json()["services"]}
+    assert entries["admin-service"]["health"] == "healthy"
+    assert "active" in entries["admin-service"]["state"]
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_restart_happy_writes_audit(
-    services_client: tuple[AsyncClient, _FakeDockerClient],
-    admin_integration_dsn: str,
+async def test_status_inactive_unit_is_unhealthy(
+    admin_client: tuple[AsyncClient, Any],
     auth_headers: dict[str, str],
 ) -> None:
-    """POST /admin/services/{name}/restart calls restart and audits."""
-    client, fake = services_client
-    response = await client.post(
-        "/admin/services/oms/restart",
-        headers=auth_headers,
-        json={"reason": "stuck websocket"},
+    """Inactive units report unhealthy in the status response."""
+    client, _ = admin_client
+    show = _fake_proc(stdout=_show_stdout(active="inactive", sub="dead"))
+    with patch(
+        "api.services.asyncio.create_subprocess_exec",
+        new=AsyncMock(return_value=show),
+    ):
+        resp = await client.get("/admin/services/status", headers=auth_headers)
+
+    entry = next(s for s in resp.json()["services"] if s["name"] == "admin-service")
+    assert entry["health"] == "unhealthy"
+    assert "inactive" in entry["state"]
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_status_requires_auth(admin_integration_dsn: str) -> None:
+    """GET /admin/services/status rejects unauthenticated requests."""
+    from conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
+        _close_test_resources,
+        _init_test_resources,
     )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["name"] == "oms"
-    assert body["restarted"] is True
-    assert body["state"] == "running"
-
-    oms = fake.containers.get("oms")
-    assert oms.restart_calls, "container.restart was not invoked"
-    assert oms.restart_calls[0]["timeout"] == 10
-
-    assert _audit_count(admin_integration_dsn, "oms", "restart.service") >= 1
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_restart_not_in_whitelist_422(
-    services_client: tuple[AsyncClient, _FakeDockerClient],
-    auth_headers: dict[str, str],
-) -> None:
-    """Names outside the whitelist return 422 (validation error)."""
-    client, _ = services_client
-    response = await client.post(
-        "/admin/services/postgres/restart",
-        headers=auth_headers,
-        json={},
-    )
-    assert response.status_code == 422
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_restart_missing_container_404(
-    admin_integration_dsn: str,
-    auth_headers: dict[str, str],
-) -> None:
-    """Whitelisted service with no live container returns 404."""
-    fake = _FakeDockerClient([], with_network=False)
-    async for client in _services_client(admin_integration_dsn, fake):
-        response = await client.post(
-            "/admin/services/llm-gateway/restart",
-            headers=auth_headers,
-            json={},
-        )
-        assert response.status_code == 404
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_restart_validation_error(
-    services_client: tuple[AsyncClient, _FakeDockerClient],
-    auth_headers: dict[str, str],
-) -> None:
-    """Out-of-range timeout fails Pydantic validation with 422."""
-    client, _ = services_client
-    response = await client.post(
-        "/admin/services/oms/restart",
-        headers=auth_headers,
-        json={"timeout_seconds": 9999},
-    )
-    assert response.status_code == 422
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_services_auth_required(admin_integration_dsn: str) -> None:
-    """All services endpoints reject unauthenticated requests."""
+    from httpx import ASGITransport  # noqa: PLC0415
     from main import create_app  # noqa: PLC0415
     from settings import Settings, get_settings  # noqa: PLC0415
-
-    _close = _admin_conf._close_test_resources
-    _init = _admin_conf._init_test_resources
 
     get_settings.cache_clear()
     settings = Settings(database_url=admin_integration_dsn)
     with (
-        patch("deps.init_resources", _init),
-        patch("deps.close_resources", _close),
+        patch("deps.init_resources", _init_test_resources),
+        patch("deps.close_resources", _close_test_resources),
     ):
         app = create_app(settings)
         transport = ASGITransport(app=app, lifespan="on")
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            assert (await client.get("/admin/services/status")).status_code == 401
-            assert (await client.post("/admin/services/oms/restart", json={})).status_code == 401
+            resp = await client.get("/admin/services/status")
+    assert resp.status_code == 401
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_restart_rate_limit(
-    services_client: tuple[AsyncClient, _FakeDockerClient],
+async def test_restart_whitelisted_service(
+    admin_client: tuple[AsyncClient, Any],
     auth_headers: dict[str, str],
 ) -> None:
-    """Burst restart calls eventually return 429 (20/min write limit)."""
-    client, _ = services_client
-    statuses: list[int] = []
-    for _ in range(22):
+    """POST /admin/services/{name}/restart restarts a whitelisted unit."""
+    client, _ = admin_client
+    restart_proc = _fake_proc(returncode=0)
+    show_proc = _fake_proc(stdout=_show_stdout())
+
+    with (
+        patch(
+            "api.services.asyncio.create_subprocess_exec",
+            new=AsyncMock(side_effect=[restart_proc, show_proc]),
+        ),
+        patch("api.services.asyncio.sleep", new=AsyncMock()),
+        patch("api.services.write_audit_log", new=AsyncMock()),
+    ):
         resp = await client.post(
-            "/admin/services/oms/restart",
+            "/admin/services/admin-service/restart",
+            json={"reason": "test restart", "timeout_seconds": 30},
             headers=auth_headers,
-            json={},
         )
-        statuses.append(resp.status_code)
-    assert 200 in statuses
-    assert 429 in statuses
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "admin-service"
+    assert body["restarted"] is True
+    assert body["state"] == "active"
+    assert body["container_id"] == "theeyebeta-admin"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_restart_calls_correct_unit(
+    admin_client: tuple[AsyncClient, Any],
+    auth_headers: dict[str, str],
+) -> None:
+    """Verify the correct systemd unit name is passed to systemctl."""
+    client, _ = admin_client
+    mock_exec = AsyncMock(
+        side_effect=[
+            _fake_proc(returncode=0),
+            _fake_proc(stdout=_show_stdout()),
+        ]
+    )
+
+    with (
+        patch("api.services.asyncio.create_subprocess_exec", new=mock_exec),
+        patch("api.services.asyncio.sleep", new=AsyncMock()),
+        patch("api.services.write_audit_log", new=AsyncMock()),
+    ):
+        await client.post(
+            "/admin/services/llm-gateway/restart",
+            json={"reason": "test", "timeout_seconds": 10},
+            headers=auth_headers,
+        )
+
+    first_args = mock_exec.call_args_list[0][0]
+    assert first_args == ("sudo", "systemctl", "restart", "theeyebeta-litellm")
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_restart_unknown_service_returns_422(
+    admin_client: tuple[AsyncClient, Any],
+    auth_headers: dict[str, str],
+) -> None:
+    """Names outside the whitelist return 422."""
+    client, _ = admin_client
+    resp = await client.post(
+        "/admin/services/not-a-service/restart",
+        json={"reason": "test", "timeout_seconds": 10},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+    assert "whitelist" in resp.json()["detail"]
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_restart_systemctl_failure_returns_409(
+    admin_client: tuple[AsyncClient, Any],
+    auth_headers: dict[str, str],
+) -> None:
+    """systemctl restart failure surfaces as 409."""
+    client, _ = admin_client
+    fail_proc = _fake_proc(returncode=1, stderr=b"Job for theeyebeta-admin.service failed")
+
+    with (
+        patch(
+            "api.services.asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=fail_proc),
+        ),
+        patch("api.services.asyncio.sleep", new=AsyncMock()),
+    ):
+        resp = await client.post(
+            "/admin/services/admin-service/restart",
+            json={"reason": "test", "timeout_seconds": 10},
+            headers=auth_headers,
+        )
+
+    assert resp.status_code == 409
+    assert "systemctl refused" in resp.json()["detail"]
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_restart_requires_auth(admin_integration_dsn: str) -> None:
+    """POST /admin/services/{name}/restart rejects unauthenticated requests."""
+    from conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
+        _close_test_resources,
+        _init_test_resources,
+    )
+    from httpx import ASGITransport  # noqa: PLC0415
+    from main import create_app  # noqa: PLC0415
+    from settings import Settings, get_settings  # noqa: PLC0415
+
+    get_settings.cache_clear()
+    settings = Settings(database_url=admin_integration_dsn)
+    with (
+        patch("deps.init_resources", _init_test_resources),
+        patch("deps.close_resources", _close_test_resources),
+    ):
+        app = create_app(settings)
+        transport = ASGITransport(app=app, lifespan="on")
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post(
+                "/admin/services/admin-service/restart",
+                json={"reason": "test", "timeout_seconds": 10},
+            )
+    assert resp.status_code == 401
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_restart_writes_audit_log(
+    admin_client: tuple[AsyncClient, Any],
+    auth_headers: dict[str, str],
+) -> None:
+    """Successful restart writes an audit log entry."""
+    client, _ = admin_client
+    mock_audit = AsyncMock()
+
+    with (
+        patch(
+            "api.services.asyncio.create_subprocess_exec",
+            new=AsyncMock(
+                side_effect=[
+                    _fake_proc(returncode=0),
+                    _fake_proc(stdout=_show_stdout()),
+                ]
+            ),
+        ),
+        patch("api.services.asyncio.sleep", new=AsyncMock()),
+        patch("api.services.write_audit_log", new=mock_audit),
+    ):
+        await client.post(
+            "/admin/services/admin-service/restart",
+            json={"reason": "scheduled maintenance", "timeout_seconds": 10},
+            headers=auth_headers,
+        )
+
+    mock_audit.assert_awaited_once()
+    kw = mock_audit.call_args.kwargs
+    assert kw["action"] == "restart.service"
+    assert kw["entity_type"] == "service"
+    assert kw["entity_id"] == "admin-service"
+    assert kw["payload"]["unit"] == "theeyebeta-admin"
+
+
+def test_restartable_services_have_non_empty_units() -> None:
+    """Every restartable service maps to a non-empty systemd unit name."""
+    for name, unit in RESTARTABLE_SERVICES.items():
+        assert unit, f"{name!r} maps to an empty unit name"
+
+
+def test_all_units_is_superset_of_restartable() -> None:
+    """ALL_UNITS includes every restartable service."""
+    for name in RESTARTABLE_SERVICES:
+        assert name in ALL_UNITS, (
+            f"{name!r} is in RESTARTABLE_SERVICES but missing from ALL_UNITS"
+        )
+
+
+def test_no_docker_imports() -> None:
+    """Guard against docker-py imports creeping back into the services module."""
+    import inspect
+
+    import api.services as svc_module
+
+    src = inspect.getsource(svc_module)
+    assert "import docker" not in src
+    assert "from docker" not in src

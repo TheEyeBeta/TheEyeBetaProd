@@ -1,8 +1,7 @@
 """Acceptance tests for P-FE-00 — base layout, nav, modal, static assets.
 
 These tests use a lightweight FastAPI app (no DB, NATS, or Redis) so they
-run in any environment, including the Windows operator laptop where no
-Docker daemon is available.
+run in any environment, including the Windows operator laptop.
 """
 
 from __future__ import annotations

@@ -56,7 +56,7 @@ class _RecordingNats:
 
 
 async def _init_test_resources(settings: object) -> None:
-    """Start only asyncpg pool and mock NATS (no Docker socket in CI)."""
+    """Start only asyncpg pool and mock NATS."""
     import deps  # noqa: PLC0415
 
     deps._pool = await asyncpg.create_pool(  # noqa: SLF001
@@ -66,7 +66,6 @@ async def _init_test_resources(settings: object) -> None:
         command_timeout=60,
     )
     deps._nats = _RecordingNats()  # noqa: SLF001
-    deps._docker = None  # noqa: SLF001
     deps._redis = None  # noqa: SLF001
 
 
@@ -78,7 +77,6 @@ async def _close_test_resources() -> None:
         deps._pool = None
     deps._nats = None
     deps._redis = None
-    deps._docker = None
 
 
 @pytest.fixture(scope="session")
@@ -186,7 +184,6 @@ async def _admin_client_for_dsn(
     with (
         patch("deps.init_resources", _init_test_resources),
         patch("deps.close_resources", _close_test_resources),
-        patch("deps.docker.DockerClient", side_effect=RuntimeError("docker disabled in tests")),
     ):
         app = create_app(settings)
 
