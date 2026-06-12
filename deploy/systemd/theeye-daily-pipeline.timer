@@ -1,0 +1,11 @@
+[Unit]
+Description=Run TheEyeBeta daily pipeline after macro workers
+
+[Timer]
+OnCalendar=Mon..Fri 21:35 UTC
+Persistent=true
+RandomizedDelaySec=120
+Unit=theeye-daily-pipeline.service
+
+[Install]
+WantedBy=timers.target

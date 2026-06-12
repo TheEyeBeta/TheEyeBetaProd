@@ -1,0 +1,11 @@
+[Unit]
+Description=Run sector aggregation after the nightly ingest + indicator sync
+
+[Timer]
+OnCalendar=Mon..Fri 22:05 UTC
+Persistent=true
+RandomizedDelaySec=60
+Unit=theeye-sector.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=theeyebeta Admin Service
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=the-eye-beta
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
+EnvironmentFile=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+ExecStart=/usr/bin/bash -lc 'cd /home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/services/admin_service && exec /home/the-eye-beta/.local/bin/uv run uvicorn main:app --host 0.0.0.0 --port 7200'
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

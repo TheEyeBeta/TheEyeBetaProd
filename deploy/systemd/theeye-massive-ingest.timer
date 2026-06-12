@@ -1,0 +1,11 @@
+[Unit]
+Description=Run TheEyeBeta canonical price ingestion after macro workers
+
+[Timer]
+OnCalendar=Mon..Fri 21:30 UTC
+Persistent=true
+RandomizedDelaySec=60
+Unit=theeye-massive-ingest.service
+
+[Install]
+WantedBy=timers.target

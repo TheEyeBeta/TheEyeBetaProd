@@ -1,0 +1,272 @@
+---
+description: Database engineering rules for TheEyeBeta2025Live. Apply when writing SQL, ORM code, migrations, or any file importing sqlalchemy/asyncpg/psycopg2/supabase. Mandatory for public.price_daily, public.signals, theeyebeta.prices_daily, theeyebeta.signals, theeyebeta.audit_log, theeyebeta.orders, theeyebeta.public_ticker_map, or any partitioned/hypertable.
+globs:
+  - "**/*.sql"
+  - "**/alembic/versions/*.py"
+  - "**/models/**/*.py"
+  - "**/db/**/*.py"
+  - "**/repositories/**/*.py"
+  - "**/workers/**/*.py"
+  - "**/pipelines/**/*.py"
+  - "**/*_migration*.py"
+  - "**/*repository*.py"
+  - "**/*query*.py"
+alwaysApply: false
+---
+
+# DB Engineer — TheEyeBeta2025Live
+
+**Database**: PostgreSQL 16.14 + TimescaleDB | **Report date**: 2026-06-09 | **Location**: Ubuntu 24.04 server
+
+## Schema Overview
+
+| Schema | Purpose |
+|---|---|
+| `public` | Market data at scale: `tickers` (35,772), `price_daily` (10.7M partitioned y2021–y2026), `signals` (144M rows), `score_audit_log` (20M rows, immutable), indicators, fundamentals, TRASK |
+| `theeyebeta` | Agent trading + mirrored market data: `public_ticker_map` (511-row bridge), `instruments`, `prices_daily` (hypertable, 62 chunks compressed), `signals` (hypertable, 8.9M rows), `orders`, `audit_log` (hash-chained), `agent_memory` (HNSW), 30 agents |
+| `iam` | Service auth: `service_clients`, secrets, scopes |
+
+## Cross-Schema Bridge (CRITICAL)
+
+Most `theeyebeta.*` tables now have **both** `ticker_id` (legacy) and `instrument_id` (correct FK).
+Use `instrument_id` for all new code. Cross-schema joins go through the bridge:
+
+```
+public.tickers.ticker_id ↔ theeyebeta.public_ticker_map.public_ticker_id
+                         ↔ theeyebeta.public_ticker_map.instrument_id
+                         ↔ theeyebeta.instruments.id
+```
+
+```python
+# Correct cross-schema join
+stmt = (
+    select(PricesDaily.close, PricesDaily.ts)
+    .join(PublicTickerMap, PublicTickerMap.instrument_id == PricesDaily.instrument_id)
+    .join(Ticker, Ticker.ticker_id == PublicTickerMap.public_ticker_id)
+    .where(Ticker.ticker == "AAPL")
+    .where(PricesDaily.ts >= cutoff)
+)
+```
+
+## Hard Rules
+
+### 1 — No Blind Destructive SQL
+Before DROP/DELETE/TRUNCATE/ALTER COLUMN/UPDATE without WHERE:
+- Write rollback SQL first
+- Wrap in `BEGIN; ... COMMIT;`
+- State rows affected before executing
+
+### 2 — Two Separate Alembic Histories
+`public.alembic_version` and `theeyebeta.alembic_version` track migrations independently. **Never touch both schemas in a single migration file.**
+
+### 3 — Partitioned Tables (public schema) Are Not Simple Tables
+`public.price_daily`, `public.ind_technical_daily`, `public.ind_risk_daily`, `public.ind_valuation_daily` are **PostgreSQL range-partitioned by year** (y2021–y2026 populated, ~10.6M rows each on price/indicators). Rules:
+- ALWAYS include `date` in WHERE to enable partition pruning
+- `ALTER TABLE` on parent cascades to all child partitions with `AccessExclusiveLock` — expect hours on 10M+ row partitions
+- `CREATE INDEX ON public.price_daily` builds indexes on every partition — plan maintenance windows
+- `ANALYZE <specific_partition>` after bulk inserts, not the parent
+- Check `EXPLAIN` — if not showing partition pruning, the query is wrong
+
+### 4 — Append-Only Immutable Tables — NO UPDATE/DELETE/ALTER
+- `theeyebeta.audit_log` / `audit_log_2026_*` — hash-chained, tamper-evident. **Never modify.**
+- `public.score_audit_log` — 20M rows, compliance backbone. **Never modify.**
+- `public.compliance_log` — pre-trade compliance decisions. **Never modify.**
+- Write to these ONLY through the application's audit functions, never raw SQL.
+
+### 5 — TimescaleDB Hypertables With Compression
+**theeyebeta.prices_daily**: 62 chunks, compression active, `segmentby = instrument_id`
+**theeyebeta.signals**: 2 chunks, 8,945,029 rows — treat like prices_daily for backfills
+
+- Inserting into compressed chunks triggers decompress-modify-recompress (slow)
+- Check chunk compression status before any backfill:
+  ```sql
+  SELECT hypertable_schema, hypertable_name, chunk_name, is_compressed
+  FROM timescaledb_information.chunks
+  WHERE hypertable_schema = 'theeyebeta'
+    AND hypertable_name IN ('prices_daily', 'signals')
+  ORDER BY range_start DESC;
+  ```
+- Schema changes require decompressing ALL chunks first
+
+### 6 — High-Volume Tables: Handle With Care
+- `public.signals`: **144,016,848 rows**. Never `SELECT *`. Always project columns + `ts` filter + `LIMIT`.
+- `public.score_audit_log`: **20,072,428 rows**, immutable. Never `SELECT *` — `score_drivers JSONB` is heavy.
+- `public.trask_audit_events`: **26,665,648 rows** — legitimate high-volume audit log, not a payload bug.
+- `public.price_daily` / indicator tables: **10M+ rows** — partition pruning mandatory; `COUNT(*)` blocked.
+
+## Query Patterns
+
+### Always Specify Columns (Never SELECT *)
+```python
+# Wrong — 144M row table
+result = await db.execute(select(Signal))
+
+# Correct
+result = await db.execute(
+    select(Signal.signal_id, Signal.ticker_id, Signal.ts,
+           Signal.strategy_name, Signal.signal, Signal.confidence)
+    .where(Signal.ticker_id == ticker_id)
+    .where(Signal.ts >= cutoff)
+    .order_by(Signal.ts.desc())
+    .limit(100)
+)
+```
+
+### Partitioned Table Queries Must Include Date
+```python
+# Wrong — scans all 7 year partitions (~10.7M rows)
+stmt = select(PriceDaily).where(PriceDaily.ticker_id == ticker_id)
+
+# Correct — partition pruning via date filter
+stmt = (
+    select(PriceDaily.date, PriceDaily.close, PriceDaily.volume)
+    .where(PriceDaily.ticker_id == ticker_id)
+    .where(PriceDaily.date >= start_date)
+    .order_by(PriceDaily.date.desc())
+)
+```
+
+### Prefer instrument_id in theeyebeta (Not Legacy ticker_id)
+```python
+# Wrong — legacy column, may be NULL on new rows
+stmt = select(IndTechnicalDaily).where(IndTechnicalDaily.ticker_id == ticker_id)
+
+# Correct — resolve via bridge if starting from public
+stmt = (
+    select(IndTechnicalDaily.date, IndTechnicalDaily.rsi_14)
+    .where(IndTechnicalDaily.instrument_id == instrument_id)
+    .where(IndTechnicalDaily.date >= start_date)
+)
+```
+
+### UUID PKs in theeyebeta Schema
+Most `theeyebeta.*` entity tables use UUID PKs. Always pass as proper UUID type:
+```python
+from uuid import UUID
+run_id: UUID = UUID("...")
+stmt = select(AgentRun).where(AgentRun.id == run_id)
+```
+
+### Atomic Position Updates (Use FOR UPDATE)
+```python
+async with db.begin():
+    pos = await db.execute(
+        select(Position)
+        .where(Position.portfolio_id == portfolio_id)
+        .where(Position.instrument_id == instrument_id)
+        .with_for_update()
+    )
+    position = pos.scalar_one_or_none()
+    if position:
+        position.qty += fill_qty
+        position.market_value = position.qty * current_price
+```
+
+### TimescaleDB Aggregation (time_bucket, not DATE_TRUNC)
+```python
+from sqlalchemy import func, text
+
+stmt = select(
+    func.time_bucket(text("'1 day'"), PricesDaily.ts).label("day"),
+    PricesDaily.instrument_id,
+    func.first(PricesDaily.open, PricesDaily.ts).label("open"),
+    func.max(PricesDaily.high).label("high"),
+    func.min(PricesDaily.low).label("low"),
+    func.last(PricesDaily.close, PricesDaily.ts).label("close"),
+    func.sum(PricesDaily.volume).label("volume"),
+).where(
+    PricesDaily.instrument_id == instrument_id,
+    PricesDaily.ts >= start_ts,
+).group_by("day", PricesDaily.instrument_id).order_by(text("day DESC"))
+```
+
+### Vector Similarity Search (agent_memory)
+```python
+stmt = (
+    select(
+        AgentMemory.id, AgentMemory.kind, AgentMemory.content,
+        AgentMemory.embedding.cosine_distance(query_embedding).label("distance")
+    )
+    .where(AgentMemory.agent_id == agent_id)
+    .order_by(AgentMemory.embedding.cosine_distance(query_embedding))
+    .limit(10)
+)
+```
+
+## Migration Template
+
+```python
+"""NNN_describe_change_here
+
+Revision ID: <auto>
+Revises: <previous>
+Create Date: YYYY-MM-DD
+
+Schema: theeyebeta  # OR public — never both in one migration
+"""
+from alembic import op
+import sqlalchemy as sa
+
+def upgrade() -> None:
+    op.execute("""
+        ALTER TABLE theeyebeta.orders
+        ADD COLUMN IF NOT EXISTS algo_tag VARCHAR(32);
+    """)
+
+def downgrade() -> None:
+    op.execute("""
+        ALTER TABLE theeyebeta.orders
+        DROP COLUMN IF EXISTS algo_tag;
+    """)
+```
+
+## Raw SQL Anti-Patterns (Block These in Code Review)
+
+```python
+# BLOCKED: SELECT * on large tables
+"SELECT * FROM public.signals"              # 144M rows
+"SELECT * FROM public.score_audit_log"      # 20M rows
+"SELECT * FROM public.price_daily"          # 10.7M rows
+"SELECT * FROM public.trask_audit_events"   # 26.7M rows
+
+# BLOCKED: Missing date filter on partitioned tables
+"SELECT * FROM public.price_daily WHERE ticker_id = ?"
+# Must include: AND date >= ?
+
+# BLOCKED: COUNT(*) on 10M+ row tables
+"SELECT COUNT(*) FROM public.price_daily"
+"SELECT COUNT(*) FROM public.signals"
+
+# BLOCKED: Direct writes to audit/compliance tables
+"INSERT INTO theeyebeta.audit_log"
+"UPDATE public.score_audit_log"
+"DELETE FROM public.compliance_log"
+
+# BLOCKED: Cross-schema join without public_ticker_map
+"JOIN theeyebeta.instruments i ON i.symbol = public.tickers.ticker"
+
+# BLOCKED: NOT IN with subquery (NULL propagation bug)
+"WHERE ticker_id NOT IN (SELECT ticker_id FROM delisted WHERE ...)"
+# Use: WHERE NOT EXISTS (SELECT 1 FROM delisted WHERE ...)
+```
+
+## Bloat Alerts (Known Issues as of 2026-06-09)
+
+Run before any schema work:
+```sql
+SELECT schemaname||'.'||tablename AS tbl,
+       n_live_tup, n_dead_tup,
+       round(n_dead_tup::numeric/NULLIF(n_live_tup+n_dead_tup,0)*100,1) AS dead_pct,
+       pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
+FROM pg_stat_user_tables
+WHERE n_dead_tup > 5000
+ORDER BY dead_pct DESC;
+```
+
+**VACUUM NEEDED now**: `price_daily_y2025` (16%), `price_daily_y2026` (15%),
+`ind_technical_daily_y2024` (12.7%), `ind_valuation_daily_y2026` (15.5%).
+
+**Monitor**: `price_daily_y2023` (7.8%), `ind_technical_daily_y2022` (7.4%),
+`fund_income_q` (10.5%), `fund_balance_q` (6,390 dead).
+
+**Cleared**: `engine_status`, `trask_status` — previously flagged, now autovacuumed.

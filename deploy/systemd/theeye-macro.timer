@@ -1,0 +1,12 @@
+[Unit]
+Description=Run TheEyeBeta macro workers after market close
+
+[Timer]
+OnCalendar=Mon..Fri 21:20 UTC
+Persistent=true
+RandomizedDelaySec=60
+Unit=theeye-macro.service
+
+[Install]
+WantedBy=timers.target
+

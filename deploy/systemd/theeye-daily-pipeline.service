@@ -1,0 +1,17 @@
+[Unit]
+Description=TheEyeBeta daily market-data pipeline
+Wants=network-online.target
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=the-eye-beta
+Group=the-eye-beta
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+ExecStart=/home/the-eye-beta/.local/bin/uv run python scripts/mirror_canonical_prices_to_public.py --run-type scheduled
+ExecStart=/home/the-eye-beta/.local/bin/uv run python -m workers.daily_pipeline_runner --run-type scheduled
+TimeoutStartSec=5400
+
+[Install]
+WantedBy=multi-user.target

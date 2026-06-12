@@ -1,0 +1,10 @@
+[Unit]
+Description=Morning calendar gap sentinel for TheEyeBeta
+
+[Timer]
+OnCalendar=Mon..Fri 07:30 UTC
+Persistent=true
+Unit=theeye-gap-sentinel.service
+
+[Install]
+WantedBy=timers.target
