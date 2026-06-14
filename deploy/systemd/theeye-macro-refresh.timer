@@ -1,0 +1,14 @@
+[Unit]
+Description=Run TheEyeBeta macro refresh nightly after US close
+Requires=theeye-macro-refresh.service
+
+[Timer]
+# 21:30 UTC = 5:30 PM ET (after US equity + bond close)
+OnCalendar=*-*-* 21:30:00 UTC
+# If the machine was off at scheduled time, run on next boot
+Persistent=true
+# Randomise start within 5 min to avoid thundering-herd with other timers
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
