@@ -5,8 +5,6 @@ from __future__ import annotations
 from datetime import date
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 from workers.base_worker import WorkerResult
 from workers.daily_pipeline_runner import DailyPipelineRunner
 
