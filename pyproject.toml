@@ -85,7 +85,10 @@ constraint-dependencies = [
     "feedparser>=6.0",
     "alpaca-py>=0.33",
     "bcrypt>=4.2",
-    "openai>=1.55",
+    # litellm[proxy] 1.88.1 imports openai._models and requires openai>=2.20,<3.
+    # A loose ">=1.55" let a broken/mismatched openai crash-loop theeyebeta-litellm
+    # (ModuleNotFoundError: No module named 'openai._models'). Pin to litellm's range.
+    "openai>=2.20.0,<3.0.0",
     "python-frontmatter>=1.1",
 
     # OpenTelemetry
