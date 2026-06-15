@@ -1,0 +1,12 @@
+[Unit]
+Description=Poll RSS news every 2 hours so theeyebeta.news_articles stays fresh
+Requires=theeye-news-ingest.service
+
+[Timer]
+# Every 2 hours at :17 (news is continuous; dedup makes reruns cheap).
+OnCalendar=*-*-* 00/2:17:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

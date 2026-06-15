@@ -1,8 +1,9 @@
 # RSS feeds polled by the news adapter (feedparser + httpx).
+# Disabled 2026-06-15 (dead sources, verified during news-ingestion remediation):
+#   - reuters: TLS chain fails (CERTIFICATE_VERIFY_FAILED) — feeds.reuters.com discontinued
+#   - yicai:   HTTP 404 — https://www.yicai.com/rss/ no longer served
+# Re-enable if/when a working feed URL is found.
 feeds:
-  - name: reuters
-    url: https://feeds.reuters.com/reuters/businessNews
-    language: en
   - name: bloomberg
     url: https://feeds.bloomberg.com/markets/news.rss
     language: en
@@ -15,6 +16,3 @@ feeds:
   - name: scmp
     url: https://www.scmp.com/rss/91/feed
     language: en
-  - name: yicai
-    url: https://www.yicai.com/rss/
-    language: zh
