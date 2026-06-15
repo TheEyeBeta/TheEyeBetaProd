@@ -30,3 +30,17 @@ other repo artifact. Constraint honored throughout: `public.*` not touched (depr
   `/etc/systemd/system`, then masked. All three now `is-enabled=masked`.
 - Reversible: `sudo systemctl unmask <unit>` + restore the archived file. If they are meant
   to run, they should be deployed from the `TheEyeBetaLocal` tree, not unmasked here.
+
+### [8] supabase-sync — disabled + masked (broken worker, product decision pending)
+
+- Investigation: `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` are all set
+  in `.env` and the worker is actively versioned (v2), so Supabase is not cleanly "replaced".
+  BUT the worker runs `--shadow` only (no external writes) and **fails at runtime**:
+  `asyncpg.UndefinedTableError: relation "theeyebeta.data_snapshots_packaged" does not exist`
+  (closest real table is `theeyebeta.data_snapshots`). The timer was never enabled.
+- Decision (opus): do NOT enable a broken, shadow-only unit (that just recreates the
+  litellm-style failing-unit problem). Do NOT delete it either — keys are present, so intent is
+  unclear. Disabled + masked `theeye-supabase-sync.{timer,service}` on the host so it can't
+  accidentally start; kept the worker code, repo unit files, and keys. Filed issue #5 for the
+  product decision (fix table ref + enable, or fully retire).
+- `is-enabled=masked` for both units. Reversible via unmask once the table reference is fixed.
