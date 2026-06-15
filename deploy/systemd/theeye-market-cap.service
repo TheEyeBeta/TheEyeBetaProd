@@ -1,0 +1,19 @@
+[Unit]
+Description=TheEyeBeta nightly market-cap fetch and threshold check
+Wants=network-online.target
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=the-eye-beta
+Group=the-eye-beta
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+ExecStart=/home/the-eye-beta/.local/bin/uv run python -m workers.market_cap_fetch_worker --run-type scheduled
+ExecStart=/home/the-eye-beta/.local/bin/uv run python -m workers.market_cap_threshold_worker --run-type scheduled
+ExecStart=/home/the-eye-beta/.local/bin/uv run python scripts/select_universe_by_cap.py --tier eod --apply
+TimeoutStartSec=7200
+RuntimeMaxSec=9000
+
+[Install]
+WantedBy=multi-user.target

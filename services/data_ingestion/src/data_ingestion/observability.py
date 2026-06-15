@@ -110,12 +110,12 @@ async def span(name: str, **attributes: str | int | float) -> AsyncIterator[trac
         yield otel_span
 
 
-async def traced_fetch(
+async def traced_fetch(  # noqa: UP047 — TypeVar T declared at module level; type param syntax not compatible with Callable generic here
     adapter: str,
     market: str,
     coro_factory: Callable[[], Awaitable[T]],
 ) -> T:
     """Run an adapter fetch inside span + duration metrics."""
-    async with observe_duration(adapter, market):
+    async with observe_duration(adapter, market):  # noqa: SIM117 — async with nesting required; combinable only in 3.10+ and contextmanager types must match
         async with span("adapter.fetch", adapter=adapter, market=market):
             return await coro_factory()

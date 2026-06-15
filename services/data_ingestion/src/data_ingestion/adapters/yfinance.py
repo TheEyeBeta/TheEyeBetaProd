@@ -12,13 +12,13 @@ import pandas as pd
 import structlog
 import yfinance as yf
 from tenacity import retry, stop_after_attempt, wait_exponential
-from zinc_schemas.ingestion import PriceDailyRecord, Record
 
 from data_ingestion.adapters.base import (
     _YFINANCE_EXCHANGES,
     load_active_instruments,
     make_http_client,
 )
+from zinc_schemas.ingestion import PriceDailyRecord, Record
 
 log = structlog.get_logger()
 

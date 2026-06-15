@@ -10,6 +10,8 @@ from uuid import UUID
 
 import asyncpg
 import structlog
+
+from data_ingestion.observability import observe_duration, record_written, span
 from zinc_schemas.ingestion import (
     FundamentalRecord,
     IntradayBarRecord,
@@ -19,8 +21,6 @@ from zinc_schemas.ingestion import (
     PriceDailyRecord,
     Record,
 )
-
-from data_ingestion.observability import observe_duration, record_written, span
 
 log = structlog.get_logger()
 
@@ -92,7 +92,7 @@ class PostgresWriter:
                 case FundamentalRecord():
                     fundamentals.append(record)
 
-        async with observe_duration(adapter, market):
+        async with observe_duration(adapter, market):  # noqa: SIM117 — two distinct async context managers; combining would obscure their roles
             async with span("writer.write_records", adapter=adapter, market=market):
                 totals = {
                     "prices_daily": await self.write_prices_daily(prices),
@@ -102,7 +102,7 @@ class PostgresWriter:
                     "news_embeddings": await self.write_news_embeddings(embeddings),
                     "fundamentals": await self.write_fundamentals(fundamentals),
                 }
-        for table, count in totals.items():
+        for _table, count in totals.items():
             record_written(adapter, market, count)
         return totals
 

@@ -59,7 +59,7 @@ async def fetch_argos_sector_context(
     last_trading_day = await conn.fetchval(
         """
         SELECT calendar_date
-          FROM public.trading_calendar
+          FROM theeyebeta.trading_calendar
          WHERE calendar_date <= $1
            AND is_trading_day
          ORDER BY calendar_date DESC
@@ -81,7 +81,7 @@ async def fetch_argos_sector_context(
     if not rows:
         await conn.execute(
             """
-            INSERT INTO public.audit_alerts
+            INSERT INTO theeyebeta.audit_alerts
                 (alert_type, severity, trade_date, worker_name, title, message, metadata)
             VALUES ('DATA_GAP', 'WARN', $1, $2, 'Sector context missing', $3, $4::jsonb)
             """,

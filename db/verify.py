@@ -4,13 +4,14 @@ Prints PASS/FAIL for each check and exits 0 only if all pass.
 """
 import os
 import sys
+
 import psycopg
 
 DATABASE_URL = os.environ["DATABASE_URL"].replace("+psycopg", "")
 TB_APP_PASSWORD = os.environ["TB_APP_PASSWORD"]
 TB_RND_PASSWORD = os.environ["TB_RND_PASSWORD"]
 
-PASS = "\u2713"
+PASS = "\u2713"  # noqa: S105 \u2014 unicode check-mark symbol, not a password
 FAIL = "\u2717"
 
 results: list[bool] = []
@@ -129,7 +130,7 @@ def run_checks() -> None:
     try:
         with _conn(_app_url()) as aconn:
             aconn.execute("DELETE FROM theeyebeta.audit_log WHERE false")
-        check("f. tb_app DELETE on audit_log blocked", False, "DELETE succeeded — should have failed")
+        check("f. tb_app DELETE on audit_log blocked", False, "DELETE succeeded — should have failed")  # noqa: E501
     except psycopg.errors.InsufficientPrivilege:
         check("f. tb_app DELETE on audit_log blocked", True)
     except Exception as exc:
@@ -139,7 +140,7 @@ def run_checks() -> None:
     try:
         with _conn(_rnd_url()) as rconn:
             rconn.execute("UPDATE theeyebeta.proposals SET status='applied' WHERE false")
-        check("g. tb_rnd_readonly UPDATE proposals blocked", False, "UPDATE succeeded — should have failed")
+        check("g. tb_rnd_readonly UPDATE proposals blocked", False, "UPDATE succeeded — should have failed")  # noqa: E501
     except psycopg.errors.InsufficientPrivilege:
         check("g. tb_rnd_readonly UPDATE proposals blocked", True)
     except Exception as exc:
@@ -149,7 +150,7 @@ def run_checks() -> None:
     try:
         with _conn(_rnd_url()) as rconn:
             rconn.execute("SELECT * FROM theeyebeta.audit_log LIMIT 1")
-        check("h. tb_rnd_readonly SELECT audit_log blocked", False, "SELECT succeeded — should have failed")
+        check("h. tb_rnd_readonly SELECT audit_log blocked", False, "SELECT succeeded — should have failed")  # noqa: E501
     except psycopg.errors.InsufficientPrivilege:
         check("h. tb_rnd_readonly SELECT audit_log blocked", True)
     except Exception as exc:

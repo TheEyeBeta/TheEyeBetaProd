@@ -55,7 +55,7 @@ class SnapshotLoader:
         redis_url: str | None = None,
         cache_ttl_seconds: int = _CACHE_TTL_SECONDS,
     ) -> None:
-        """Configure Postgres, Redis, and MinIO clients."""
+        """Configure Postgres and Redis clients; MinIO is initialised on first use."""
         self._database_url = (database_url or _db_url()).replace("+asyncpg", "").replace(
             "+psycopg",
             "",
@@ -63,15 +63,20 @@ class SnapshotLoader:
         self._redis_url = redis_url or _redis_url()
         self._cache_ttl = cache_ttl_seconds
         self._redis: Redis | None = None
-        raw_endpoint = os.environ.get("MINIO_ENDPOINT", "127.0.0.1:9000")
-        host = raw_endpoint.replace("http://", "").replace("https://", "")
-        secure = raw_endpoint.startswith("https://")
-        self._minio = Minio(
-            host,
-            access_key=os.environ.get("MINIO_ROOT_USER", "minioadmin"),
-            secret_key=os.environ.get("MINIO_ROOT_PASSWORD", ""),
-            secure=secure,
-        )
+        self._minio: Minio | None = None
+
+    def _minio_client(self) -> Minio:
+        if self._minio is None:
+            raw_endpoint = os.environ.get("MINIO_ENDPOINT", "127.0.0.1:9000")
+            host = raw_endpoint.replace("http://", "").replace("https://", "")
+            secure = raw_endpoint.startswith("https://")
+            self._minio = Minio(
+                host,
+                access_key=os.environ.get("MINIO_ROOT_USER", "minioadmin"),
+                secret_key=os.environ.get("MINIO_ROOT_PASSWORD", ""),
+                secure=secure,
+            )
+        return self._minio
 
     async def _redis_client(self) -> Redis:
         if self._redis is None:
@@ -86,7 +91,7 @@ class SnapshotLoader:
 
     def _fetch_blob_sync(self, blob_uri: str) -> bytes:
         bucket, key = _parse_s3_uri(blob_uri)
-        response = self._minio.get_object(bucket, key)
+        response = self._minio_client().get_object(bucket, key)
         try:
             return response.read()
         finally:

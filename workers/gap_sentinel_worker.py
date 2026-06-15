@@ -34,7 +34,7 @@ async def check_pipeline_calendar_gaps(
     trading_days = await conn.fetch(
         """
         SELECT calendar_date
-          FROM public.trading_calendar
+          FROM theeyebeta.trading_calendar
          WHERE is_trading_day
            AND calendar_date < $1
          ORDER BY calendar_date DESC
@@ -52,7 +52,7 @@ async def check_pipeline_calendar_gaps(
         completed = await conn.fetchval(
             """
             SELECT 1
-              FROM public.audit_worker_runs
+              FROM theeyebeta.worker_runs
              WHERE worker_name = $1
                AND trade_date = $2
                AND status = 'COMPLETED'
@@ -74,7 +74,7 @@ async def check_pipeline_calendar_gaps(
         existing_gap = await conn.fetchval(
             """
             SELECT gap_id
-              FROM public.audit_data_gaps
+              FROM theeyebeta.audit_data_gaps
              WHERE trade_date = $1
                AND (remediation_notes ILIKE '%pipeline completion%'
                     OR remediation_notes ILIKE '%pipeline COMPLETED%')
@@ -93,7 +93,7 @@ async def check_pipeline_calendar_gaps(
         day_end = day_start + timedelta(days=1)
         gap_id = await conn.fetchval(
             """
-            INSERT INTO public.audit_data_gaps
+            INSERT INTO theeyebeta.audit_data_gaps
                 (dataset_type, trade_date, expected_start, expected_end,
                  expected_count, actual_count, gap_start, gap_end,
                  severity, remediation_state, remediation_notes, metadata)
@@ -122,7 +122,7 @@ async def check_pipeline_calendar_gaps(
         gap_ids.append(int(gap_id))
         alert_id = await conn.fetchval(
             """
-            INSERT INTO public.audit_alerts
+            INSERT INTO theeyebeta.audit_alerts
                 (alert_type, severity, trade_date, worker_name, gap_id, title, message, metadata)
             VALUES (
                 'DATA_GAP',
@@ -174,7 +174,7 @@ async def expected_latest_trading_day(
     value = await conn.fetchval(
         """
         SELECT calendar_date
-          FROM public.trading_calendar
+          FROM theeyebeta.trading_calendar
          WHERE is_trading_day
            AND calendar_date < $1
          ORDER BY calendar_date DESC
@@ -243,7 +243,7 @@ async def check_canonical_freshness(
         existing_gap = await conn.fetchval(
             """
             SELECT gap_id
-              FROM public.audit_data_gaps
+              FROM theeyebeta.audit_data_gaps
              WHERE trade_date = $1
                AND remediation_state = 'OPEN'
                AND remediation_notes ILIKE '%Canonical schema stale%'
@@ -256,7 +256,7 @@ async def check_canonical_freshness(
             day_end = day_start + timedelta(days=1)
             gap_id = await conn.fetchval(
                 """
-                INSERT INTO public.audit_data_gaps
+                INSERT INTO theeyebeta.audit_data_gaps
                     (dataset_type, trade_date, expected_start, expected_end,
                      expected_count, actual_count, gap_start, gap_end,
                      severity, remediation_state, remediation_notes, metadata)
@@ -294,7 +294,7 @@ async def check_canonical_freshness(
             gap_ids.append(int(gap_id))
             alert_id = await conn.fetchval(
                 """
-                INSERT INTO public.audit_alerts (
+                INSERT INTO theeyebeta.audit_alerts (
                     alert_type, severity, trade_date, worker_name,
                     gap_id, title, message, metadata
                 )
@@ -327,6 +327,85 @@ async def check_canonical_freshness(
         "violation": violation,
         "gaps_created": gap_ids,
         "alerts_created": alert_ids,
+    }
+
+
+async def remediate_open_gaps(
+    conn: asyncpg.Connection,
+    *,
+    as_of: date | None = None,
+) -> dict[str, object]:
+    """Close OPEN CRITICAL gaps whose underlying conditions are now satisfied."""
+    today = as_of or date.today()
+    resolved_pipeline: list[str] = []
+    resolved_canonical: list[str] = []
+
+    pipeline_gaps = await conn.fetch(
+        """
+        SELECT gap_id, trade_date
+          FROM theeyebeta.audit_data_gaps
+         WHERE remediation_state = 'OPEN'
+           AND severity = 'CRITICAL'
+           AND remediation_notes ILIKE '%daily_pipeline COMPLETED%'
+        """,
+    )
+    for row in pipeline_gaps:
+        trade_day: date = row["trade_date"]
+        completed = await conn.fetchval(
+            """
+            SELECT 1
+              FROM theeyebeta.worker_runs
+             WHERE worker_name = $1
+               AND trade_date = $2
+               AND status = 'COMPLETED'
+             LIMIT 1
+            """,
+            PIPELINE_WORKER_NAME,
+            trade_day,
+        )
+        if not completed:
+            continue
+        await conn.execute(
+            """
+            UPDATE theeyebeta.audit_data_gaps
+               SET remediation_state = 'RESOLVED',
+                   remediation_notes = COALESCE(remediation_notes, '')
+                       || ' | Auto-resolved: daily_pipeline COMPLETED',
+                   updated_at = now()
+             WHERE gap_id = $1
+            """,
+            row["gap_id"],
+        )
+        resolved_pipeline.append(trade_day.isoformat())
+
+    canonical = await check_canonical_freshness(conn, as_of=freshness_as_of(today), dry_run=True)
+    if not canonical["violation"]:
+        canonical_gaps = await conn.fetch(
+            """
+            SELECT gap_id, trade_date
+              FROM theeyebeta.audit_data_gaps
+             WHERE remediation_state = 'OPEN'
+               AND severity = 'CRITICAL'
+               AND remediation_notes ILIKE '%Canonical schema stale%'
+            """,
+        )
+        for row in canonical_gaps:
+            await conn.execute(
+                """
+                UPDATE theeyebeta.audit_data_gaps
+                   SET remediation_state = 'RESOLVED',
+                       remediation_notes = COALESCE(remediation_notes, '')
+                           || ' | Auto-resolved: canonical freshness OK',
+                       updated_at = now()
+                 WHERE gap_id = $1
+                """,
+                row["gap_id"],
+            )
+            resolved_canonical.append(row["trade_date"].isoformat())
+
+    return {
+        "resolved_pipeline_days": resolved_pipeline,
+        "resolved_canonical_days": resolved_canonical,
     }
 
 
@@ -364,12 +443,12 @@ async def check_stuck_worker_runs(
     rows = await conn.fetch(
         """
         SELECT run_id, worker_name, trade_date, started_at
-          FROM public.audit_worker_runs r
+          FROM theeyebeta.worker_runs r
          WHERE status = 'STARTED'
            AND started_at < now() - ($1::text || ' hours')::interval
            AND NOT EXISTS (
                SELECT 1
-                 FROM public.audit_worker_runs t
+                 FROM theeyebeta.worker_runs t
                 WHERE t.worker_name = r.worker_name
                   AND t.trade_date = r.trade_date
                   AND t.status IN ('COMPLETED', 'FAILED', 'TIMEOUT', 'CANCELLED')
@@ -396,7 +475,7 @@ async def check_stuck_worker_runs(
         exists = await conn.fetchval(
             """
             SELECT 1
-              FROM public.audit_alerts
+              FROM theeyebeta.audit_alerts
              WHERE alert_type = 'DAY_INCOMPLETE'
                AND worker_name = $1
                AND trade_date = $2
@@ -412,7 +491,7 @@ async def check_stuck_worker_runs(
             continue
         alert_id = await conn.fetchval(
             """
-            INSERT INTO public.audit_alerts
+            INSERT INTO theeyebeta.audit_alerts
                 (alert_type, severity, trade_date, worker_name, title, message, metadata)
             VALUES (
                 'DAY_INCOMPLETE',
@@ -466,6 +545,7 @@ class GapSentinelWorker(BaseWorker):
 
         pipeline = await check_pipeline_calendar_gaps(conn, as_of=trade_date)
         canonical = await check_canonical_freshness(conn, as_of=as_of_dt)
+        resolved = await remediate_open_gaps(conn, as_of=trade_date)
         gaps_created = len(pipeline["gaps_created"]) + len(canonical["gaps_created"])
         alerts_created = (
             len(pipeline["alerts_created"])
@@ -475,7 +555,7 @@ class GapSentinelWorker(BaseWorker):
         return WorkerResult(
             records_written=gaps_created + alerts_created,
             records_expected=0,
-            metadata={**pipeline, "canonical_freshness": canonical},
+            metadata={**pipeline, "canonical_freshness": canonical, "remediation": resolved},
         )
 
 

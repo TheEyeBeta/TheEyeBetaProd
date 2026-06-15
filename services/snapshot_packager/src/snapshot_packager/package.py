@@ -8,11 +8,11 @@ from uuid import UUID
 
 import asyncpg
 import structlog
-from zinc_schemas.packaged_snapshot import PackagedSnapshotV1
-from zinc_schemas.snapshot_validator import validate_snapshot
 
 from snapshot_packager.builder import SnapshotBuilder
 from snapshot_packager.writers import PackagedSnapshotWriter
+from zinc_schemas.packaged_snapshot import PackagedSnapshotV1
+from zinc_schemas.snapshot_validator import validate_snapshot
 
 log = structlog.get_logger()
 

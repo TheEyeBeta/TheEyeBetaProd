@@ -101,6 +101,18 @@ def test_parse_massive_grouped_filters_to_universe() -> None:
     assert bars["AAPL"].source == "massive"
 
 
+def test_parse_massive_grouped_matches_class_share_aliases() -> None:
+    universe = {"BRK.B": _inst("BRK.B", 10)}
+    payload = {
+        "results": [
+            {"T": "BRK-B", "o": 1, "h": 2, "l": 1, "c": 1.5, "v": 100},
+        ],
+    }
+    bars = parse_massive_grouped(payload, symbol_map=universe, trade_date=date(2026, 6, 10))
+    assert set(bars) == {"BRK.B"}
+    assert bars["BRK.B"].symbol == "BRK.B"
+
+
 def test_pick_spot_check_symbols_prefers_liquid_names() -> None:
     symbols = pick_spot_check_symbols({"AAPL", "MSFT", "ZZZ", "QQQ"})
     assert symbols[:2] == ["AAPL", "MSFT"]

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
 import pytest
-from zinc_schemas.constitution import AgentConstitution, MandateRules, load_constitution
+
+from zinc_schemas.constitution import AgentConstitution, load_constitution
 
 _SRC = Path(__file__).resolve().parents[1] / "src"
 if str(_SRC) not in sys.path:

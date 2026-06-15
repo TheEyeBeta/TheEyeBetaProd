@@ -6,10 +6,9 @@ from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
+import main as main_module
 import pytest
 from fastapi.testclient import TestClient
-
-import main as main_module
 from main import create_app
 from snapshot_packager.package import PackageResult
 

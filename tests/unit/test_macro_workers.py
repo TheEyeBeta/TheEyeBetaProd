@@ -133,6 +133,6 @@ def test_macro_feature_nulls_propagate_to_data_gaps() -> None:
     assert block["cpi_yoy_pct"] is None
     assert "fed_funds_change_30d" in block["data_gaps"]
     assert "cpi_yoy_pct" in block["data_gaps"]
+    assert "cpi_surprise" not in block["data_gaps"]
     assert block["yield_10y_change_30d"] == 0.1
     assert "yield_10y_change_30d" not in block["data_gaps"]
-

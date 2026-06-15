@@ -16,7 +16,6 @@ from zinc_proto.compliance_pb2_grpc import (
 )
 from zinc_proto.guard_pb2 import (
     ESCALATE,
-    PASS as GUARD_PASS,
     REJECT,
     RETRY,
     Outcome,
@@ -25,16 +24,23 @@ from zinc_proto.guard_pb2 import (
     ValidateResponse,
     Violation,
 )
+from zinc_proto.guard_pb2 import (
+    PASS as GUARD_PASS,
+)
 from zinc_proto.guard_pb2_grpc import GuardServicer, GuardStub, add_GuardServicer_to_server
 from zinc_proto.risk_pb2 import (
     ALLOW,
-    BLOCK as RISK_BLOCK,
-    WARN as RISK_WARN,
     PortfolioMetrics,
     PortfolioRequest,
     RiskCheckRequest,
     RiskDecision,
     RiskOutcome,
+)
+from zinc_proto.risk_pb2 import (
+    BLOCK as RISK_BLOCK,
+)
+from zinc_proto.risk_pb2 import (
+    WARN as RISK_WARN,
 )
 from zinc_proto.risk_pb2_grpc import RiskServicer, RiskStub, add_RiskServicer_to_server
 

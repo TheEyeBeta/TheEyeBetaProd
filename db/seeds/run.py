@@ -1,4 +1,8 @@
-import os, pathlib, psycopg
+import os
+import pathlib
+
+import psycopg
+
 URL = os.environ["DATABASE_URL"].replace("+psycopg", "")
 here = pathlib.Path(__file__).parent
 with psycopg.connect(URL) as conn:

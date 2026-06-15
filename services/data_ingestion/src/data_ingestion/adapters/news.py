@@ -11,9 +11,9 @@ from typing import Any
 import feedparser
 import structlog
 import yaml
-from zinc_schemas.ingestion import NewsRecord, Record
 
 from data_ingestion.adapters.base import _CONFIG_DIR, make_http_client
+from zinc_schemas.ingestion import NewsRecord, Record
 
 log = structlog.get_logger()
 

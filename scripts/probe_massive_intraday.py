@@ -14,7 +14,6 @@ import json
 import os
 import sys
 from datetime import date, timedelta
-from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
@@ -51,7 +50,7 @@ def _probe(
         body = resp.json()
     except Exception:
         body = resp.text[:500]
-    if isinstance(body, (dict, list)):
+    if isinstance(body, (dict, list)):  # noqa: SIM108 — two-branch ternary with different calls is clearer as if/else
         text = json.dumps(body)[:800]
     else:
         text = str(body)[:800]
@@ -110,7 +109,6 @@ def main() -> None:
     per_ticker_calls = ACTIVE_UNIVERSE
     grouped_calls = 0
     a_ok = results[0]["status"] == 200
-    b_ok = results[1]["status"] == 200
 
     print("\n=== DECISION INPUTS ===")
     print(f"universe_size: {ACTIVE_UNIVERSE}")

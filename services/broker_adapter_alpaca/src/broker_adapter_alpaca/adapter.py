@@ -55,7 +55,7 @@ class AlpacaAdapter:
             )
         return self._trading
 
-    def _trading_stream(self) -> Any:
+    def _trading_stream(self) -> Any:  # noqa: ANN401 — Alpaca SDK stream type is not exported
         if self._stream is None:
             from alpaca.trading.stream import TradingStream  # noqa: PLC0415
 

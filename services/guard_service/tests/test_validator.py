@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 
 import pytest
-from zinc_schemas.constitution import AgentConstitution, MandateRules
 
 from guard_service.validator import ConstitutionGuard, Outcome
+from zinc_schemas.constitution import AgentConstitution, MandateRules
 
 
 def valid_output(symbol: str = "AAPL", confidence: float = 0.7) -> str:

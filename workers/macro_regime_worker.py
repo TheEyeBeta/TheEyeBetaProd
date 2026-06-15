@@ -115,7 +115,7 @@ def _json_default(value: object) -> object:
 
 
 class MacroRegimeWorker(BaseWorker):
-    """Build one daily canonical macro regime snapshot and mirror it to public."""
+    """Build one daily canonical macro regime snapshot."""
 
     worker_name = "MacroRegimeWorker"
     worker_type = "macro"
@@ -161,13 +161,12 @@ class MacroRegimeWorker(BaseWorker):
 
         async with conn.transaction():
             await self._upsert_canonical_raw(conn, trade_date, raw)
-            await self._update_canonical_derived(conn, trade_date)
+            await self._update_canonical_derived(conn)
             await self._update_growth_from_indicators(conn, trade_date)
             row = await self._fetch_canonical(conn, trade_date)
             classified = self._classify_row(dict(row))
             await self._update_canonical_classification(conn, trade_date, classified)
-            final_row = await self._fetch_canonical(conn, trade_date)
-            await self._mirror_to_public(conn, final_row)
+            await self._fetch_canonical(conn, trade_date)
 
         return WorkerResult(
             records_written=1,
@@ -186,7 +185,7 @@ class MacroRegimeWorker(BaseWorker):
         value = await conn.fetchval(
             """
             SELECT is_trading_day
-              FROM public.trading_calendar
+              FROM theeyebeta.trading_calendar
              WHERE calendar_date = $1
              LIMIT 1
             """,
@@ -373,43 +372,55 @@ class MacroRegimeWorker(BaseWorker):
             gdp_qoq,
         )
 
-    async def _update_canonical_derived(self, conn: asyncpg.Connection, trade_date: date) -> None:
+    async def _update_canonical_derived(self, conn: asyncpg.Connection) -> None:
+        """Recompute derived macro deltas using trading-day lookbacks, not row offsets."""
         await conn.execute(
             """
-            WITH history AS (
+            WITH trading_days AS (
                 SELECT
-                    id,
-                    as_of_date,
-                    fed_funds_rate,
-                    yield_10y,
-                    yield_2y,
-                    spread_2s10s,
-                    dxy,
-                    vix,
-                    hy_oas_bps,
-                    sp500_level,
-                    nasdaq_level,
-                    cpi,
-                    gdp,
-                    LAG(fed_funds_rate, 21) OVER (ORDER BY as_of_date) AS ff_30d_ago,
-                    LAG(yield_10y, 21) OVER (ORDER BY as_of_date) AS y10_30d_ago,
-                    LAG(yield_2y, 21) OVER (ORDER BY as_of_date) AS y2_30d_ago,
-                    LAG(spread_2s10s, 21) OVER (ORDER BY as_of_date) AS spread_30d_ago,
-                    LAG(dxy, 21) OVER (ORDER BY as_of_date) AS dxy_30d_ago,
-                    LAG(hy_oas_bps, 21) OVER (ORDER BY as_of_date) AS hy_30d_ago,
-                    LAG(sp500_level, 21) OVER (ORDER BY as_of_date) AS sp500_30d_ago,
-                    LAG(nasdaq_level, 21) OVER (ORDER BY as_of_date) AS nasdaq_30d_ago,
-                    LAG(dxy, 5) OVER (ORDER BY as_of_date) AS dxy_5d_ago,
-                    LAG(vix, 5) OVER (ORDER BY as_of_date) AS vix_5d_ago,
-                    LAG(sp500_level, 5) OVER (ORDER BY as_of_date) AS sp500_5d_ago,
-                    LAG(nasdaq_level, 5) OVER (ORDER BY as_of_date) AS nasdaq_5d_ago,
-                    MIN(vix) OVER (
-                        ORDER BY as_of_date ROWS BETWEEN 251 PRECEDING AND CURRENT ROW
+                    calendar_date,
+                    LAG(calendar_date, 21) OVER (ORDER BY calendar_date) AS lag_21d,
+                    LAG(calendar_date, 5) OVER (ORDER BY calendar_date) AS lag_5d
+                  FROM theeyebeta.trading_calendar
+                 WHERE is_trading_day
+            ),
+            history AS (
+                SELECT
+                    m.id,
+                    m.as_of_date,
+                    m.fed_funds_rate,
+                    m.yield_10y,
+                    m.yield_2y,
+                    m.spread_2s10s,
+                    m.dxy,
+                    m.vix,
+                    m.hy_oas_bps,
+                    m.sp500_level,
+                    m.nasdaq_level,
+                    p21.fed_funds_rate AS ff_30d_ago,
+                    p21.yield_10y AS y10_30d_ago,
+                    p21.yield_2y AS y2_30d_ago,
+                    p21.spread_2s10s AS spread_30d_ago,
+                    p21.dxy AS dxy_30d_ago,
+                    p21.hy_oas_bps AS hy_30d_ago,
+                    p21.sp500_level AS sp500_30d_ago,
+                    p21.nasdaq_level AS nasdaq_30d_ago,
+                    p5.dxy AS dxy_5d_ago,
+                    p5.vix AS vix_5d_ago,
+                    p5.sp500_level AS sp500_5d_ago,
+                    p5.nasdaq_level AS nasdaq_5d_ago,
+                    MIN(m.vix) OVER (
+                        ORDER BY m.as_of_date ROWS BETWEEN 251 PRECEDING AND CURRENT ROW
                     ) AS vix_min_1y,
-                    MAX(vix) OVER (
-                        ORDER BY as_of_date ROWS BETWEEN 251 PRECEDING AND CURRENT ROW
+                    MAX(m.vix) OVER (
+                        ORDER BY m.as_of_date ROWS BETWEEN 251 PRECEDING AND CURRENT ROW
                     ) AS vix_max_1y
-                FROM theeyebeta.macro_regime_snapshots
+                  FROM theeyebeta.macro_regime_snapshots m
+                  JOIN trading_days td ON td.calendar_date = m.as_of_date
+                  LEFT JOIN theeyebeta.macro_regime_snapshots p21
+                    ON p21.as_of_date = td.lag_21d
+                  LEFT JOIN theeyebeta.macro_regime_snapshots p5
+                    ON p5.as_of_date = td.lag_5d
             )
             UPDATE theeyebeta.macro_regime_snapshots r
             SET
@@ -438,9 +449,7 @@ class MacroRegimeWorker(BaseWorker):
                 cpi_surprise = NULL
             FROM history h
             WHERE r.id = h.id
-              AND r.as_of_date = $1
             """,
-            trade_date,
         )
 
     async def _compute_dry_run_row(
@@ -652,24 +661,6 @@ class MacroRegimeWorker(BaseWorker):
             classified["volatility_regime"],
             classified["dollar_regime"],
             json.dumps(classified["style_tilts"]),
-        )
-
-    async def _mirror_to_public(self, conn: asyncpg.Connection, row: asyncpg.Record) -> None:
-        columns = ", ".join(REGIME_COLUMNS)
-        placeholders = ", ".join(f"${index}" for index in range(1, len(REGIME_COLUMNS) + 1))
-        update_clause = ", ".join(
-            f"{column} = EXCLUDED.{column}" for column in REGIME_COLUMNS if column != "as_of_date"
-        )
-        values = [row[column] for column in REGIME_COLUMNS]
-        sql = f"""
-            INSERT INTO public.macro_regimes ({columns})
-            VALUES ({placeholders})
-            ON CONFLICT (as_of_date) DO UPDATE SET
-                {update_clause}
-            """  # noqa: S608 - all identifiers come from static REGIME_COLUMNS.
-        await conn.execute(
-            sql,
-            *values,
         )
 
 

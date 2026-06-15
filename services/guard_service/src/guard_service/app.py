@@ -15,12 +15,12 @@ import structlog
 import uvicorn
 from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict, Field
-from zinc_proto import guard_pb2, guard_pb2_grpc
-from zinc_schemas.constitution import load_all_constitutions, resolve_agents_dir
 
 from guard_service.creative_classifier import CreativeContentClassifier
 from guard_service.db import count_violations_for_run, insert_violations
 from guard_service.validator import ConstitutionGuard, Outcome, ValidationResult
+from zinc_proto import guard_pb2, guard_pb2_grpc
+from zinc_schemas.constitution import load_all_constitutions, resolve_agents_dir
 
 log = structlog.get_logger()
 

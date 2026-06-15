@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
+import sys as _sys
 import tempfile
 import time
 from pathlib import Path
-
-import sys as _sys
 
 import numpy as np
 import pytest

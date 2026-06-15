@@ -45,12 +45,12 @@ class Report:
         """Emit a GitHub-flavoured markdown table."""
         widths = [max(len(str(h)), max((len(str(r[i])) for r in rows), default=0))
                   for i, h in enumerate(headers)]
-        sep = "| " + " | ".join("-" * w for w, _ in zip(widths, headers)) + " |"
-        hdr = "| " + " | ".join(str(h).ljust(w) for w, h in zip(widths, headers)) + " |"
+        sep = "| " + " | ".join("-" * w for w, _ in zip(widths, headers, strict=False)) + " |"
+        hdr = "| " + " | ".join(str(h).ljust(w) for w, h in zip(widths, headers, strict=False)) + " |"
         self.line(hdr)
         self.line(sep)
         for row in rows:
-            self.line("| " + " | ".join(str(c).ljust(w) for w, c in zip(widths, row)) + " |")
+            self.line("| " + " | ".join(str(c).ljust(w) for w, c in zip(widths, row, strict=False)) + " |")
 
     def code(self, text: str, lang: str = "") -> None:
         self.line(f"```{lang}")

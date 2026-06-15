@@ -10,6 +10,7 @@ from typing import Any
 import grpc
 import httpx
 import structlog
+
 from zinc_proto import guard_pb2, guard_pb2_grpc
 
 from .guard import GuardViolation, validate_output
@@ -17,7 +18,7 @@ from .schemas import AgentOutput
 
 log = structlog.get_logger()
 
-_OUTCOME_PASS = "PASS"
+_OUTCOME_PASS = "PASS"  # noqa: S105 — false positive; this is a protocol outcome string, not a credential
 _OUTCOME_RETRY = "RETRY"
 _OUTCOME_ESCALATE = "ESCALATE"
 _OUTCOME_REJECT = "REJECT"

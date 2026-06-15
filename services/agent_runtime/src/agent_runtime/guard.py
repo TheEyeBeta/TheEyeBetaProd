@@ -19,7 +19,7 @@ VIOLATION_TYPE_DB: dict[str, str] = {
 }
 
 
-class GuardViolation(Exception):
+class GuardViolation(Exception):  # noqa: N818 — established API name; renaming would break callers
     """Raised when agent output fails a guard check."""
 
     def __init__(self, kind: str, detail: str) -> None:

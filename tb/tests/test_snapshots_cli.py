@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+
 from tb.commands.snapshots import _business_days
 
 

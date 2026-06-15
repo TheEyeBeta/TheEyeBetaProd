@@ -10,6 +10,7 @@ from datetime import date
 from typing import Any
 
 import asyncpg
+import structlog
 
 try:  # Local CLI runs should pick up .env; systemd uses EnvironmentFile.
     from dotenv import load_dotenv
@@ -18,6 +19,8 @@ except ImportError:  # pragma: no cover - dotenv is convenience only.
 
 if load_dotenv is not None:
     load_dotenv()
+
+log = structlog.get_logger()
 
 
 def worker_database_url() -> str:
@@ -51,9 +54,13 @@ class BaseWorker:
     display_name: str | None = None
 
     def __init__(self, *, database_url: str | None = None) -> None:
-        self.database_url = (database_url or worker_database_url()).replace("+asyncpg", "").replace(
-            "+psycopg",
-            "",
+        self.database_url = (
+            (database_url or worker_database_url())
+            .replace("+asyncpg", "")
+            .replace(
+                "+psycopg",
+                "",
+            )
         )
         self.run_id: int | None = None
 
@@ -111,20 +118,43 @@ class BaseWorker:
         run_type: str,
         records_expected: int | None,
     ) -> int:
-        row = await conn.fetchrow(
-            """
-            INSERT INTO public.audit_worker_runs
+        insert_sql = """
+            INSERT INTO theeyebeta.worker_runs
                 (worker_name, worker_type, trade_date, run_type, status,
                  started_at, records_expected)
             VALUES ($1, $2, $3, $4, 'STARTED', now(), $5)
             RETURNING run_id
-            """,
-            self.worker_name,
-            self.worker_type,
-            trade_date,
-            run_type,
-            records_expected,
-        )
+            """
+        try:
+            row = await conn.fetchrow(
+                insert_sql,
+                self.worker_name,
+                self.worker_type,
+                trade_date,
+                run_type,
+                records_expected,
+            )
+        except asyncpg.UniqueViolationError:
+            if run_type != "scheduled":
+                raise
+            # audit_worker_runs_scheduled_unique_idx allows one scheduled row
+            # per (worker_name, trade_date). A rerun of the same calendar day
+            # must still execute and stay auditable, so register it as a
+            # recovery run instead of crashing the whole systemd unit.
+            log.warning(
+                "scheduled_run_already_registered",
+                worker_name=self.worker_name,
+                trade_date=trade_date.isoformat(),
+                fallback_run_type="recovery",
+            )
+            row = await conn.fetchrow(
+                insert_sql,
+                self.worker_name,
+                self.worker_type,
+                trade_date,
+                "recovery",
+                records_expected,
+            )
         return int(row["run_id"])
 
     async def _finish_completed(self, conn: asyncpg.Connection, result: WorkerResult) -> None:
@@ -132,7 +162,7 @@ class BaseWorker:
             return
         await conn.execute(
             """
-            UPDATE public.audit_worker_runs
+            UPDATE theeyebeta.worker_runs
                SET status = 'COMPLETED',
                    ended_at = now(),
                    duration_seconds = GREATEST(
@@ -155,7 +185,7 @@ class BaseWorker:
             return
         await conn.execute(
             """
-            UPDATE public.audit_worker_runs
+            UPDATE theeyebeta.worker_runs
                SET status = 'FAILED',
                    ended_at = now(),
                    duration_seconds = GREATEST(
@@ -186,7 +216,7 @@ class BaseWorker:
         metadata = json.dumps({"run_id": self.run_id})
         await conn.execute(
             """
-            INSERT INTO public.worker_heartbeats
+            INSERT INTO theeyebeta.worker_heartbeats
                 (worker_id, worker_type, status, last_heartbeat, started_at,
                  last_error, metadata)
             VALUES ($1, $2, $3, now(), now(), $4, $5::jsonb)
@@ -205,7 +235,7 @@ class BaseWorker:
         )
         await conn.execute(
             """
-            INSERT INTO public.trask_components
+            INSERT INTO theeyebeta.trask_components
                 (component_type, component_id, display_name, state, last_heartbeat,
                  config, metadata)
             VALUES ($1, $2, $3, $4, now(), '{}'::jsonb, $5::jsonb)
@@ -215,8 +245,8 @@ class BaseWorker:
                 state = EXCLUDED.state,
                 last_heartbeat = now(),
                 last_state_change = CASE
-                    WHEN public.trask_components.state <> EXCLUDED.state THEN now()
-                    ELSE public.trask_components.last_state_change
+                    WHEN theeyebeta.trask_components.state <> EXCLUDED.state THEN now()
+                    ELSE theeyebeta.trask_components.last_state_change
                 END,
                 metadata = EXCLUDED.metadata,
                 updated_at = now()

@@ -10,6 +10,10 @@ import asyncpg
 import numpy as np
 import structlog
 from uuid6 import uuid7
+
+from snapshot_packager.macro_keys import macro_key_for_series
+from snapshot_packager.markets import MARKET_EXCHANGE_CASE_SQL, VALID_MARKETS
+from snapshot_packager.technicals_native import snapshot_technicals_last
 from zinc_schemas.packaged_snapshot import (
     PACKAGED_SCHEMA_VERSION,
     PackagedNewsItem,
@@ -18,10 +22,6 @@ from zinc_schemas.packaged_snapshot import (
     PackagedTechnicals,
     PackagedUniverseEntry,
 )
-
-from snapshot_packager.macro_keys import macro_key_for_series
-from snapshot_packager.markets import MARKET_EXCHANGE_CASE_SQL, VALID_MARKETS
-from snapshot_packager.technicals_native import snapshot_technicals_last
 
 log = structlog.get_logger()
 

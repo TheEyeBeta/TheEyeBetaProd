@@ -4429,13 +4429,15 @@ wheels = [
 
 [[package]]
 name = "tb"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "tb" }
 dependencies = [
     { name = "asyncpg" },
     { name = "httpx" },
     { name = "minio" },
+    { name = "psycopg", extra = ["binary"] },
     { name = "python-dotenv" },
+    { name = "rich" },
     { name = "structlog" },
     { name = "typer" },
     { name = "zinc-schemas" },
@@ -4446,7 +4448,9 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "minio", specifier = ">=7.2" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "rich", specifier = ">=13.9" },
     { name = "structlog", specifier = ">=24.4" },
     { name = "typer", specifier = ">=0.15" },
     { name = "zinc-schemas", editable = "libs/zinc_schemas" },

@@ -6,9 +6,8 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from httpx import AsyncClient
-
 from api.services import ALL_UNITS, RESTARTABLE_SERVICES
+from httpx import AsyncClient
 
 
 def _fake_proc(

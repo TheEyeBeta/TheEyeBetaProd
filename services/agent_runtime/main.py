@@ -24,7 +24,7 @@ log = structlog.get_logger()
 class Settings(BaseSettings):
     """Service configuration."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     service_name: str = "agent-runtime"
     version: str = "0.1.0"

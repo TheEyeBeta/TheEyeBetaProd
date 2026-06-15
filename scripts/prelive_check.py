@@ -37,22 +37,33 @@ from workers.gap_sentinel_worker import (
 from workers.macro_features import build_macro_feature_block_from_row
 from workers.sector_features import build_sector_context_from_rows
 
-# Known migration sequences, oldest -> newest. Later phases append here.
-PUBLIC_SEQUENCE = ["20260610_01"]
-PUBLIC_REQUIRED = "20260610_01"
+# Legacy public track ignored after Prod takeover.
+PUBLIC_SEQUENCE: list[str] = []
+PUBLIC_REQUIRED = ""
 THEEYEBETA_SEQUENCE = [
-    "0011_macro_derived_snapshots",
+    "0011_data_snapshots_packaged",
     "0012_sector_daily",
     "0013_prices_intraday",
+    "0018_market_cap_universe",
+    "0019_trading_calendar",
+    "0020_worker_ops",
+    "0021_pipeline_alerts",
+    "0022_ind_technical_daily",
+    "0023_sector_daily",
+    "0024_public_ticker_map",
 ]
-THEEYEBETA_REQUIRED = "0012_sector_daily"
+THEEYEBETA_REQUIRED = "0020_worker_ops"
 
-# Daily-cadence workers that must heartbeat within 26h. Later phases append
-# (intraday, indicator, supabase) as they land.
 WORKER_SET: list[str] = [
     "MacroIngestionWorker",
     "MacroRegimeWorker",
     "MassiveDailyIngestionWorker",
+    "IntradayIngestionWorker",
+    "IndicatorComputeWorker",
+    "TheeyebetaIndicatorWorker",
+    "daily_pipeline",
+    "MarketCapFetchWorker",
+    "MarketCapThresholdWorker",
     "GapSentinelWorker",
     "SectorAggregationWorker",
 ]
@@ -88,15 +99,10 @@ def _seq_ok(head: str, required: str, sequence: list[str]) -> bool:
 
 
 async def check_migration_heads(conn: asyncpg.Connection) -> CheckResult:
-    pub = await conn.fetchval("SELECT version_num FROM public.alembic_version")
     beta = await conn.fetchval("SELECT version_num FROM theeyebeta.alembic_version")
-    pub_ok = _seq_ok(str(pub), PUBLIC_REQUIRED, PUBLIC_SEQUENCE)
     beta_ok = _seq_ok(str(beta), THEEYEBETA_REQUIRED, THEEYEBETA_SEQUENCE)
-    evidence = (
-        f"public={pub} (need >={PUBLIC_REQUIRED}), "
-        f"theeyebeta={beta} (need >={THEEYEBETA_REQUIRED})"
-    )
-    return CheckResult(1, "MIGRATION HEADS", "PASS" if pub_ok and beta_ok else "FAIL", evidence)
+    evidence = f"theeyebeta={beta} (need >={THEEYEBETA_REQUIRED})"
+    return CheckResult(1, "MIGRATION HEADS", "PASS" if beta_ok else "FAIL", evidence)
 
 
 async def check_price_freshness(conn: asyncpg.Connection) -> CheckResult:
@@ -118,20 +124,6 @@ async def check_macro(conn: asyncpg.Connection) -> CheckResult:
     problems: list[str] = []
     if snap_date is None or snap_date < expected:
         problems.append(f"snapshot stale ({snap_date} < {expected})")
-
-    # Mirror parity on the latest rows; id/computed_at are per-table identity
-    # and write-time noise, excluded from equality.
-    equal = await conn.fetchval(
-        """
-        WITH p AS (SELECT * FROM public.macro_regimes ORDER BY as_of_date DESC LIMIT 1),
-             t AS (SELECT * FROM theeyebeta.macro_regime_snapshots
-                   ORDER BY as_of_date DESC LIMIT 1)
-        SELECT (SELECT row_to_json(p)::jsonb - 'id' - 'computed_at' FROM p)
-             = (SELECT row_to_json(t)::jsonb - 'id' - 'computed_at' FROM t)
-        """,
-    )
-    if not equal:
-        problems.append("public.macro_regimes != theeyebeta.macro_regime_snapshots")
 
     ranges = {
         "UNEMPLOYMENT_RATE": (3.0, 6.0),
@@ -175,7 +167,7 @@ async def check_macro(conn: asyncpg.Connection) -> CheckResult:
 async def check_open_critical_gaps(conn: asyncpg.Connection) -> CheckResult:
     count = await conn.fetchval(
         """
-        SELECT COUNT(*) FROM public.audit_data_gaps
+        SELECT COUNT(*) FROM theeyebeta.audit_data_gaps
          WHERE remediation_state='OPEN' AND severity='CRITICAL'
         """,
     )
@@ -189,7 +181,7 @@ async def check_calendar_sentinel(conn: asyncpg.Connection) -> CheckResult:
     for day in missing:
         triaged = await conn.fetchval(
             """
-            SELECT 1 FROM public.audit_data_gaps
+            SELECT 1 FROM theeyebeta.audit_data_gaps
              WHERE trade_date = $1::date
                AND remediation_state IN ('RESOLVED','IGNORED')
                AND (remediation_notes ILIKE '%pipeline completion%'
@@ -204,7 +196,7 @@ async def check_calendar_sentinel(conn: asyncpg.Connection) -> CheckResult:
     massive_missing: list[str] = []
     rows = await conn.fetch(
         """
-        SELECT calendar_date FROM public.trading_calendar
+        SELECT calendar_date FROM theeyebeta.trading_calendar
          WHERE is_trading_day AND calendar_date >= $1 AND calendar_date < CURRENT_DATE
          ORDER BY calendar_date
         """,
@@ -213,7 +205,7 @@ async def check_calendar_sentinel(conn: asyncpg.Connection) -> CheckResult:
     for row in rows:
         completed = await conn.fetchval(
             """
-            SELECT 1 FROM public.audit_worker_runs
+            SELECT 1 FROM theeyebeta.worker_runs
              WHERE worker_name='MassiveDailyIngestionWorker'
                AND trade_date=$1 AND status='COMPLETED' LIMIT 1
             """,
@@ -246,76 +238,43 @@ async def check_stuck(conn: asyncpg.Connection) -> CheckResult:
 
 async def check_circuit_breakers(conn: asyncpg.Connection) -> CheckResult:
     count = await conn.fetchval(
-        "SELECT COUNT(*) FROM public.trask_circuit_breakers WHERE state='open'",
+        "SELECT COUNT(*) FROM theeyebeta.trask_circuit_breakers WHERE state='open'",
     )
     return CheckResult(7, "CIRCUIT BREAKERS", "PASS" if count == 0 else "FAIL", f"open={count}")
 
 
-async def check_cross_schema_spot(conn: asyncpg.Connection) -> CheckResult:
+async def check_canonical_spot(conn: asyncpg.Connection) -> CheckResult:
+    """Verify canonical daily closes exist for spot symbols (no public bridge)."""
     expected = await expected_latest_trading_day(conn)
-    worst_rel = 0.0
-    worst_symbol = None
-    compared = 0
-    missing_public = 0
-    missing_beta: list[str] = []
+    missing: list[str] = []
     for symbol in SPOT_CHECK_SYMBOLS:
-        row = await conn.fetchrow(
+        close = await conn.fetchval(
             """
-            SELECT i.symbol,
-                   (SELECT p.close FROM theeyebeta.prices_daily p
-                     WHERE p.instrument_id = i.id AND p.ts::date = $2) AS beta_close,
-                   (SELECT pd.close FROM public.price_daily pd
-                     WHERE pd.ticker_id = m.public_ticker_id AND pd.date = $2) AS pub_close
+            SELECT p.close
               FROM theeyebeta.instruments i
               JOIN theeyebeta.public_ticker_map m ON m.instrument_id = i.id
-             WHERE i.symbol = $1 AND i.active
+              JOIN theeyebeta.prices_daily p ON p.instrument_id = i.id
+             WHERE i.symbol = $1 AND i.active AND p.ts::date = $2
+             LIMIT 1
             """,
             symbol,
             expected,
         )
-        if row is None:
-            continue
-        beta_close, pub_close = row["beta_close"], row["pub_close"]
-        if beta_close is None:
-            missing_beta.append(symbol)
-            continue
-        if pub_close is None:
-            missing_public += 1
-            continue
-        rel = abs(float(beta_close) - float(pub_close)) / float(pub_close)
-        compared += 1
-        if rel > worst_rel:
-            worst_rel, worst_symbol = rel, symbol
-
-    if missing_beta:
+        if close is None:
+            missing.append(symbol)
+    if missing:
         return CheckResult(
             8,
-            "CROSS-SCHEMA SPOT CHECK",
+            "CANONICAL SPOT CHECK",
             "FAIL",
-            f"canonical close missing on {expected} for {missing_beta}",
+            f"missing {expected} closes for {missing}",
         )
-    if compared == 0:
-        return CheckResult(
-            8,
-            "CROSS-SCHEMA SPOT CHECK",
-            "WARN",
-            f"public lacks {expected} closes for all spot symbols "
-            f"(legacy pipeline gap) — canonical present, nothing to diff",
-        )
-    if worst_rel <= SPOT_PASS_REL:
-        status = "PASS"
-        note = ""
-    elif worst_rel <= SPOT_WARN_REL:
-        status = "WARN"
-        note = " (provider divergence — expected post-split, monitor)"
-    else:
-        status = "FAIL"
-        note = ""
-    evidence = (
-        f"{compared} compared on {expected}; worst rel diff {worst_rel:.5f} ({worst_symbol})"
-        f"{note}; public missing {missing_public}"
+    return CheckResult(
+        8,
+        "CANONICAL SPOT CHECK",
+        "PASS",
+        f"{len(SPOT_CHECK_SYMBOLS)} symbols have {expected} canonical closes",
     )
-    return CheckResult(8, "CROSS-SCHEMA SPOT CHECK", status, evidence)
 
 
 async def check_argos_dry_run(conn: asyncpg.Connection) -> CheckResult:
@@ -352,7 +311,7 @@ async def check_heartbeats(conn: asyncpg.Connection) -> CheckResult:
     stale: list[str] = []
     for worker in WORKER_SET:
         last = await conn.fetchval(
-            "SELECT last_heartbeat FROM public.worker_heartbeats WHERE worker_id = $1",
+            "SELECT last_heartbeat FROM theeyebeta.worker_heartbeats WHERE worker_id = $1",
             worker,
         )
         if last is None or datetime.now(UTC) - last > timedelta(hours=HEARTBEAT_MAX_AGE_HOURS):
@@ -469,7 +428,7 @@ CHECKS = [
     check_calendar_sentinel,
     check_stuck,
     check_circuit_breakers,
-    check_cross_schema_spot,
+    check_canonical_spot,
     check_argos_dry_run,
     check_heartbeats,
     check_disk,

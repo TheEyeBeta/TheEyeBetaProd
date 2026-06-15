@@ -1,7 +1,7 @@
 """Scheduled daily pipeline runner with trading-calendar gate and audit lifecycle.
 
-Invokes the legacy ``core.pipeline.daily_pipeline`` entrypoint from TheEyeBetaLocal
-while writing terminal ``audit_worker_runs`` rows under ``worker_name=daily_pipeline``.
+Orchestrates native indicator compute (``IndicatorComputeWorker``) writing directly
+to ``theeyebeta.ind_technical_daily``.
 """
 
 from __future__ import annotations
@@ -9,51 +9,24 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import sys
 from datetime import date
-from pathlib import Path
 
 import asyncpg
 
 from workers.base_worker import BaseWorker, WorkerResult
-
-_LOCAL_ROOT = Path(__file__).resolve().parents[1].parent / "TheEyeBetaLocal"
-
-
-def _ensure_local_paths() -> None:
-    """Add TheEyeBetaLocal packages to ``sys.path`` for pipeline imports."""
-    paths = [
-        _LOCAL_ROOT / "packages" / "core" / "src",
-        _LOCAL_ROOT / "packages" / "data_access" / "src",
-        _LOCAL_ROOT / "packages" / "providers" / "src",
-        _LOCAL_ROOT / "services" / "etl" / "src",
-    ]
-    for path in paths:
-        text = str(path)
-        if text not in sys.path:
-            sys.path.insert(0, text)
+from workers.calendar import is_trading_day
+from workers.indicator_compute_worker import IndicatorComputeWorker
 
 
 class DailyPipelineRunner(BaseWorker):
-    """Run the legacy daily pipeline once with a terminal audit row."""
+    """Run the canonical daily indicator pipeline once with a terminal audit row."""
 
     worker_name = "daily_pipeline"
     worker_type = "daily_pipeline"
     display_name = "Daily Pipeline"
 
-    async def _is_trading_day(self, conn: asyncpg.Connection, trade_date: date) -> bool:
-        value = await conn.fetchval(
-            """
-            SELECT is_trading_day
-              FROM public.trading_calendar
-             WHERE calendar_date = $1
-             LIMIT 1
-            """,
-            trade_date,
-        )
-        if value is None:
-            return trade_date.weekday() < 5
-        return bool(value)
+    def __init__(self, *, database_url: str | None = None) -> None:
+        super().__init__(database_url=database_url)
 
     async def execute(
         self,
@@ -62,7 +35,7 @@ class DailyPipelineRunner(BaseWorker):
         *,
         dry_run: bool,
     ) -> WorkerResult:
-        if not await self._is_trading_day(conn, trade_date):
+        if not await is_trading_day(conn, trade_date):
             return WorkerResult(
                 records_written=0,
                 records_expected=0,
@@ -73,64 +46,55 @@ class DailyPipelineRunner(BaseWorker):
             return WorkerResult(
                 records_written=0,
                 records_expected=0,
-                metadata={"dry_run": True, "would_run": "core.pipeline.daily_pipeline"},
+                metadata={
+                    "dry_run": True,
+                    "would_run": "workers.indicator_compute_worker",
+                    "trade_date": trade_date.isoformat(),
+                },
             )
 
-        summary = await asyncio.to_thread(_run_legacy_pipeline, trade_date)
-        exit_code = int(summary.exit_code)
-        metadata = json.loads(summary.to_json())
-        records_written = int(summary.successful_tickers or 0)
-        records_expected = int(summary.total_tickers or 0)
-
-        if exit_code not in {0, 1, 2}:
-            msg = f"daily_pipeline exit_code={exit_code} status={summary.status}"
-            raise RuntimeError(msg)
-
+        compute = IndicatorComputeWorker(database_url=self.database_url)
+        result = await compute.execute(conn, trade_date, dry_run=False)
+        metadata = {
+            "engine": "indicator_compute",
+            "trade_date": trade_date.isoformat(),
+            **result.metadata,
+        }
         return WorkerResult(
-            records_written=records_written,
-            records_expected=records_expected,
+            records_written=result.records_written,
+            records_expected=result.records_expected,
             metadata=metadata,
         )
 
 
-def _run_legacy_pipeline(trade_date: date) -> object:
-    """Execute the legacy pipeline synchronously on a worker thread."""
-    _ensure_local_paths()
-    from core.pipeline.daily_pipeline import run_daily_pipeline
-
-    return run_daily_pipeline(
-        mode="full",
-        target_date=trade_date,
-        skip_if_not_trading_day=True,
-        force_update=True,
-        post_close_delay_hours=0.0,
-    )
-
-
-def _parse_date(raw: str | None) -> date:
-    return date.fromisoformat(raw) if raw else date.today()
-
-
 async def _async_main(args: argparse.Namespace) -> None:
-    target_date = _parse_date(args.date)
+    target = date.fromisoformat(args.date) if args.date else date.today()
     worker = DailyPipelineRunner()
     result = await worker.run(
-        target_date,
+        target,
         run_type=args.run_type,
         dry_run=args.dry_run,
     )
-    print(json.dumps({"worker": worker.worker_name, **result.metadata}, indent=2, sort_keys=True))
+    print(json.dumps({"worker": worker.worker_name, **result.metadata}, indent=2))
 
 
 def main() -> None:
+    """CLI entrypoint."""
     parser = argparse.ArgumentParser(description="Run the audited daily pipeline")
-    parser.add_argument("--date", help="Target trade date YYYY-MM-DD; default today")
+    parser.add_argument("--date", help="Trade date YYYY-MM-DD")
     parser.add_argument(
         "--run-type",
-        default="scheduled",
+        default="manual",
         choices=["manual", "scheduled", "recovery"],
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--engine",
+        default="indicator_compute",
+        help="Deprecated; kept for systemd compatibility",
+    )
+    parser.add_argument("--mode", default="full", help="Deprecated compatibility flag")
+    parser.add_argument("--force-update", action="store_true", help="Deprecated compatibility flag")
     asyncio.run(_async_main(parser.parse_args()))
 
 
