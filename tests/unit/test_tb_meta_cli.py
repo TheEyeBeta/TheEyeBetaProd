@@ -25,8 +25,14 @@ def test_meta_version() -> None:
 
 def test_meta_doctor_pass() -> None:
     with (
-        patch("tb.commands.meta.asyncio.run", return_value={"ok": True, "active_eod_universe": 100}),
-        patch("tb.commands.meta.shutil.disk_usage", return_value=type("U", (), {"free": 80, "total": 100})()),
+        patch(
+            "tb.commands.meta.asyncio.run",
+            return_value={"ok": True, "active_eod_universe": 100},
+        ),
+        patch(
+            "tb.commands.meta.shutil.disk_usage",
+            return_value=type("U", (), {"free": 80, "total": 100})(),
+        ),
         patch("tb.commands.meta.list_timers", return_value="theeye-massive-ingest.timer"),
     ):
         result = runner.invoke(app, ["doctor"])

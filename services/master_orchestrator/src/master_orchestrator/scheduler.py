@@ -19,6 +19,12 @@ log = structlog.get_logger()
 class RiskMetricsScheduler:
     """Recompute portfolio risk metrics on a fixed interval."""
 
+    # TODO(#4): theeyebeta.risk_metrics is an empty hypertable with no active writer.
+    # This scheduler is the intended writer path (via RiskServiceClient), but it only runs
+    # when settings.risk_service_url is set; risk_service is scaffolded and NOT deployed
+    # (see SERVICES_STATUS.md), so start() takes the skip branch and risk_metrics stays
+    # empty. Do not start the scaffolded service ad hoc — deploy it properly. Tracked in #4.
+
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._client = RiskServiceClient(settings.risk_service_url)

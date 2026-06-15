@@ -1,3 +1,4 @@
+# STATUS: scaffolded, not deployed. Pending: deploy verify API (chain now written by BaseWorker).
 """FastAPI application for audit verification and service lifecycle."""
 
 from __future__ import annotations

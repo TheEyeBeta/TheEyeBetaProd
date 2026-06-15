@@ -1,3 +1,4 @@
+# STATUS: scaffolded, not deployed. Pending: deploy unit + LLM wiring.
 """Entry point for rnd-agent."""
 
 from __future__ import annotations

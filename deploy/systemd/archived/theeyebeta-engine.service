@@ -1,0 +1,40 @@
+[Unit]
+Description=TheEyeBeta Trade Engine (24/7)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Run under a dedicated user (create it on the Linux server)
+User=the-eye-beta
+Group=the-eye-beta
+
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal
+
+# Environment
+EnvironmentFile=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/.env
+Environment="PYTHONPATH=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/packages/core/src:/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/packages/data_access/src:/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/packages/providers/src:/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/services/engine/src"
+
+# Start the engine (entrypoint is `python -m engine`, which calls engine.run)
+ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/.venv/bin/python -m engine
+
+# Restart policy
+Restart=always
+RestartSec=5
+
+# Logging to journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=theeyebeta-engine
+
+# Hardening (safe defaults)
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Limits
+TimeoutStopSec=60
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

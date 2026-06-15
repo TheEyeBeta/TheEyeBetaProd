@@ -1,3 +1,4 @@
+# STATUS: scaffolded, not deployed. Pending: deploy unit; writes risk_metrics (#4).
 """Risk-service entrypoint — gRPC on 7060 and HTTP bridge on 8007."""
 
 from __future__ import annotations

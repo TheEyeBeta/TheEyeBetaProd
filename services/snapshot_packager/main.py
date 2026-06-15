@@ -1,3 +1,4 @@
+# STATUS: scaffolded, not deployed. Pending: deploy unit + object storage (MinIO/S3).
 """FastAPI entrypoint for snapshot-packager (port 7011)."""
 
 from __future__ import annotations
