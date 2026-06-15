@@ -147,10 +147,9 @@ FRED_SERIES = [
     {"code": "DCOILWTICO",      "name": "WTI Crude Oil Spot Price",             "category": "commodities", "freq": "daily",     "units": "Dollars per Barrel",                   "seasonal_adj": False, "notes": "Cushing Oklahoma delivery; US benchmark"},
     {"code": "DCOILBRENTEU",    "name": "Brent Crude Oil Spot Price",           "category": "commodities", "freq": "daily",     "units": "Dollars per Barrel",                   "seasonal_adj": False, "notes": "North Sea; global benchmark"},
     {"code": "DHHNGSP",         "name": "Henry Hub Natural Gas Spot Price",     "category": "commodities", "freq": "daily",     "units": "Dollars per MMBTU",                    "seasonal_adj": False, "notes": "US natural gas benchmark"},
-    # GOLD PARKED — FRED discontinued the LBMA AM/PM fixes (GOLDAMGBD228NLBM / GOLDPMGBD228NLBM);
-    # no free FRED daily spot-gold series exists. Source via FMP/AlphaVantage/Massive and add to
-    # MANUAL_SERIES, then ingest with 03. Re-enable here only if a live FRED code is found.
-    # {"code": "GOLDPMGBD228NLBM","name": "Gold Fixing Price (London PM)", "category": "commodities", "freq": "daily", "units": "USD per Troy Ounce", "seasonal_adj": False, "notes": "discontinued on FRED"},
+    # GOLD — FRED discontinued LBMA fixes; ingested via yfinance GC=F (see 05_gold_ingestor.py).
+    # Canonical code GOLDPMGBD228NLBM is preserved so downstream queries stay stable.
+    # {"code": "GOLDPMGBD228NLBM","name": "Gold Price (COMEX GC=F)", "category": "commodities", "freq": "daily", "units": "USD per Troy Ounce", "seasonal_adj": False, "notes": "yfinance/COMEX via 05_gold_ingestor.py"},
     {"code": "PNRGINDEXM",      "name": "Global Price of Energy Index",         "category": "commodities", "freq": "monthly",   "units": "Index 2016=100",                       "seasonal_adj": False, "notes": "IMF commodity price index"},
     {"code": "PALLFNFINDEXM",   "name": "Global Price of All Commodities",      "category": "commodities", "freq": "monthly",   "units": "Index 2016=100",                       "seasonal_adj": False, "notes": "IMF; broad commodity basket"},
     {"code": "PCOPPUSDM",       "name": "Global Price of Copper",               "category": "commodities", "freq": "monthly",   "units": "USD per Metric Ton",                   "seasonal_adj": False, "notes": "'Dr. Copper' — industrial demand proxy"},

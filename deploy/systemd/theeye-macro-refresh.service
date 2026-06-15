@@ -1,5 +1,5 @@
 [Unit]
-Description=TheEyeBeta macro incremental refresh (FRED, scripts/macro_ingestor/04_macro_refresh.py)
+Description=TheEyeBeta macro incremental refresh (04 FRED + 05 gold/yfinance)
 Wants=network-online.target
 After=network-online.target postgresql.service
 
@@ -12,6 +12,7 @@ WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/scripts/macro_
 # Provides FRED_API_KEY + ADMIN_DATABASE_URL; 04 falls back DB_URL -> ADMIN_DATABASE_URL itself.
 EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
 ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.venv/bin/python 04_macro_refresh.py
+ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.venv/bin/python 05_gold_ingestor.py --refresh
 TimeoutStartSec=900
 RuntimeMaxSec=1800
 Restart=on-failure
