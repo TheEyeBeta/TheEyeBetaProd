@@ -19,11 +19,14 @@ log = structlog.get_logger()
 class RiskMetricsScheduler:
     """Recompute portfolio risk metrics on a fixed interval."""
 
-    # TODO(#4): theeyebeta.risk_metrics is an empty hypertable with no active writer.
-    # This scheduler is the intended writer path (via RiskServiceClient), but it only runs
-    # when settings.risk_service_url is set; risk_service is scaffolded and NOT deployed
-    # (see SERVICES_STATUS.md), so start() takes the skip branch and risk_metrics stays
-    # empty. Do not start the scaffolded service ad hoc — deploy it properly. Tracked in #4.
+    # TODO(#4): theeyebeta.risk_metrics is an empty hypertable. The root cause is upstream,
+    # not this scheduler: the platform runs 0 portfolios / 0 positions, and
+    # risk_metrics.portfolio_id is a NOT NULL FK to theeyebeta.portfolios, so there is nothing
+    # to compute and no row can be inserted. risk_service is now deploy-ready (staged unit at
+    # deploy/systemd/staged/theeye-risk-service.service) but intentionally inactive. This
+    # scheduler only starts when both risk_service_url and a portfolio-id list are set; keep
+    # them unset until a real book exists. Full activation checklist + the reason empty is
+    # correct: docs/ops/risk-metrics-activation.md. Tracked in #4.
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings

@@ -24,7 +24,7 @@ Effort is a rough order-of-magnitude estimate (S ≈ <1d, M ≈ 1–3d, L ≈ >3
 | `llm_gateway` | LiteLLM proxy **config** + virtual-key provisioning (no FastAPI app) | N/A — the proxy itself is deployed (`theeyebeta-litellm`, fixed in this pass). This dir is config/scripts only | — |
 | `master_orchestrator` | Orchestration + risk-metrics scheduler (FastAPI :7050) | No deploy unit; it gates the `risk_metrics` writer (issue #4) | M |
 | `oms` | Order management system (FastAPI :7080) | No deploy unit. **Live-trading-adjacent** — do not enable without explicit approval | L |
-| `risk_service` | Risk-metrics computation/writer (gRPC :7060 / HTTP :8007) | No deploy unit; intended writer for `theeyebeta.risk_metrics` (issue #4) | M |
+| `risk_service` | Risk-metrics computation/writer (gRPC :7060 / HTTP :8007) | Deploy unit **staged** (`deploy/systemd/staged/`, disabled). Real blocker for `risk_metrics` (#4) is **upstream, not the unit**: 0 portfolios / 0 positions, and `risk_metrics.portfolio_id` is a NOT NULL FK — nothing to compute. Also needs `make build-cpp` (`zinc_native._zinc_risk`). See `docs/ops/risk-metrics-activation.md` | M |
 | `rnd_agent` | Research / R&D agent | No deploy unit; LLM wiring | M |
 | `snapshot_packager` | Daily snapshot packaging (FastAPI :7011) | No deploy unit; object storage (MinIO/S3) | M |
 
@@ -34,3 +34,10 @@ Effort is a rough order-of-magnitude estimate (S ≈ <1d, M ≈ 1–3d, L ≈ >3
   `TheEyeBetaDataAPI` repo (see `docs/api-gateway.md`).
 - Open tracking issues from this pass: #3 (signals cutover), #4 (risk_metrics writer),
   #5 (supabase-sync broken + product decision).
+- **#4 update (2026-06-15):** `theeyebeta.risk_metrics` is empty because the platform runs
+  **no portfolios and holds no positions** — not because the writer was undeployed. The table
+  has a `NOT NULL` FK to `theeyebeta.portfolios`, positions are written only by the
+  live-trading-gated OMS, and nothing seeds portfolios. Empty is therefore the *correct* state
+  today (cf. the empty `audit_log` finding). `risk_service` is now deploy-ready (staged unit +
+  config), but stays inactive until a real book exists. Activation checklist:
+  `docs/ops/risk-metrics-activation.md`.
