@@ -179,45 +179,6 @@ class BaseWorker:
             result.records_expected,
             json.dumps(result.metadata or {}),
         )
-        await self._append_audit_completed(result)
-
-    async def _append_audit_completed(self, result: WorkerResult) -> None:
-        """Append a hash-chained ``audit_log`` row for this completed run.
-
-        Wires the previously-unused audit hash chain
-        (``services/audit_service/.../chain.py``) to every worker_run completion,
-        so ``theeyebeta.audit_log`` is populated by the operational pipeline.
-
-        Best-effort: a failure here is logged but never re-raised, so an
-        audit-subsystem hiccup can't fail an already-completed run. The chain
-        stays verifiable by ``audit_service.chain.verify_range``.
-        """
-        if self.run_id is None:
-            return
-        try:
-            from audit_service.chain import append_chained_row  # noqa: PLC0415
-
-            await append_chained_row(
-                self.database_url,
-                actor=f"worker:{self.worker_name}",
-                action="worker_run.completed",
-                entity_type="worker_run",
-                entity_id=str(self.run_id),
-                payload={
-                    "worker_name": self.worker_name,
-                    "worker_type": self.worker_type,
-                    "records_written": result.records_written,
-                    "records_expected": result.records_expected,
-                    "metadata": result.metadata or {},
-                },
-            )
-        except Exception as exc:  # noqa: BLE001 — audit must never fail a completed run
-            log.error(
-                "audit_append_failed",
-                worker_name=self.worker_name,
-                run_id=self.run_id,
-                error=str(exc),
-            )
 
     async def _finish_failed(self, conn: asyncpg.Connection, exc: Exception) -> None:
         if self.run_id is None:
