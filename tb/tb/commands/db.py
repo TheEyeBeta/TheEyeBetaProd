@@ -50,7 +50,9 @@ def db_shell() -> None:
 def db_ping() -> None:
     """Verify database connectivity."""
     with sync_connect() as conn:
-        row = conn.execute("SELECT current_database(), current_user, version()").fetchone()
+        row = conn.execute(
+            "SELECT current_database(), current_user, version()"
+        ).fetchone()
     typer.echo(f"database={row['current_database']} user={row['current_user']}")
     typer.echo(str(row["version"]).split(",")[0])
 

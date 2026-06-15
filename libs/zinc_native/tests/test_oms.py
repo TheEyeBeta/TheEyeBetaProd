@@ -10,9 +10,13 @@ import pytest
 
 _zinc_oms = _sys.modules.get("zinc_native._zinc_oms")
 if _zinc_oms is None:
-    pytest.importorskip("zinc_native._zinc_oms", reason="C++ kernels not compiled — run make build-cpp")
+    pytest.importorskip(
+        "zinc_native._zinc_oms", reason="C++ kernels not compiled — run make build-cpp"
+    )
 elif not getattr(_zinc_oms, "__file__", None):
-    pytest.skip("C++ kernels not compiled — zinc_native.oms is a Python stub", allow_module_level=True)
+    pytest.skip(
+        "C++ kernels not compiled — zinc_native.oms is a Python stub", allow_module_level=True
+    )
 from zinc_native import oms
 
 REFERENCE_FILLED_QUANTITY = 42
@@ -39,9 +43,15 @@ class TestStateMachine:
     def test_happy_path_hand_computed_partial_fills(self) -> None:
         order = _make_order(100)
 
-        _expect_success(oms.StateMachine.transition(order, oms.Event.Approve), oms.OrderStatus.Approved)
-        _expect_success(oms.StateMachine.transition(order, oms.Event.Submit), oms.OrderStatus.Submitted)
-        _expect_success(oms.StateMachine.transition(order, oms.Event.Accept), oms.OrderStatus.Accepted)
+        _expect_success(
+            oms.StateMachine.transition(order, oms.Event.Approve), oms.OrderStatus.Approved
+        )
+        _expect_success(
+            oms.StateMachine.transition(order, oms.Event.Submit), oms.OrderStatus.Submitted
+        )
+        _expect_success(
+            oms.StateMachine.transition(order, oms.Event.Accept), oms.OrderStatus.Accepted
+        )
 
         result = oms.StateMachine.transition(order, oms.Event.PartialFill, 40)
         _expect_success(result, oms.OrderStatus.PartiallyFilled)
@@ -141,7 +151,9 @@ class TestStateMachine:
     def test_numerical_stability_against_reference_literal(self) -> None:
         order = _make_order(100)
         order.status = oms.OrderStatus.Accepted
-        result = oms.StateMachine.transition(order, oms.Event.PartialFill, REFERENCE_FILLED_QUANTITY)
+        result = oms.StateMachine.transition(
+            order, oms.Event.PartialFill, REFERENCE_FILLED_QUANTITY
+        )
         assert result.ok
         assert order.filled_quantity == REFERENCE_FILLED_QUANTITY
         assert result.order.filled_quantity == REFERENCE_FILLED_QUANTITY

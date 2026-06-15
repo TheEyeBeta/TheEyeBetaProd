@@ -51,7 +51,11 @@ def now_price(
             if not inst:
                 return None
             price = await fetch_latest_price(conn, int(inst["instrument_id"]))
-            return {"symbol": ticker, "instrument_id": inst["instrument_id"], "price": price}
+            return {
+                "symbol": ticker,
+                "instrument_id": inst["instrument_id"],
+                "price": price,
+            }
 
     result = asyncio.run(_run())
     if not result or not result.get("price"):
@@ -131,9 +135,13 @@ def now_news(
 
 
 @app.command("signals")
-def now_signals(ticker: str = typer.Argument(...), limit: int = typer.Option(5, "--limit")) -> None:
+def now_signals(
+    ticker: str = typer.Argument(...), limit: int = typer.Option(5, "--limit")
+) -> None:
     """Latest trading signals (if signals table populated)."""
-    typer.echo(f"Signals query for {ticker} — check agent-runtime when deployed (limit={limit})")
+    typer.echo(
+        f"Signals query for {ticker} — check agent-runtime when deployed (limit={limit})"
+    )
 
 
 @app.command("diagnose")

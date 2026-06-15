@@ -35,7 +35,11 @@ def _docker_health() -> list[dict[str, str]]:
     for line in proc.stdout.splitlines():
         if "\t" in line:
             name, status = line.split("\t", 1)
-            health = "green" if "healthy" in status.lower() or "up" in status.lower() else "yellow"
+            health = (
+                "green"
+                if "healthy" in status.lower() or "up" in status.lower()
+                else "yellow"
+            )
             if "exited" in status.lower() or "dead" in status.lower():
                 health = "red"
             rows.append({"name": name, "status": status, "health": health})
@@ -43,7 +47,9 @@ def _docker_health() -> list[dict[str, str]]:
 
 
 @app.callback(invoke_without_command=True)
-def status(ctx: typer.Context, json_output: bool = typer.Option(False, "--json")) -> None:
+def status(
+    ctx: typer.Context, json_output: bool = typer.Option(False, "--json")
+) -> None:
     """Show universe counts, Docker health, price freshness, and timers."""
     if ctx.invoked_subcommand is not None:
         return

@@ -13,9 +13,13 @@ import pytest
 pa = pytest.importorskip("pyarrow")
 _zinc_bt = _sys.modules.get("zinc_native._zinc_bt")
 if _zinc_bt is None:
-    pytest.importorskip("zinc_native._zinc_bt", reason="C++ kernels not compiled — run make build-cpp")
+    pytest.importorskip(
+        "zinc_native._zinc_bt", reason="C++ kernels not compiled — run make build-cpp"
+    )
 elif not getattr(_zinc_bt, "__file__", None):
-    pytest.skip("C++ kernels not compiled — zinc_native.bt is a Python stub", allow_module_level=True)
+    pytest.skip(
+        "C++ kernels not compiled — zinc_native.bt is a Python stub", allow_module_level=True
+    )
 import pyarrow.parquet as pq  # noqa: E402
 
 from zinc_native import bt
@@ -75,9 +79,7 @@ class TestEngine:
                 _zero_slippage(),
             )
             engine.set_parquet_path(str(parquet_path))
-            engine.set_strategy(
-                lambda _snapshot: bt.Decision(symbol_index=0, target_weight=1.0)
-            )
+            engine.set_strategy(lambda _snapshot: bt.Decision(symbol_index=0, target_weight=1.0))
             result = engine.run()
 
         assert len(result.daily_pnl) == BUY_HOLD_DAYS
@@ -128,9 +130,7 @@ class TestEngine:
                 _zero_slippage(),
             )
             engine.set_parquet_path(str(parquet_path))
-            engine.set_strategy(
-                lambda _snapshot: bt.Decision(symbol_index=0, target_weight=1.0)
-            )
+            engine.set_strategy(lambda _snapshot: bt.Decision(symbol_index=0, target_weight=1.0))
             result = engine.run()
 
         assert len(result.daily_pnl) == 1
@@ -199,9 +199,7 @@ class TestEngine:
                 _zero_slippage(),
             )
             engine.set_parquet_path(str(parquet_path))
-            engine.set_strategy(
-                lambda _snapshot: bt.Decision(symbol_index=0, target_weight=1.0)
-            )
+            engine.set_strategy(lambda _snapshot: bt.Decision(symbol_index=0, target_weight=1.0))
             result = engine.run()
 
         assert result.metrics.total_return == pytest.approx(literal_total_return, abs=1e-4)

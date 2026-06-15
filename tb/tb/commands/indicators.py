@@ -40,7 +40,15 @@ def indicators_compute(
     dry_run: bool = typer.Option(False, "--dry-run"),
 ) -> None:
     """Run IndicatorComputeWorker."""
-    cmd = ["uv", "run", "python", "-m", "workers.indicator_compute_worker", "--run-type", "manual"]
+    cmd = [
+        "uv",
+        "run",
+        "python",
+        "-m",
+        "workers.indicator_compute_worker",
+        "--run-type",
+        "manual",
+    ]
     if on_date:
         cmd.extend(["--date", on_date])
     if dry_run:
@@ -56,7 +64,9 @@ def indicators_null_report(on_date: str | None = typer.Option(None, "--date")) -
     async def _run() -> None:
         async with async_connect() as conn:
             d = on_date or str(
-                await conn.fetchval("SELECT MAX(date) FROM theeyebeta.ind_technical_daily")
+                await conn.fetchval(
+                    "SELECT MAX(date) FROM theeyebeta.ind_technical_daily"
+                )
             )
             missing = await conn.fetchval(
                 """

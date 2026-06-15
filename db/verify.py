@@ -2,6 +2,7 @@
 Architectural invariant verification for theeyebeta.
 Prints PASS/FAIL for each check and exits 0 only if all pass.
 """
+
 import os
 import sys
 
@@ -30,6 +31,7 @@ def _conn(url: str = DATABASE_URL, **kwargs: object) -> psycopg.Connection:  # t
 
 def _rnd_url() -> str:
     import urllib.parse as up
+
     p = up.urlparse(DATABASE_URL)
     return p._replace(
         netloc=f"tb_rnd_readonly:{TB_RND_PASSWORD}@{p.hostname}:{p.port or 5432}"
@@ -38,24 +40,19 @@ def _rnd_url() -> str:
 
 def _app_url() -> str:
     import urllib.parse as up
+
     p = up.urlparse(DATABASE_URL)
-    return p._replace(
-        netloc=f"tb_app:{TB_APP_PASSWORD}@{p.hostname}:{p.port or 5432}"
-    ).geturl()
+    return p._replace(netloc=f"tb_app:{TB_APP_PASSWORD}@{p.hostname}:{p.port or 5432}").geturl()
 
 
 def run_checks() -> None:
     with _conn() as conn:
         # ── a. Schema exists ────────────────────────────────────────────────
-        row = conn.execute(
-            "SELECT 1 FROM pg_namespace WHERE nspname='theeyebeta'"
-        ).fetchone()
+        row = conn.execute("SELECT 1 FROM pg_namespace WHERE nspname='theeyebeta'").fetchone()
         check("a. schema theeyebeta exists", row is not None)
 
         # ── b. All 10 migrations applied ────────────────────────────────────
-        row = conn.execute(
-            "SELECT version_num FROM theeyebeta.alembic_version"
-        ).fetchone()
+        row = conn.execute("SELECT version_num FROM theeyebeta.alembic_version").fetchone()
         expected_rev = "0009_audit"
         ok = row is not None and row[0] == expected_rev
         check("b. migrations at head (0009_audit)", ok, f"got {row[0] if row else None}")
@@ -88,9 +85,7 @@ def run_checks() -> None:
 
         # ── e. Roles exist ───────────────────────────────────────────────────
         for role in ("tb_app", "tb_rnd_readonly"):
-            row = conn.execute(
-                "SELECT 1 FROM pg_roles WHERE rolname=%s", (role,)
-            ).fetchone()
+            row = conn.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (role,)).fetchone()
             check(f"e. role {role} exists", row is not None)
 
         # ── j. audit_log partitions ──────────────────────────────────────────
@@ -130,7 +125,9 @@ def run_checks() -> None:
     try:
         with _conn(_app_url()) as aconn:
             aconn.execute("DELETE FROM theeyebeta.audit_log WHERE false")
-        check("f. tb_app DELETE on audit_log blocked", False, "DELETE succeeded — should have failed")  # noqa: E501
+        check(
+            "f. tb_app DELETE on audit_log blocked", False, "DELETE succeeded — should have failed"
+        )  # noqa: E501
     except psycopg.errors.InsufficientPrivilege:
         check("f. tb_app DELETE on audit_log blocked", True)
     except Exception as exc:
@@ -140,7 +137,11 @@ def run_checks() -> None:
     try:
         with _conn(_rnd_url()) as rconn:
             rconn.execute("UPDATE theeyebeta.proposals SET status='applied' WHERE false")
-        check("g. tb_rnd_readonly UPDATE proposals blocked", False, "UPDATE succeeded — should have failed")  # noqa: E501
+        check(
+            "g. tb_rnd_readonly UPDATE proposals blocked",
+            False,
+            "UPDATE succeeded — should have failed",
+        )  # noqa: E501
     except psycopg.errors.InsufficientPrivilege:
         check("g. tb_rnd_readonly UPDATE proposals blocked", True)
     except Exception as exc:
@@ -150,7 +151,11 @@ def run_checks() -> None:
     try:
         with _conn(_rnd_url()) as rconn:
             rconn.execute("SELECT * FROM theeyebeta.audit_log LIMIT 1")
-        check("h. tb_rnd_readonly SELECT audit_log blocked", False, "SELECT succeeded — should have failed")  # noqa: E501
+        check(
+            "h. tb_rnd_readonly SELECT audit_log blocked",
+            False,
+            "SELECT succeeded — should have failed",
+        )  # noqa: E501
     except psycopg.errors.InsufficientPrivilege:
         check("h. tb_rnd_readonly SELECT audit_log blocked", True)
     except Exception as exc:

@@ -79,6 +79,8 @@ def intraday_latest(
                     limit,
                 )
         for row in rows:
-            typer.echo(f"{row['ts']}  {row['symbol']:<8} close={row['close']} vol={row['volume']}")
+            typer.echo(
+                f"{row['ts']}  {row['symbol']:<8} close={row['close']} vol={row['volume']}"
+            )
 
     asyncio.run(_run())

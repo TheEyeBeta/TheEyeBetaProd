@@ -20,7 +20,9 @@ def prices_freshness() -> None:
 
     async def _run() -> None:
         async with async_connect() as conn:
-            latest = await conn.fetchval("SELECT MAX(ts::date) FROM theeyebeta.prices_daily")
+            latest = await conn.fetchval(
+                "SELECT MAX(ts::date) FROM theeyebeta.prices_daily"
+            )
             count = await conn.fetchval("SELECT COUNT(*) FROM theeyebeta.prices_daily")
         typer.echo(f"latest={latest} total_rows={count:,}")
 
@@ -63,7 +65,9 @@ def prices_sample(
             inst = await resolve_symbol(conn, symbol)
             if not inst:
                 raise typer.Exit(code=1)
-            rows = await fetch_price_series(conn, int(inst["instrument_id"]), limit=limit)
+            rows = await fetch_price_series(
+                conn, int(inst["instrument_id"]), limit=limit
+            )
         for row in rows[-limit:]:
             typer.echo(f"{row['d']} close={row['close']}")
 
@@ -76,7 +80,15 @@ def prices_ingest(
     dry_run: bool = typer.Option(False, "--dry-run"),
 ) -> None:
     """Trigger Massive EOD ingestion worker."""
-    cmd = ["uv", "run", "python", "-m", "workers.massive_ingestion_worker", "--run-type", "manual"]
+    cmd = [
+        "uv",
+        "run",
+        "python",
+        "-m",
+        "workers.massive_ingestion_worker",
+        "--run-type",
+        "manual",
+    ]
     if on_date:
         cmd.extend(["--date", on_date])
     if dry_run:
@@ -92,7 +104,15 @@ app.add_typer(gaps_app, name="gaps")
 @gaps_app.command("detect")
 def gaps_detect(on_date: str | None = typer.Option(None, "--date")) -> None:
     """Run gap sentinel (detect mode)."""
-    cmd = ["uv", "run", "python", "-m", "workers.gap_sentinel_worker", "--run-type", "manual"]
+    cmd = [
+        "uv",
+        "run",
+        "python",
+        "-m",
+        "workers.gap_sentinel_worker",
+        "--run-type",
+        "manual",
+    ]
     if on_date:
         cmd.extend(["--date", on_date])
     proc = subprocess.run(cmd, cwd=REPO_ROOT, check=False)  # noqa: S603

@@ -29,7 +29,9 @@ def export_prices(
             inst = await resolve_symbol(conn, symbol)
             if not inst:
                 raise typer.Exit(code=1)
-            return await fetch_price_series(conn, int(inst["instrument_id"]), limit=5000)
+            return await fetch_price_series(
+                conn, int(inst["instrument_id"]), limit=5000
+            )
 
     rows = asyncio.run(_run())
     out = output.open("w", newline="") if output else sys.stdout
@@ -37,7 +39,9 @@ def export_prices(
         if fmt == "json":
             json.dump(rows, out, indent=2, default=str)
         else:
-            writer = csv.DictWriter(out, fieldnames=["d", "open", "high", "low", "close", "volume"])
+            writer = csv.DictWriter(
+                out, fieldnames=["d", "open", "high", "low", "close", "volume"]
+            )
             writer.writeheader()
             for row in rows:
                 writer.writerow({k: row[k] for k in writer.fieldnames})

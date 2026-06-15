@@ -57,7 +57,9 @@ def meta_doctor(json_output: bool = typer.Option(False, "--json")) -> None:
     usage = shutil.disk_usage("/")
     free_pct = round(100.0 * usage.free / usage.total, 1)
     disk_status = "PASS" if free_pct >= 20 else "WARN"
-    checks.append({"name": "disk", "status": disk_status, "detail": f"{free_pct}% free"})
+    checks.append(
+        {"name": "disk", "status": disk_status, "detail": f"{free_pct}% free"}
+    )
 
     timers = list_timers()
     checks.append(

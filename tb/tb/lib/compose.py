@@ -42,7 +42,9 @@ def compose_restart(service: str) -> int:
 def compose_deploy(service: str | None = None) -> int:
     """Pull images and bring service(s) up."""
     pull = subprocess.run(
-        _compose_cmd("pull", *([service] if service else [])), cwd=REPO_ROOT, check=False
+        _compose_cmd("pull", *([service] if service else [])),
+        cwd=REPO_ROOT,
+        check=False,
     )  # noqa: S603
     if pull.returncode != 0:
         return pull.returncode

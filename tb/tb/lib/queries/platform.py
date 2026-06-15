@@ -10,7 +10,9 @@ import asyncpg
 
 async def fetch_platform_summary(conn: asyncpg.Connection) -> dict[str, Any]:
     """Universe counts, price freshness, stale heartbeats."""
-    active = await conn.fetchval("SELECT COUNT(*) FROM theeyebeta.instruments WHERE active")
+    active = await conn.fetchval(
+        "SELECT COUNT(*) FROM theeyebeta.instruments WHERE active"
+    )
     intraday = await conn.fetchval(
         """
         SELECT COUNT(DISTINCT i.id)
@@ -22,8 +24,12 @@ async def fetch_platform_summary(conn: asyncpg.Connection) -> dict[str, Any]:
          WHERE i.active AND c.market_cap >= 500000000
         """,
     )
-    latest_daily = await conn.fetchval("SELECT MAX(ts::date) FROM theeyebeta.prices_daily")
-    latest_intraday = await conn.fetchval("SELECT MAX(ts) FROM theeyebeta.prices_intraday")
+    latest_daily = await conn.fetchval(
+        "SELECT MAX(ts::date) FROM theeyebeta.prices_daily"
+    )
+    latest_intraday = await conn.fetchval(
+        "SELECT MAX(ts) FROM theeyebeta.prices_intraday"
+    )
     stale_workers = await conn.fetch(
         """
         SELECT worker_id, last_heartbeat
@@ -47,9 +53,12 @@ async def fetch_platform_summary(conn: asyncpg.Connection) -> dict[str, Any]:
 
 async def fetch_canonical_status(conn: asyncpg.Connection) -> dict[str, Any]:
     """Prices and indicators freshness for the latest trading day."""
-    latest_daily = await conn.fetchval("SELECT MAX(ts::date) FROM theeyebeta.prices_daily")
+    latest_daily = await conn.fetchval(
+        "SELECT MAX(ts::date) FROM theeyebeta.prices_daily"
+    )
     active = int(
-        await conn.fetchval("SELECT COUNT(*) FROM theeyebeta.instruments WHERE active") or 0
+        await conn.fetchval("SELECT COUNT(*) FROM theeyebeta.instruments WHERE active")
+        or 0
     )
     price_rows = 0
     ind_rows = 0

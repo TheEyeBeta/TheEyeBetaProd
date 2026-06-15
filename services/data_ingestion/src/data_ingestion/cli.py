@@ -103,10 +103,7 @@ def macro(
         typer.echo(f"FAILED: {exc}", err=True)
         raise typer.Exit(code=1) from None
 
-    typer.echo(
-        f"macro done — series={result['series']} "
-        f"points_written={result['points_written']}"
-    )
+    typer.echo(f"macro done — series={result['series']} points_written={result['points_written']}")
 
 
 @app.command(name="all")
@@ -156,6 +153,7 @@ def all_ingest(
 
 # ── Backfill commands ─────────────────────────────────────────────────────────
 
+
 def _default_start() -> date:
     """Return a date 5 years before today."""
     today = date.today()
@@ -189,8 +187,7 @@ def backfill_prices(
         raise typer.Exit(code=1) from None
 
     typer.echo(
-        f"backfill prices done — instruments={result['requested']} "
-        f"written={result['written']}"
+        f"backfill prices done — instruments={result['requested']} written={result['written']}"
     )
 
 
@@ -221,8 +218,7 @@ def backfill_macro(
         raise typer.Exit(code=1) from None
 
     typer.echo(
-        f"backfill macro done — series={result['series']} "
-        f"points_written={result['points_written']}"
+        f"backfill macro done — series={result['series']} points_written={result['points_written']}"
     )
 
 
@@ -251,9 +247,7 @@ def backfill_all(
 
     try:
         pr = asyncio.run(_bprices(start, end))
-        typer.echo(
-            f"  prices — instruments={pr['requested']} written={pr['written']}"
-        )
+        typer.echo(f"  prices — instruments={pr['requested']} written={pr['written']}")
     except Exception as exc:  # noqa: BLE001
         log.error("backfill_prices_failed", error=str(exc))
         typer.echo(f"  prices FAILED: {exc}", err=True)
@@ -261,9 +255,7 @@ def backfill_all(
 
     try:
         mr = asyncio.run(_bmacro(start, end))
-        typer.echo(
-            f"  macro  — series={mr['series']} points_written={mr['points_written']}"
-        )
+        typer.echo(f"  macro  — series={mr['series']} points_written={mr['points_written']}")
     except Exception as exc:  # noqa: BLE001
         log.error("backfill_macro_failed", error=str(exc))
         typer.echo(f"  macro FAILED: {exc}", err=True)

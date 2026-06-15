@@ -21,7 +21,15 @@ def pipeline_daily(
     run_type: str = typer.Option("manual", "--run-type"),
 ) -> None:
     """Run the canonical daily pipeline."""
-    cmd = ["uv", "run", "python", "-m", "workers.daily_pipeline_runner", "--run-type", run_type]
+    cmd = [
+        "uv",
+        "run",
+        "python",
+        "-m",
+        "workers.daily_pipeline_runner",
+        "--run-type",
+        run_type,
+    ]
     if on_date:
         cmd.extend(["--date", on_date])
     if dry_run:
@@ -59,7 +67,9 @@ def pipeline_dry_run(on_date: str | None = typer.Option(None, "--date")) -> None
 
 
 @app.command("report")
-def pipeline_report(on_date: str = typer.Argument(..., help="Trade date YYYY-MM-DD")) -> None:
+def pipeline_report(
+    on_date: str = typer.Argument(..., help="Trade date YYYY-MM-DD"),
+) -> None:
     """Summary counts for a pipeline date."""
     trade = date.fromisoformat(on_date)
 

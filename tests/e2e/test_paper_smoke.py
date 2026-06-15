@@ -193,9 +193,7 @@ async def test_paper_trade_full_stack(
                 f"{_OMS_URL}/oms/orders/{order_id}/approve",
                 json={"approved_by": "paper-smoke-test"},
             )
-        assert resp.status_code == 200, (
-            f"OMS approve returned {resp.status_code}: {resp.text}"
-        )
+        assert resp.status_code == 200, f"OMS approve returned {resp.status_code}: {resp.text}"
 
         # ── Step 6: wait for fill from Alpaca paper ────────────────────────────
         filled = await _wait_for_fill(pool, order_id, timeout=_FILL_TIMEOUT)
@@ -226,9 +224,7 @@ async def test_paper_trade_full_stack(
                     "to": run_end.isoformat(),
                 },
             )
-        assert resp.status_code == 200, (
-            f"Audit verify returned {resp.status_code}: {resp.text}"
-        )
+        assert resp.status_code == 200, f"Audit verify returned {resp.status_code}: {resp.text}"
         body = resp.json()
         assert body["status"] == "OK", (
             f"Audit chain broken — first_bad_row_id={body.get('first_bad_row_id')}, "

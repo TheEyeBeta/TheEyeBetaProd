@@ -493,7 +493,9 @@ class ConstitutionGuard:
         constitution: AgentConstitution,
         text: str,
     ) -> list[Violation] | None:
-        forbidden = set(constitution.forbidden_targets or FORBIDDEN_TARGET_DEFAULTS.get(agent_id, []))  # noqa: E501
+        forbidden = set(
+            constitution.forbidden_targets or FORBIDDEN_TARGET_DEFAULTS.get(agent_id, [])
+        )  # noqa: E501
         if not forbidden:
             return None
         lowered = text.lower()
@@ -528,7 +530,6 @@ def _snapshot_field_paths(snapshot: dict[str, Any]) -> set[str]:
         if isinstance(block, dict):
             for key in block:
                 paths.add(f"prices.{symbol}.{key}")
-    for key in (snapshot.get("macro") or {}):
+    for key in snapshot.get("macro") or {}:
         paths.add(f"macro.{key}")
     return paths
-

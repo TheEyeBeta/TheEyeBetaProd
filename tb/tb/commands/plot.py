@@ -7,7 +7,11 @@ import asyncio
 import typer
 
 from tb.lib.db import async_connect
-from tb.lib.queries.instruments import fetch_latest_indicators, fetch_price_series, resolve_symbol
+from tb.lib.queries.instruments import (
+    fetch_latest_indicators,
+    fetch_price_series,
+    resolve_symbol,
+)
 
 app = typer.Typer(no_args_is_help=True, help="Price and indicator charts")
 
@@ -18,7 +22,9 @@ def _plot_symbol(symbol: str, *, mode: str, limit: int = 30) -> None:
             inst = await resolve_symbol(conn, symbol)
             if not inst:
                 raise typer.Exit(code=1)
-            prices = await fetch_price_series(conn, int(inst["instrument_id"]), limit=limit)
+            prices = await fetch_price_series(
+                conn, int(inst["instrument_id"]), limit=limit
+            )
             ind = await fetch_latest_indicators(conn, int(inst["instrument_id"]))
         typer.echo(f"=== {symbol} {mode} (last {len(prices)} bars) ===")
         for row in prices[-10:]:
@@ -33,7 +39,9 @@ def _plot_symbol(symbol: str, *, mode: str, limit: int = 30) -> None:
 
 
 @app.command("price")
-def plot_price(symbol: str = typer.Argument(...), limit: int = typer.Option(30, "--limit")) -> None:
+def plot_price(
+    symbol: str = typer.Argument(...), limit: int = typer.Option(30, "--limit")
+) -> None:
     """Price series summary."""
     _plot_symbol(symbol, mode="price", limit=limit)
 

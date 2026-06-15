@@ -40,34 +40,34 @@ os.environ.setdefault("DB_URL", os.environ.get("ADMIN_DATABASE_URL", ""))
 # ---------------------------------------------------------------------------
 # CONFIG — edit if your column names differ from defaults
 # ---------------------------------------------------------------------------
-SCHEMA        = "theeyebeta"
-TABLE         = "macro_indicators"
-SERIES_COL    = "series_code"     # ← the column holding the series identifier
-TS_COL        = "ts"              # ← the hypertable time dimension column
-VALUE_COL     = "value"           # ← the numeric observation value
+SCHEMA = "theeyebeta"
+TABLE = "macro_indicators"
+SERIES_COL = "series_code"  # ← the column holding the series identifier
+TS_COL = "ts"  # ← the hypertable time dimension column
+VALUE_COL = "value"  # ← the numeric observation value
 # ---------------------------------------------------------------------------
 
 FULL_TABLE = f"{SCHEMA}.{TABLE}"
 STALE_WARN_DAYS = {
-    "daily":     3,
-    "weekly":    10,
-    "monthly":   35,
+    "daily": 3,
+    "weekly": 10,
+    "monthly": 35,
     "quarterly": 95,
 }
 
-GREEN  = "\033[92m"
+GREEN = "\033[92m"
 YELLOW = "\033[93m"
-RED    = "\033[91m"
-CYAN   = "\033[96m"
-BOLD   = "\033[1m"
-RESET  = "\033[0m"
+RED = "\033[91m"
+CYAN = "\033[96m"
+BOLD = "\033[1m"
+RESET = "\033[0m"
 
 
 def get_connection():
     url = os.environ.get("DB_URL")
     if not url:
         print(f"{RED}ERROR: DB_URL environment variable not set.{RESET}")
-        print("  export DB_URL=\"postgresql://user:pass@host:5432/TheEyeBeta2025Live\"")
+        print('  export DB_URL="postgresql://user:pass@host:5432/TheEyeBeta2025Live"')
         sys.exit(1)
     return psycopg.connect(url)
 
@@ -161,15 +161,21 @@ def main():
         print(f"\n  {RED}WARNING: Expected columns NOT found: {missing_expected}{RESET}")
         print("  Edit the CONFIG section at the top of this script and the ingestors.")
     else:
-        print(f"\n  {GREEN}✓ All expected key columns confirmed: {SERIES_COL}, {TS_COL}, {VALUE_COL}{RESET}")
+        print(
+            f"\n  {GREEN}✓ All expected key columns confirmed: {SERIES_COL}, {TS_COL}, {VALUE_COL}{RESET}"
+        )
 
     # ── 2. Hypertable info ───────────────────────────────────────────────────
     print(f"\n{BOLD}[2] TIMESCALEDB STATUS{RESET}")
     ht = check_hypertable(conn)
     if ht:
-        print(f"  ✓ Confirmed hypertable: {ht['num_dimensions']} dimension(s), {ht['num_chunks']} chunk(s)")
+        print(
+            f"  ✓ Confirmed hypertable: {ht['num_dimensions']} dimension(s), {ht['num_chunks']} chunk(s)"
+        )
     else:
-        print(f"  {YELLOW}⚠ Not registered as a TimescaleDB hypertable — proceed with caution{RESET}")
+        print(
+            f"  {YELLOW}⚠ Not registered as a TimescaleDB hypertable — proceed with caution{RESET}"
+        )
 
     # ── 3. What's already in the DB ─────────────────────────────────────────
     print(f"\n{BOLD}[3] SERIES CURRENTLY IN DATABASE{RESET}")
@@ -182,21 +188,21 @@ def main():
         flag = staleness_flag(code, stats["last_ts"])
         rows = stats["row_count"]
         first = stats["first_ts"].strftime("%Y-%m-%d") if stats["first_ts"] else "?"
-        last  = stats["last_ts"].strftime("%Y-%m-%d")  if stats["last_ts"]  else "?"
+        last = stats["last_ts"].strftime("%Y-%m-%d") if stats["last_ts"] else "?"
         print(f"  {GREEN}●{RESET} {code:<30} {rows:>8,} rows  {first} → {last}{flag}")
         if meta:
             print(f"    {name}")
 
     # ── 4. Coverage diff ────────────────────────────────────────────────────
     present_codes = set(present.keys())
-    target_fred   = set(ALL_FRED_CODES)
+    target_fred = set(ALL_FRED_CODES)
     target_manual = set(ALL_MANUAL_CODES)
-    all_target    = target_fred | target_manual
+    all_target = target_fred | target_manual
 
-    in_db_and_registered   = present_codes & all_target
-    in_db_not_registered   = present_codes - all_target
-    missing_auto           = target_fred   - present_codes
-    missing_manual         = target_manual - present_codes
+    in_db_and_registered = present_codes & all_target
+    in_db_not_registered = present_codes - all_target
+    missing_auto = target_fred - present_codes
+    missing_manual = target_manual - present_codes
 
     # ── 5. Already covered ───────────────────────────────────────────────────
     print(f"\n{BOLD}[4] ALREADY COVERED — {len(in_db_and_registered)} series{RESET}")
@@ -207,7 +213,9 @@ def main():
     if in_db_not_registered:
         print(f"\n{BOLD}[4b] IN DB BUT NOT IN REGISTRY — {len(in_db_not_registered)} series{RESET}")
         print(f"  {YELLOW}These exist in the DB but are not in the macro_series_registry.{RESET}")
-        print(f"  {YELLOW}They may be legacy series from your old worker. Leave them alone unless confirmed dead.{RESET}")
+        print(
+            f"  {YELLOW}They may be legacy series from your old worker. Leave them alone unless confirmed dead.{RESET}"
+        )
         for code in sorted(in_db_not_registered):
             stats = present[code]
             print(f"  {YELLOW}?{RESET} {code}")
@@ -225,7 +233,9 @@ def main():
             print(f"    {RED}○{RESET} {code:<30} {SERIES_BY_CODE[code]['name']}")
 
     # ── 7. Missing manual ─────────────────────────────────────────────────────
-    print(f"\n{BOLD}[6] MISSING — MANUAL (licensed/no free API){RESET}  → fill manual_macro_template.csv + run 03_manual_file_ingestor.py")
+    print(
+        f"\n{BOLD}[6] MISSING — MANUAL (licensed/no free API){RESET}  → fill manual_macro_template.csv + run 03_manual_file_ingestor.py"
+    )
     print(f"  {len(missing_manual)} series to add manually\n")
     for code in sorted(missing_manual):
         meta = SERIES_BY_CODE[code]
@@ -233,16 +243,20 @@ def main():
         print(f"    Download from: {meta['manual_url']}")
 
     # ── 8. Summary ────────────────────────────────────────────────────────────
-    print(f"\n{BOLD}{'━'*54}{RESET}")
+    print(f"\n{BOLD}{'━' * 54}{RESET}")
     print(f"{BOLD}  SUMMARY{RESET}")
-    print(f"{'━'*54}")
+    print(f"{'━' * 54}")
     print(f"  Target universe:     {len(all_target):>4} series")
     print(f"  Already in DB:       {len(in_db_and_registered):>4} series")
-    pct_auto = 100*(len(target_fred - missing_auto)/len(target_fred)) if target_fred else 0
-    print(f"  FRED coverage:       {pct_auto:.0f}%  ({len(target_fred - missing_auto)}/{len(target_fred)} automated)")
+    pct_auto = 100 * (len(target_fred - missing_auto) / len(target_fred)) if target_fred else 0
+    print(
+        f"  FRED coverage:       {pct_auto:.0f}%  ({len(target_fred - missing_auto)}/{len(target_fred)} automated)"
+    )
     print(f"  Missing (auto):      {len(missing_auto):>4} — run 02_fred_macro_backfill.py")
-    print(f"  Missing (manual):    {len(missing_manual):>4} — fill CSV + run 03_manual_file_ingestor.py")
-    print(f"{'━'*54}\n")
+    print(
+        f"  Missing (manual):    {len(missing_manual):>4} — fill CSV + run 03_manual_file_ingestor.py"
+    )
+    print(f"{'━' * 54}\n")
 
     conn.close()
 

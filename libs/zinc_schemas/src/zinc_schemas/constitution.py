@@ -74,9 +74,7 @@ def _parse_mandate(raw: object) -> MandateRules | None:
         return None
     return MandateRules(
         allowed_markets=[str(m) for m in raw.get("allowed_markets") or []],
-        forbidden_symbol_suffixes=[
-            str(s) for s in raw.get("forbidden_symbol_suffixes") or []
-        ],
+        forbidden_symbol_suffixes=[str(s) for s in raw.get("forbidden_symbol_suffixes") or []],
         forbidden_exchanges=[str(e) for e in raw.get("forbidden_exchanges") or []],
     )
 

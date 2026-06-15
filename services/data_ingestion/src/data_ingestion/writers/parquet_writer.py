@@ -61,7 +61,9 @@ class ParquetWriter:
     def _blob_uri(self, market: str, trade_date: date) -> str:
         return f"s3://{self._bucket}/{self._object_key(market, trade_date)}"
 
-    def _write_sync(self, market: str, trade_date: date, frame: pl.DataFrame) -> SnapshotWriteResult:  # noqa: E501
+    def _write_sync(
+        self, market: str, trade_date: date, frame: pl.DataFrame
+    ) -> SnapshotWriteResult:  # noqa: E501
         if not self._client.bucket_exists(self._bucket):
             self._client.make_bucket(self._bucket)
         buffer = io.BytesIO()
@@ -100,9 +102,12 @@ class ParquetWriter:
         frame: pl.DataFrame,
     ) -> SnapshotWriteResult:
         """Serialize a Polars frame to zstd Parquet in MinIO."""
-        async with observe_duration("parquet", market), span(
-            "writer.write_daily_snapshot",
-            market=market,
-            trade_date=str(trade_date),
+        async with (
+            observe_duration("parquet", market),
+            span(
+                "writer.write_daily_snapshot",
+                market=market,
+                trade_date=str(trade_date),
+            ),
         ):
             return await asyncio.to_thread(self._write_sync, market, trade_date, frame)

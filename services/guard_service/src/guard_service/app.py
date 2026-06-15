@@ -41,10 +41,9 @@ def build_guard() -> ConstitutionGuard:
         "true",
         "yes",
     )
-    if (
-        not disable_creative
-        and os.environ.get("LITELLM_KEY_GUARD_SERVICE_CLASSIFIER", "").startswith("sk-")
-    ):
+    if not disable_creative and os.environ.get(
+        "LITELLM_KEY_GUARD_SERVICE_CLASSIFIER", ""
+    ).startswith("sk-"):
         classifier = CreativeContentClassifier()
     return ConstitutionGuard(constitutions, creative_classifier=classifier)
 
@@ -76,8 +75,7 @@ async def validate_request(
         snapshot = json.loads(request.snapshot_json)
     valid_symbols = set(request.valid_symbols) if request.valid_symbols else None
     tool_calls = [
-        {"name": tc.name, "arguments_json": tc.arguments_json}
-        for tc in request.tool_calls
+        {"name": tc.name, "arguments_json": tc.arguments_json} for tc in request.tool_calls
     ]
     prior = await count_violations_for_run(request.run_id)
     result = await guard.validate(

@@ -27,6 +27,7 @@ OUT_FILE = REPO_ROOT / "docs" / "db-state-map.md"
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 class Report:
     """Accumulate markdown lines, print immediately, write file at end."""
 
@@ -43,14 +44,20 @@ class Report:
 
     def table(self, headers: list[str], rows: list[list[Any]]) -> None:
         """Emit a GitHub-flavoured markdown table."""
-        widths = [max(len(str(h)), max((len(str(r[i])) for r in rows), default=0))
-                  for i, h in enumerate(headers)]
+        widths = [
+            max(len(str(h)), max((len(str(r[i])) for r in rows), default=0))
+            for i, h in enumerate(headers)
+        ]
         sep = "| " + " | ".join("-" * w for w, _ in zip(widths, headers, strict=False)) + " |"
-        hdr = "| " + " | ".join(str(h).ljust(w) for w, h in zip(widths, headers, strict=False)) + " |"
+        hdr = (
+            "| " + " | ".join(str(h).ljust(w) for w, h in zip(widths, headers, strict=False)) + " |"
+        )
         self.line(hdr)
         self.line(sep)
         for row in rows:
-            self.line("| " + " | ".join(str(c).ljust(w) for w, c in zip(widths, row, strict=False)) + " |")
+            self.line(
+                "| " + " | ".join(str(c).ljust(w) for w, c in zip(widths, row, strict=False)) + " |"
+            )
 
     def code(self, text: str, lang: str = "") -> None:
         self.line(f"```{lang}")
@@ -78,6 +85,7 @@ def _fmt_null(v: Any) -> str:
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     rpt = Report()
     rpt.line("# theeyebeta — Database State Map")
@@ -86,7 +94,6 @@ def main() -> None:
     rpt.line()
 
     with _conn() as conn:
-
         # ─── 1. Schemas present ───────────────────────────────────────────────
         rpt.line("---")
         rpt.h(2, "1. Schemas present")
@@ -202,8 +209,10 @@ def main() -> None:
             """
         ).fetchall()
         collision_names = [r[0] for r in collision_rows]
-        rpt.line(f"**Colliding names ({len(collision_names)}):** "
-                 + (", ".join(f"`{n}`" for n in collision_names) or "_none_"))
+        rpt.line(
+            f"**Colliding names ({len(collision_names)}):** "
+            + (", ".join(f"`{n}`" for n in collision_names) or "_none_")
+        )
         rpt.line()
 
         for name in collision_names:
@@ -225,11 +234,29 @@ def main() -> None:
                 ).fetchall()
                 if col_rows:
                     rpt.table(
-                        ["pos", "column", "data_type", "udt", "max_len",
-                         "num_prec", "nullable", "default"],
-                        [[r[0], r[1], r[2], r[3], _fmt_null(r[4]),
-                          _fmt_null(r[5]), r[6], _fmt_null(r[7])]
-                         for r in col_rows],
+                        [
+                            "pos",
+                            "column",
+                            "data_type",
+                            "udt",
+                            "max_len",
+                            "num_prec",
+                            "nullable",
+                            "default",
+                        ],
+                        [
+                            [
+                                r[0],
+                                r[1],
+                                r[2],
+                                r[3],
+                                _fmt_null(r[4]),
+                                _fmt_null(r[5]),
+                                r[6],
+                                _fmt_null(r[7]),
+                            ]
+                            for r in col_rows
+                        ],
                     )
                 else:
                     rpt.line(f"_No columns found for `{schema}.{name}`._")
@@ -345,8 +372,16 @@ def main() -> None:
         ).fetchall()
         if rows:
             rpt.table(
-                ["pid", "user", "app", "client", "state",
-                 "backend_start", "query_start", "recent_query"],
+                [
+                    "pid",
+                    "user",
+                    "app",
+                    "client",
+                    "state",
+                    "backend_start",
+                    "query_start",
+                    "recent_query",
+                ],
                 [[r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]] for r in rows],
             )
         else:
@@ -398,8 +433,7 @@ def main() -> None:
         ).fetchall()
         if rows:
             rpt.table(
-                ["schema", "table", "inserts", "updates", "deletes",
-                 "live_rows", "last_analyzed"],
+                ["schema", "table", "inserts", "updates", "deletes", "live_rows", "last_analyzed"],
                 [[r[0], r[1], r[2], r[3], r[4], r[5], r[6]] for r in rows],
             )
         else:
@@ -427,9 +461,24 @@ def main() -> None:
     for d in search_dirs:
         try:
             result = subprocess.run(
-                ["find", d, "-name", "alembic.ini", "-not", "-path", "*/\\.git/*",
-                 "-not", "-path", "*/__pycache__/*", "-not", "-path", "*/node_modules/*"],
-                capture_output=True, text=True, timeout=15,
+                [
+                    "find",
+                    d,
+                    "-name",
+                    "alembic.ini",
+                    "-not",
+                    "-path",
+                    "*/\\.git/*",
+                    "-not",
+                    "-path",
+                    "*/__pycache__/*",
+                    "-not",
+                    "-path",
+                    "*/node_modules/*",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
             )
             for ln in result.stdout.splitlines():
                 p = ln.strip()
@@ -459,13 +508,16 @@ def main() -> None:
                     "(script_location not found)",
                 )
                 vt_line = next(
-                    (ln for ln in content.splitlines()
-                     if "version_table" in ln and not ln.strip().startswith("#")),
+                    (
+                        ln
+                        for ln in content.splitlines()
+                        if "version_table" in ln and not ln.strip().startswith("#")
+                    ),
                     "(version_table* not set — defaults to public.alembic_version)",
                 )
                 rpt.code(
-                    f"sqlalchemy.url   = {url_line.split('=',1)[-1].strip()}\n"
-                    f"script_location  = {loc_line.split('=',1)[-1].strip()}\n"
+                    f"sqlalchemy.url   = {url_line.split('=', 1)[-1].strip()}\n"
+                    f"script_location  = {loc_line.split('=', 1)[-1].strip()}\n"
                     f"version_table    = {vt_line.strip()}"
                 )
             except Exception as exc:
@@ -476,7 +528,8 @@ def main() -> None:
     rpt.line("---")
     rpt.h(2, "10. Recommendations (read-only analysis — no actions taken)")
     rpt.line()
-    rpt.line("""
+    rpt.line(
+        """
 The diagnostics above reveal two independent systems sharing this PostgreSQL database:
 
 **System A — theeyebeta** (`theeyebeta` schema)
@@ -517,7 +570,8 @@ The diagnostics above reveal two independent systems sharing this PostgreSQL dat
    need the same treatment — identify origin, reconcile, then drop.
 
 **Awaiting decision before any mutation.**
-""".strip())
+""".strip()
+    )
     rpt.line()
 
     rpt.save()

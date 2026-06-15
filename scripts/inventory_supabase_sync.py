@@ -14,7 +14,13 @@ load_dotenv()
 DATABASE_URL = re.sub(r"\+\w+", "", os.environ.get("DATABASE_URL", ""), count=1)
 
 CONTRACT = [
-    ("latest_snapshot", "public.latest_snapshot + tickers", "REST upsert", "60s daemon", "IRIS / Supabase readers"),
+    (
+        "latest_snapshot",
+        "public.latest_snapshot + tickers",
+        "REST upsert",
+        "60s daemon",
+        "IRIS / Supabase readers",
+    ),
     ("market_news", "public.market_news", "REST upsert", "60s news-sync", "IRIS news widgets"),
 ]
 

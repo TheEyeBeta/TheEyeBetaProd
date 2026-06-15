@@ -65,9 +65,7 @@ def nats_container() -> Generator[DockerContainer, None, None]:
         pytest.skip("Docker daemon not available (required for testcontainers)")
 
     container = (
-        DockerContainer("nats:2-alpine")
-        .with_command("-js -m 8222")
-        .with_exposed_ports(4222)
+        DockerContainer("nats:2-alpine").with_command("-js -m 8222").with_exposed_ports(4222)
     )
     container.start()
     try:

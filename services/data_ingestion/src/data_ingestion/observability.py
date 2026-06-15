@@ -19,6 +19,7 @@ _OTEL_INITIALIZED = False
 
 T = TypeVar("T")
 
+
 def setup_otel(service_name: str = "data-ingestion") -> None:
     """Configure OpenTelemetry tracing (OTLP when endpoint is set)."""
     global _OTEL_INITIALIZED  # noqa: PLW0603

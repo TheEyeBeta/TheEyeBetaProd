@@ -91,9 +91,9 @@ def test_null_policy_excludes_then_nulls() -> None:
 
 def test_null_policy_boundary_30_pct_allows_metric() -> None:
     # 10 members, 3 missing (30% exactly, not > 30%) -> metric computed.
-    members = [
-        _inst(f"S{i}", "Energy", rsi=50.0 + i) for i in range(7)
-    ] + [_inst(f"M{i}", "Energy", rsi=None) for i in range(3)]
+    members = [_inst(f"S{i}", "Energy", rsi=50.0 + i) for i in range(7)] + [
+        _inst(f"M{i}", "Energy", rsi=None) for i in range(3)
+    ]
     aggs = aggregate_sectors(members, spx_return_30d=None)
     assert aggs[0].median_rsi_14 == pytest.approx(53.0)
 

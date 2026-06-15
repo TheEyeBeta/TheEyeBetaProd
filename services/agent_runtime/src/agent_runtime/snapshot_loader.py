@@ -56,9 +56,13 @@ class SnapshotLoader:
         cache_ttl_seconds: int = _CACHE_TTL_SECONDS,
     ) -> None:
         """Configure Postgres and Redis clients; MinIO is initialised on first use."""
-        self._database_url = (database_url or _db_url()).replace("+asyncpg", "").replace(
-            "+psycopg",
-            "",
+        self._database_url = (
+            (database_url or _db_url())
+            .replace("+asyncpg", "")
+            .replace(
+                "+psycopg",
+                "",
+            )
         )
         self._redis_url = redis_url or _redis_url()
         self._cache_ttl = cache_ttl_seconds

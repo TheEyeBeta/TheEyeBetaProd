@@ -15,6 +15,7 @@ from zinc_schemas.ingestion import IntradayBarRecord, Record
 
 log = structlog.get_logger()
 
+
 def _bar_specs() -> tuple[tuple[int, object], ...]:
     from alpaca.data.timeframe import TimeFrame, TimeFrameUnit  # noqa: PLC0415
 

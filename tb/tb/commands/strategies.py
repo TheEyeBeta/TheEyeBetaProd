@@ -10,7 +10,9 @@ app = typer.Typer(no_args_is_help=True, help="Strategy definitions")
 @app.command("list")
 def strategies_list() -> None:
     """List registered strategies."""
-    typer.echo("(strategies served by agent-runtime — query via admin API when deployed)")
+    typer.echo(
+        "(strategies served by agent-runtime — query via admin API when deployed)"
+    )
 
 
 @app.command("describe")

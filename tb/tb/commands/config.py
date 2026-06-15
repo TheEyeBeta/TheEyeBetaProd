@@ -16,13 +16,17 @@ REQUIRED_ENV = (
 
 
 @app.command("show")
-def config_show(mask_secrets: bool = typer.Option(True, "--mask-secrets/--no-mask")) -> None:
+def config_show(
+    mask_secrets: bool = typer.Option(True, "--mask-secrets/--no-mask"),
+) -> None:
     """Show resolved environment keys (names only for secrets)."""
     for key in sorted(os.environ):
         if key.startswith(("_", "LS_", "SHLVL")):
             continue
         val = os.environ[key]
-        if mask_secrets and any(s in key.upper() for s in ("KEY", "SECRET", "PASSWORD", "TOKEN")):
+        if mask_secrets and any(
+            s in key.upper() for s in ("KEY", "SECRET", "PASSWORD", "TOKEN")
+        ):
             val = "***"
         typer.echo(f"{key}={val}")
 

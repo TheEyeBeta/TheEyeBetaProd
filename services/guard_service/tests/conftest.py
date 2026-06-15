@@ -56,4 +56,3 @@ def snapshot_us_aapl() -> dict:
         "macro": {"us.dgs10": 4.25},
         "news_summary": [],
     }
-

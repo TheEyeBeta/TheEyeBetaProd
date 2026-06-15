@@ -61,23 +61,23 @@ os.environ.setdefault("DB_URL", os.environ.get("ADMIN_DATABASE_URL", ""))
 # ---------------------------------------------------------------------------
 # CONFIG — must match your actual table
 # ---------------------------------------------------------------------------
-SCHEMA     = "theeyebeta"
-TABLE      = "macro_indicators"
+SCHEMA = "theeyebeta"
+TABLE = "macro_indicators"
 FULL_TABLE = f"{SCHEMA}.{TABLE}"
 
 # Column names — MUST match what 01_check_macro_coverage.py reported
-COL_TS            = "ts"
-COL_SERIES_CODE   = "series_code"
-COL_VALUE         = "value"
-COL_SERIES_NAME   = "series_name"
-COL_SOURCE        = "source"
-COL_UNITS         = "units"
-COL_FREQUENCY     = "frequency"
-COL_SEASONAL_ADJ  = "seasonal_adj"
-COL_VINTAGE_DATE  = "vintage_date"
-COL_IS_MANUAL     = "is_manual"
-COL_INGESTED_AT   = "ingested_at"
-COL_REMEDIATION   = "remediation_notes"   # may not exist — checked at runtime
+COL_TS = "ts"
+COL_SERIES_CODE = "series_code"
+COL_VALUE = "value"
+COL_SERIES_NAME = "series_name"
+COL_SOURCE = "source"
+COL_UNITS = "units"
+COL_FREQUENCY = "frequency"
+COL_SEASONAL_ADJ = "seasonal_adj"
+COL_VINTAGE_DATE = "vintage_date"
+COL_IS_MANUAL = "is_manual"
+COL_INGESTED_AT = "ingested_at"
+COL_REMEDIATION = "remediation_notes"  # may not exist — checked at runtime
 
 CONFLICT_COLS = f"({COL_SERIES_CODE}, {COL_TS})"
 
@@ -95,6 +95,7 @@ log = logging.getLogger("manual_ingestor")
 # ---------------------------------------------------------------------------
 # DB
 # ---------------------------------------------------------------------------
+
 
 def get_connection():
     url = os.environ.get("DB_URL")
@@ -115,12 +116,17 @@ def get_actual_columns(conn) -> set:
 
 
 def build_insert_sql(actual_cols: set) -> str:
-    cols   = [COL_TS, COL_SERIES_CODE, COL_VALUE]
-    values = ["%s",   "%s",            "%s"]
+    cols = [COL_TS, COL_SERIES_CODE, COL_VALUE]
+    values = ["%s", "%s", "%s"]
 
     optional = [
-        COL_SERIES_NAME, COL_SOURCE, COL_UNITS,
-        COL_FREQUENCY, COL_SEASONAL_ADJ, COL_VINTAGE_DATE, COL_IS_MANUAL,
+        COL_SERIES_NAME,
+        COL_SOURCE,
+        COL_UNITS,
+        COL_FREQUENCY,
+        COL_SEASONAL_ADJ,
+        COL_VINTAGE_DATE,
+        COL_IS_MANUAL,
     ]
     for col in optional:
         if col in actual_cols:
@@ -219,8 +225,10 @@ def validate_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
     # Parse seasonal_adj if present
     if "seasonal_adj" in df.columns:
-        df["seasonal_adj"] = df["seasonal_adj"].str.upper().map(
-            {"TRUE": True, "FALSE": False, "YES": True, "NO": False, "1": True, "0": False}
+        df["seasonal_adj"] = (
+            df["seasonal_adj"]
+            .str.upper()
+            .map({"TRUE": True, "FALSE": False, "YES": True, "NO": False, "1": True, "0": False})
         )
 
     log.info(f"File: {original_len} raw rows → {len(df)} valid rows after cleaning")
@@ -239,19 +247,21 @@ def enrich_from_registry(row: pd.Series) -> dict:
     code = row["series_code"]
     meta = SERIES_BY_CODE.get(code, {})
     return {
-        "series_name":  row.get("series_name")  or meta.get("name", ""),
-        "source":       row.get("source")        or meta.get("source", "MANUAL"),
-        "units":        row.get("units")         or meta.get("units", ""),
-        "frequency":    row.get("frequency")     or meta.get("freq", ""),
-        "seasonal_adj": row.get("seasonal_adj")  if not pd.isna(row.get("seasonal_adj", None)) else meta.get("seasonal_adj"),
-        "notes":        row.get("notes", ""),
+        "series_name": row.get("series_name") or meta.get("name", ""),
+        "source": row.get("source") or meta.get("source", "MANUAL"),
+        "units": row.get("units") or meta.get("units", ""),
+        "frequency": row.get("frequency") or meta.get("freq", ""),
+        "seasonal_adj": row.get("seasonal_adj")
+        if not pd.isna(row.get("seasonal_adj", None))
+        else meta.get("seasonal_adj"),
+        "notes": row.get("notes", ""),
     }
 
 
 def build_row_tuple(row: pd.Series, actual_cols: set) -> tuple:
-    ts  = row["obs_date"].to_pydatetime()
+    ts = row["obs_date"].to_pydatetime()
     val = float(row["value"])
-    r   = [ts, row["series_code"], val]
+    r = [ts, row["series_code"], val]
     enriched = enrich_from_registry(row)
 
     if COL_SERIES_NAME in actual_cols:
@@ -279,12 +289,17 @@ def build_row_tuple(row: pd.Series, actual_cols: set) -> tuple:
 # MAIN
 # ---------------------------------------------------------------------------
 
+
 def parse_args():
     p = argparse.ArgumentParser(description="Ingest manually downloaded macro data")
-    p.add_argument("--file",    required=True, help="Path to CSV or Excel file")
-    p.add_argument("--sheet",   default=None,  help="Excel sheet name (default: first sheet)")
-    p.add_argument("--series",  nargs="*",     help="Only ingest these series codes from the file")
-    p.add_argument("--dry-run", action="store_true", help="Validate file and show what would be inserted, no DB writes")
+    p.add_argument("--file", required=True, help="Path to CSV or Excel file")
+    p.add_argument("--sheet", default=None, help="Excel sheet name (default: first sheet)")
+    p.add_argument("--series", nargs="*", help="Only ingest these series codes from the file")
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate file and show what would be inserted, no DB writes",
+    )
     return p.parse_args()
 
 
@@ -335,7 +350,9 @@ def main():
         try:
             t = build_row_tuple(row, actual_cols)
             if len(t) != param_count:
-                log.error(f"Row param count mismatch: expected {param_count}, got {len(t)} for {key}")
+                log.error(
+                    f"Row param count mismatch: expected {param_count}, got {len(t)} for {key}"
+                )
                 continue
             all_rows.append(t)
             new_count += 1
@@ -362,7 +379,7 @@ def main():
     try:
         with conn.cursor() as cur:
             for i in range(0, len(all_rows), BATCH_SIZE):
-                batch = all_rows[i:i+BATCH_SIZE]
+                batch = all_rows[i : i + BATCH_SIZE]
                 cur.executemany(insert_sql, batch)
                 inserted += len(batch)
                 log.info(f"  Inserted batch: {inserted}/{len(all_rows)} rows")
@@ -378,7 +395,9 @@ def main():
     log.info("\nPer-series summary:")
     for code in series_in_file:
         subset = df[df["series_code"] == code]
-        log.info(f"  {code:<30} {len(subset)} rows  ({subset['obs_date'].min().date()} → {subset['obs_date'].max().date()})")
+        log.info(
+            f"  {code:<30} {len(subset)} rows  ({subset['obs_date'].min().date()} → {subset['obs_date'].max().date()})"
+        )
 
     conn.close()
 

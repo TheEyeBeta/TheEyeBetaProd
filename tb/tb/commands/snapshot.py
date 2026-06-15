@@ -48,7 +48,9 @@ def snapshot_get(
     if json_output:
         typer.echo(json.dumps(row, indent=2, default=str))
     else:
-        typer.echo(f"snapshot {row['snapshot_id']} market={row['market']} as_of={row['as_of']}")
+        typer.echo(
+            f"snapshot {row['snapshot_id']} market={row['market']} as_of={row['as_of']}"
+        )
 
 
 @app.command("movers")

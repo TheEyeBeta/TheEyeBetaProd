@@ -134,16 +134,12 @@ def section_1(conn: psycopg.Connection[Any]) -> None:
     _record("Connect to DATABASE_URL succeeds", True)
 
     # Schema 'theeyebeta' exists
-    row = conn.execute(
-        "SELECT 1 FROM pg_namespace WHERE nspname='theeyebeta'"
-    ).fetchone()
+    row = conn.execute("SELECT 1 FROM pg_namespace WHERE nspname='theeyebeta'").fetchone()
     _record("Schema 'theeyebeta' exists", row is not None)
 
     # Schemas 'iam' and 'public' still exist
     for schema in ("iam", "public"):
-        row = conn.execute(
-            "SELECT 1 FROM pg_namespace WHERE nspname=%s", (schema,)
-        ).fetchone()
+        row = conn.execute("SELECT 1 FROM pg_namespace WHERE nspname=%s", (schema,)).fetchone()
         _record(f"Schema '{schema}' exists", row is not None)
 
     # Database-level search_path is 'theeyebeta, public'
@@ -188,9 +184,7 @@ def section_1(conn: psycopg.Connection[Any]) -> None:
     # Alembic version
     expected_rev = "0010_data_snapshots"
     try:
-        row = conn.execute(
-            "SELECT version_num FROM theeyebeta.alembic_version"
-        ).fetchone()
+        row = conn.execute("SELECT version_num FROM theeyebeta.alembic_version").fetchone()
         actual_rev: str | None = row[0] if row else None
         _record(
             f"Alembic version_num = '{expected_rev}'",
@@ -214,9 +208,7 @@ def section_2(conn: psycopg.Connection[Any]) -> None:
 
     db_name = "TheEyeBeta2025Live"
     for role in ("tb_app", "tb_rnd_readonly"):
-        row = conn.execute(
-            "SELECT rolcanlogin FROM pg_roles WHERE rolname=%s", (role,)
-        ).fetchone()
+        row = conn.execute("SELECT rolcanlogin FROM pg_roles WHERE rolname=%s", (role,)).fetchone()
         exists = row is not None
         can_login = bool(row[0]) if row else False
         _record(
@@ -412,8 +404,15 @@ def section_4(conn: psycopg.Connection[Any]) -> None:
     # orders.status — 9 values
     orders_check_text = " ".join(get_checks("orders").values())
     status_9 = [
-        "pending_approval", "approved", "submitted", "accepted",
-        "partially_filled", "filled", "cancelled", "rejected", "expired",
+        "pending_approval",
+        "approved",
+        "submitted",
+        "accepted",
+        "partially_filled",
+        "filled",
+        "cancelled",
+        "rejected",
+        "expired",
     ]
     missing = [v for v in status_9 if v not in orders_check_text]
     _record(
@@ -434,16 +433,20 @@ def section_4(conn: psycopg.Connection[Any]) -> None:
 
     # agent_decisions.confidence BETWEEN 0 AND 1
     conf_ok = any(
-        "confidence" in v and "0" in v and "1" in v
-        for v in get_checks("agent_decisions").values()
+        "confidence" in v and "0" in v and "1" in v for v in get_checks("agent_decisions").values()
     )
     _record("agent_decisions.confidence CHECK BETWEEN 0 AND 1", conf_ok)
 
     # guard_violations.violation_type — 7 types
     gv_text = " ".join(get_checks("guard_violations").values())
     violation_types = [
-        "schema", "confidence_range", "missing_evidence", "tool_whitelist",
-        "creative_content", "mandate_boundary", "forbidden_target",
+        "schema",
+        "confidence_range",
+        "missing_evidence",
+        "tool_whitelist",
+        "creative_content",
+        "mandate_boundary",
+        "forbidden_target",
     ]
     missing = [v for v in violation_types if v not in gv_text]
     _record(
@@ -464,8 +467,12 @@ def section_4(conn: psycopg.Connection[Any]) -> None:
 
     # proposals.category — 6 categories
     prop_cats = [
-        "strategy_param", "agent_constitution", "risk_rule",
-        "compliance_rule_nonregulatory", "new_strategy", "architecture",
+        "strategy_param",
+        "agent_constitution",
+        "risk_rule",
+        "compliance_rule_nonregulatory",
+        "new_strategy",
+        "architecture",
     ]
     missing = [v for v in prop_cats if v not in prop_text]
     _record(
@@ -537,7 +544,11 @@ def section_5(conn: psycopg.Connection[Any]) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 EXPECTED_HYPERTABLES: set[str] = {
-    "prices_daily", "prices_intraday", "macro_indicators", "signals", "risk_metrics"
+    "prices_daily",
+    "prices_intraday",
+    "macro_indicators",
+    "signals",
+    "risk_metrics",
 }
 
 
@@ -771,7 +782,13 @@ def section_9(conn: psycopg.Connection[Any]) -> None:
 
     # View has expected columns
     expected_view_cols = {
-        "id", "ts", "actor", "action", "entity_type", "entity_id_safe", "payload_summary",
+        "id",
+        "ts",
+        "actor",
+        "action",
+        "entity_type",
+        "entity_id_safe",
+        "payload_summary",
     }
     if view_exists:
         col_rows = conn.execute(
@@ -861,8 +878,11 @@ def section_10(superconn: psycopg.Connection[Any]) -> None:
         # ── tb_app ────────────────────────────────────────────────────────────
         with _conn(_app_url()) as app:
             # SELECT audit_log
-            _try(app, "SELECT id FROM theeyebeta.audit_log LIMIT 1",
-                 label="tb_app: SELECT from audit_log allowed")
+            _try(
+                app,
+                "SELECT id FROM theeyebeta.audit_log LIMIT 1",
+                label="tb_app: SELECT from audit_log allowed",
+            )
 
             # INSERT audit_log
             test_hash = os.urandom(32)
@@ -939,13 +959,10 @@ def section_10(superconn: psycopg.Connection[Any]) -> None:
             )
             if row2 is not None:
                 try:
-                    app.execute(
-                        "DELETE FROM theeyebeta.proposals WHERE id=%s", (row2[0],)
-                    )
+                    app.execute("DELETE FROM theeyebeta.proposals WHERE id=%s", (row2[0],))
                     _record("tb_app: DELETE from proposals allowed", True)
                 except psycopg.errors.InsufficientPrivilege:
-                    _record("tb_app: DELETE from proposals allowed", False,
-                            "InsufficientPrivilege")
+                    _record("tb_app: DELETE from proposals allowed", False, "InsufficientPrivilege")
                     cleanup_ids.append(("proposals", "id", row2[0]))
                 except Exception as exc:
                     _record("tb_app: DELETE from proposals allowed", False, str(exc))
@@ -1022,8 +1039,11 @@ def section_10(superconn: psycopg.Connection[Any]) -> None:
 
             # SELECT from research/analysis tables
             for table in [
-                "agent_decisions", "agent_runs", "guard_violations",
-                "backtest_runs", "backtest_results",
+                "agent_decisions",
+                "agent_runs",
+                "guard_violations",
+                "backtest_runs",
+                "backtest_results",
             ]:
                 _try(
                     rnd,
@@ -1099,9 +1119,7 @@ def section_11(conn: psycopg.Connection[Any]) -> None:
     )
 
     # Strategy 'example_swing_us' exists
-    row = conn.execute(
-        "SELECT 1 FROM theeyebeta.strategies WHERE id='example_swing_us'"
-    ).fetchone()
+    row = conn.execute("SELECT 1 FROM theeyebeta.strategies WHERE id='example_swing_us'").fetchone()
     _record("Strategy 'example_swing_us' exists", row is not None)
 
     _section_summary(11)
@@ -1141,8 +1159,14 @@ def section_12(conn: psycopg.Connection[Any]) -> None:
     # rather than generic market-data names (signals, exchanges, etc.) that any
     # independent system sharing this instance might legitimately also use.
     unique_names = [
-        "agents", "agent_runs", "agent_decisions", "agent_messages", "agent_memory",
-        "guard_violations", "proposals", "audit_log",
+        "agents",
+        "agent_runs",
+        "agent_decisions",
+        "agent_messages",
+        "agent_memory",
+        "guard_violations",
+        "proposals",
+        "audit_log",
     ]
     wrong_schema_rows = conn.execute(
         """
@@ -1157,7 +1181,9 @@ def section_12(conn: psycopg.Connection[Any]) -> None:
     _record(
         "No theeyebeta-specific tables leak into other schemas",
         not wrong_schema_rows,
-        f"found elsewhere: {[(r[0], r[1]) for r in wrong_schema_rows]}" if wrong_schema_rows else "",  # noqa: E501
+        f"found elsewhere: {[(r[0], r[1]) for r in wrong_schema_rows]}"
+        if wrong_schema_rows
+        else "",  # noqa: E501
     )
 
     # _audit_summary_placeholder was dropped (does not exist anywhere)

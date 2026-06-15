@@ -95,9 +95,7 @@ class CnProxyAdapter:
                                 symbol=symbol,
                                 adr_ticker=ticker_sym,
                             )
-                        return [
-                            r.model_copy(update={"source": "cn_proxy"}) for r in records
-                        ]
+                        return [r.model_copy(update={"source": "cn_proxy"}) for r in records]
             return []
 
         results = await asyncio.gather(*[_one(inst) for inst in instruments])

@@ -23,7 +23,9 @@ def quant_returns(
             inst = await resolve_symbol(conn, symbol)
             if not inst:
                 raise typer.Exit(code=1)
-            rows = await fetch_price_series(conn, int(inst["instrument_id"]), limit=window + 1)
+            rows = await fetch_price_series(
+                conn, int(inst["instrument_id"]), limit=window + 1
+            )
         if len(rows) < 2:
             typer.echo("Insufficient data")
             return
@@ -57,8 +59,12 @@ def quant_corr(
         if n < 5:
             typer.echo("Insufficient overlap")
             return
-        ra = [float(pa[i]["close"]) / float(pa[i - 1]["close"]) - 1 for i in range(1, n)]
-        rb = [float(pb[i]["close"]) / float(pb[i - 1]["close"]) - 1 for i in range(1, n)]
+        ra = [
+            float(pa[i]["close"]) / float(pa[i - 1]["close"]) - 1 for i in range(1, n)
+        ]
+        rb = [
+            float(pb[i]["close"]) / float(pb[i - 1]["close"]) - 1 for i in range(1, n)
+        ]
         ma, mb = sum(ra) / len(ra), sum(rb) / len(rb)
         cov = sum((ra[i] - ma) * (rb[i] - mb) for i in range(len(ra))) / len(ra)
         sa = (sum((x - ma) ** 2 for x in ra) / len(ra)) ** 0.5
@@ -82,7 +88,8 @@ def quant_var(
                 raise typer.Exit(code=1)
             rows = await fetch_price_series(conn, int(inst["instrument_id"]), limit=252)
         rets = sorted(
-            float(rows[i]["close"]) / float(rows[i - 1]["close"]) - 1 for i in range(1, len(rows))
+            float(rows[i]["close"]) / float(rows[i - 1]["close"]) - 1
+            for i in range(1, len(rows))
         )
         idx = max(0, int(len(rets) * alpha) - 1)
         typer.echo(f"{symbol} VaR({alpha:.0%}) = {rets[idx]:.4f}")

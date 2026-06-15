@@ -27,9 +27,7 @@ def test_postgres_version(db_conn):
 def test_timescaledb_extension(db_conn):
     """TimescaleDB extension is installed."""
     cur = db_conn.cursor()
-    cur.execute(
-        "SELECT extname FROM pg_extension WHERE extname = 'timescaledb'"
-    )
+    cur.execute("SELECT extname FROM pg_extension WHERE extname = 'timescaledb'")
     row = cur.fetchone()
     assert row is not None, "timescaledb extension not found"
 
@@ -37,9 +35,7 @@ def test_timescaledb_extension(db_conn):
 def test_pgvector_extension(db_conn):
     """pgvector extension is available (may not yet be created in zinc DB)."""
     cur = db_conn.cursor()
-    cur.execute(
-        "SELECT name FROM pg_available_extensions WHERE name = 'vector'"
-    )
+    cur.execute("SELECT name FROM pg_available_extensions WHERE name = 'vector'")
     row = cur.fetchone()
     assert row is not None, "pgvector extension not available on this server"
 

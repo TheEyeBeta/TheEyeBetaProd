@@ -21,7 +21,9 @@ from tb.lib.queries.trask import (
 
 load_dotenv()
 
-app = typer.Typer(no_args_is_help=True, help="Trask worker registry and circuit breakers")
+app = typer.Typer(
+    no_args_is_help=True, help="Trask worker registry and circuit breakers"
+)
 
 
 @app.command("status")
@@ -39,7 +41,9 @@ def trask_workers() -> None:
 @app.command("dashboard")
 def trask_dashboard(
     once: bool = typer.Option(False, "--once", help="Print once and exit"),
-    refresh: int = typer.Option(5, "--refresh", help="Refresh seconds (ignored with --once)"),
+    refresh: int = typer.Option(
+        5, "--refresh", help="Refresh seconds (ignored with --once)"
+    ),
 ) -> None:
     """Live Trask component dashboard."""
     _ = refresh
@@ -65,7 +69,9 @@ def trask_audit(limit: int = typer.Option(20, "--limit")) -> None:
 
 
 worker_app = typer.Typer(no_args_is_help=True, help="Worker control (read-only status)")
-sentinel_app = typer.Typer(no_args_is_help=True, help="Sentinel control (read-only status)")
+sentinel_app = typer.Typer(
+    no_args_is_help=True, help="Sentinel control (read-only status)"
+)
 app.add_typer(worker_app, name="worker")
 app.add_typer(sentinel_app, name="sentinel")
 
@@ -121,7 +127,9 @@ async def _trask_status_async() -> None:
         )
     typer.echo(f"FAILED components: {len(failed)}")
     for row in failed:
-        typer.echo(f"  {row['component_id']} ({row['display_name']}): hb={row['last_heartbeat']}")
+        typer.echo(
+            f"  {row['component_id']} ({row['display_name']}): hb={row['last_heartbeat']}"
+        )
     if not open_breakers and not failed:
         typer.echo("All Trask components healthy (no open breakers or FAILED state).")
 
@@ -190,7 +198,9 @@ async def _trask_audit_async(limit: int) -> None:
         )
 
 
-async def _component_status_async(component_id: str | None, *, component_type: str) -> None:
+async def _component_status_async(
+    component_id: str | None, *, component_type: str
+) -> None:
     async with async_connect() as conn:
         if component_id:
             row = await conn.fetchrow(

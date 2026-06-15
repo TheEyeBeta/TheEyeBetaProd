@@ -214,9 +214,7 @@ class YfinanceAdapter:
         instruments = self._instruments
         if instruments is None:
             all_inst = await load_active_instruments()
-            instruments = [
-                i for i in all_inst if str(i["exchange_code"]) in _YFINANCE_EXCHANGES
-            ]
+            instruments = [i for i in all_inst if str(i["exchange_code"]) in _YFINANCE_EXCHANGES]
 
         sem = asyncio.Semaphore(_SEMAPHORE_LIMIT)
         loop = asyncio.get_running_loop()

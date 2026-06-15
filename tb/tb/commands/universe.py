@@ -20,7 +20,9 @@ ROOT = Path(__file__).resolve().parents[3]
 @app.command("sync")
 def universe_sync(
     tier: str = typer.Option("eod", "--tier", help="eod or intraday"),
-    apply: bool = typer.Option(False, "--apply", help="Write instruments.active (eod only)"),
+    apply: bool = typer.Option(
+        False, "--apply", help="Write instruments.active (eod only)"
+    ),
     date: str | None = typer.Option(None, "--date", help="Cap as-of date YYYY-MM-DD"),
 ) -> None:
     """Select universe tier from market-cap snapshots."""

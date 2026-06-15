@@ -146,8 +146,7 @@ def _install_bt_stub() -> None:
                     continue
                 position = shares[symbol]
                 equity = cash + sum(
-                    shares[s] * float(snap.close[i])
-                    for i, s in enumerate(self._universe)
+                    shares[s] * float(snap.close[i]) for i, s in enumerate(self._universe)
                 )
                 target_value = equity * max(0.0, min(1.0, decision.target_weight))
                 current_value = position * close
@@ -176,8 +175,7 @@ def _install_bt_stub() -> None:
                         ),
                     )
                 equity = cash + sum(
-                    shares[s] * float(snap.close[i])
-                    for i, s in enumerate(self._universe)
+                    shares[s] * float(snap.close[i]) for i, s in enumerate(self._universe)
                 )
                 pnl = (equity - prev_equity) / prev_equity if prev_equity > 0 else 0.0
                 result.daily_pnl.append(pnl)

@@ -25,6 +25,8 @@ class IntegrationInfra:
     minio_secret_key: str
     minio_bucket: str
     redis_url: str
+
+
 SQL_DIR = Path(__file__).resolve().parent / "sql"
 
 

@@ -28,11 +28,7 @@ def _show_stdout(
     ts: str = "Thu 2026-06-12 10:00:00 UTC",
 ) -> bytes:
     """Simulate ``systemctl show`` stdout for a healthy unit."""
-    return (
-        f"ActiveState={active}\n"
-        f"SubState={sub}\n"
-        f"ActiveEnterTimestamp={ts}\n"
-    ).encode()
+    return (f"ActiveState={active}\nSubState={sub}\nActiveEnterTimestamp={ts}\n").encode()
 
 
 @pytest.mark.integration
@@ -303,9 +299,7 @@ def test_restartable_services_have_non_empty_units() -> None:
 def test_all_units_is_superset_of_restartable() -> None:
     """ALL_UNITS includes every restartable service."""
     for name in RESTARTABLE_SERVICES:
-        assert name in ALL_UNITS, (
-            f"{name!r} is in RESTARTABLE_SERVICES but missing from ALL_UNITS"
-        )
+        assert name in ALL_UNITS, f"{name!r} is in RESTARTABLE_SERVICES but missing from ALL_UNITS"
 
 
 def test_no_docker_imports() -> None:

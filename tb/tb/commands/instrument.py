@@ -53,7 +53,10 @@ def instrument_add(
     typer.echo(f"Would add {len(tickers)} tickers: {', '.join(tickers)}")
     if dry_run:
         return
-    typer.echo("Use scripts/select_universe_by_cap.py or manual SQL for new listings.", err=True)
+    typer.echo(
+        "Use scripts/select_universe_by_cap.py or manual SQL for new listings.",
+        err=True,
+    )
     raise typer.Exit(code=1)
 
 

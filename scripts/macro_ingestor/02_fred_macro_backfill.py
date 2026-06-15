@@ -65,32 +65,32 @@ os.environ.setdefault("DB_URL", os.environ.get("ADMIN_DATABASE_URL", ""))
 # CONFIG — verify these match your actual table columns
 #          (run 01_check_macro_coverage.py first to confirm)
 # ---------------------------------------------------------------------------
-SCHEMA      = "theeyebeta"
-TABLE       = "macro_indicators"
-FULL_TABLE  = f"{SCHEMA}.{TABLE}"
+SCHEMA = "theeyebeta"
+TABLE = "macro_indicators"
+FULL_TABLE = f"{SCHEMA}.{TABLE}"
 
 # ── Column name map ──────────────────────────────────────────────────────────
 # EDIT these if your actual column names differ from defaults
-COL_TS           = "ts"               # timestamptz  — observation date/time (hypertable dim)
-COL_SERIES_CODE  = "series_code"      # text         — series identifier e.g. 'GDPC1'
-COL_VALUE        = "value"            # numeric      — observation value
-COL_SERIES_NAME  = "series_name"      # text         — human-readable name (nullable)
-COL_SOURCE       = "source"           # text         — 'FRED' (nullable)
-COL_UNITS        = "units"            # text         — units string (nullable)
-COL_FREQUENCY    = "frequency"        # text         — 'daily','weekly','monthly','quarterly'
-COL_SEASONAL_ADJ = "seasonal_adj"     # boolean      — seasonally adjusted? (nullable)
-COL_VINTAGE_DATE = "vintage_date"     # date         — ALFRED realtime_start (nullable)
-COL_IS_MANUAL    = "is_manual"        # boolean      — False for FRED auto
-COL_INGESTED_AT  = "ingested_at"      # timestamptz  — when we pulled it
+COL_TS = "ts"  # timestamptz  — observation date/time (hypertable dim)
+COL_SERIES_CODE = "series_code"  # text         — series identifier e.g. 'GDPC1'
+COL_VALUE = "value"  # numeric      — observation value
+COL_SERIES_NAME = "series_name"  # text         — human-readable name (nullable)
+COL_SOURCE = "source"  # text         — 'FRED' (nullable)
+COL_UNITS = "units"  # text         — units string (nullable)
+COL_FREQUENCY = "frequency"  # text         — 'daily','weekly','monthly','quarterly'
+COL_SEASONAL_ADJ = "seasonal_adj"  # boolean      — seasonally adjusted? (nullable)
+COL_VINTAGE_DATE = "vintage_date"  # date         — ALFRED realtime_start (nullable)
+COL_IS_MANUAL = "is_manual"  # boolean      — False for FRED auto
+COL_INGESTED_AT = "ingested_at"  # timestamptz  — when we pulled it
 
 # The UNIQUE constraint that backs ON CONFLICT DO NOTHING
 # Most likely: (series_code, ts) — adjust if yours is different
 CONFLICT_COLS = f"({COL_SERIES_CODE}, {COL_TS})"
 # ---------------------------------------------------------------------------
 
-DEFAULT_START_DATE = "2010-01-01"   # 16 years of history
-RATE_LIMIT_DELAY   = 0.5            # seconds between FRED requests (= 120/min safe)
-BATCH_SIZE         = 5_000          # rows per DB INSERT batch
+DEFAULT_START_DATE = "2010-01-01"  # 16 years of history
+RATE_LIMIT_DELAY = 0.5  # seconds between FRED requests (= 120/min safe)
+BATCH_SIZE = 5_000  # rows per DB INSERT batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -103,6 +103,7 @@ log = logging.getLogger("macro_backfill")
 # ---------------------------------------------------------------------------
 # FRED FETCH WITH RETRY
 # ---------------------------------------------------------------------------
+
 
 class FREDRateLimitError(Exception):
     pass
@@ -145,6 +146,7 @@ def fetch_series_latest(fred: Fred, code: str, start: str) -> pd.Series | None:
 # DATABASE
 # ---------------------------------------------------------------------------
 
+
 def get_connection():
     url = os.environ.get("DB_URL")
     if not url:
@@ -171,8 +173,16 @@ def validate_columns_exist(conn):
         actual = {r[0] for r in cur.fetchall()}
 
     required = {COL_TS, COL_SERIES_CODE, COL_VALUE}
-    optional = {COL_SERIES_NAME, COL_SOURCE, COL_UNITS, COL_FREQUENCY,
-                COL_SEASONAL_ADJ, COL_VINTAGE_DATE, COL_IS_MANUAL, COL_INGESTED_AT}
+    optional = {
+        COL_SERIES_NAME,
+        COL_SOURCE,
+        COL_UNITS,
+        COL_FREQUENCY,
+        COL_SEASONAL_ADJ,
+        COL_VINTAGE_DATE,
+        COL_IS_MANUAL,
+        COL_INGESTED_AT,
+    }
     missing_required = required - actual
     missing_optional = optional - actual
 
@@ -190,19 +200,19 @@ def validate_columns_exist(conn):
 def build_insert_sql(actual_cols: set) -> str:
     """Build INSERT statement using only columns that actually exist in the table."""
     # Always-required cols
-    cols   = [COL_TS, COL_SERIES_CODE, COL_VALUE]
-    values = ["%s",   "%s",            "%s"]
+    cols = [COL_TS, COL_SERIES_CODE, COL_VALUE]
+    values = ["%s", "%s", "%s"]
 
     # Optional cols — include only if present in actual schema
     optional_map = {
-        COL_SERIES_NAME:  "%s",
-        COL_SOURCE:       "%s",
-        COL_UNITS:        "%s",
-        COL_FREQUENCY:    "%s",
+        COL_SERIES_NAME: "%s",
+        COL_SOURCE: "%s",
+        COL_UNITS: "%s",
+        COL_FREQUENCY: "%s",
         COL_SEASONAL_ADJ: "%s",
         COL_VINTAGE_DATE: "%s",
-        COL_IS_MANUAL:    "%s",
-        COL_INGESTED_AT:  "NOW()",
+        COL_IS_MANUAL: "%s",
+        COL_INGESTED_AT: "NOW()",
     }
     for col, placeholder in optional_map.items():
         if col in actual_cols and col != COL_INGESTED_AT:
@@ -248,6 +258,7 @@ def upsert_batch(conn, sql: str, rows: list, dry_run: bool) -> int:
 # ROW BUILDERS
 # ---------------------------------------------------------------------------
 
+
 def build_rows_latest(series: pd.Series, meta: dict, actual_cols: set) -> list:
     """Build row tuples from a latest-revision pandas Series."""
     rows = []
@@ -278,13 +289,26 @@ def build_rows_latest(series: pd.Series, meta: dict, actual_cols: set) -> list:
 # MAIN
 # ---------------------------------------------------------------------------
 
+
 def parse_args():
     p = argparse.ArgumentParser(description="Backfill FRED macro series into TheEyeBeta")
-    p.add_argument("--series", nargs="*", help="Specific FRED codes to process (default: all missing)")
+    p.add_argument(
+        "--series", nargs="*", help="Specific FRED codes to process (default: all missing)"
+    )
     p.add_argument("--refresh", action="store_true", help="Re-fetch even if series already in DB")
-    p.add_argument("--dry-run", action="store_true", help="Show what would happen without writing to DB")
-    p.add_argument("--vintage-only", action="store_true", help="Restrict to revision-critical series (still latest-revision fetch; vintage storage disabled)")
-    p.add_argument("--start", default=DEFAULT_START_DATE, help=f"Start date for history (default: {DEFAULT_START_DATE})")
+    p.add_argument(
+        "--dry-run", action="store_true", help="Show what would happen without writing to DB"
+    )
+    p.add_argument(
+        "--vintage-only",
+        action="store_true",
+        help="Restrict to revision-critical series (still latest-revision fetch; vintage storage disabled)",
+    )
+    p.add_argument(
+        "--start",
+        default=DEFAULT_START_DATE,
+        help=f"Start date for history (default: {DEFAULT_START_DATE})",
+    )
     return p.parse_args()
 
 
@@ -295,7 +319,7 @@ def main():
     log.info(f"Connected to DB. Target table: {FULL_TABLE}")
 
     actual_cols = validate_columns_exist(conn)
-    insert_sql  = build_insert_sql(actual_cols)
+    insert_sql = build_insert_sql(actual_cols)
     log.info(f"Insert SQL (first 120 chars): {insert_sql[:120]}...")
 
     present_codes = get_already_present_codes(conn)
@@ -310,15 +334,19 @@ def main():
         if not_found:
             log.warning(f"Codes not in registry (will skip): {not_found}")
     elif args.vintage_only:
-        log.warning("--vintage-only: ALFRED multi-vintage storage is disabled "
-                    "(no vintage_date column); fetching these latest-revision only.")
+        log.warning(
+            "--vintage-only: ALFRED multi-vintage storage is disabled "
+            "(no vintage_date column); fetching these latest-revision only."
+        )
         target = [SERIES_BY_CODE[c] for c in REVISION_CRITICAL if c in SERIES_BY_CODE]
     else:
         target = FRED_SERIES
 
     if not args.refresh:
         to_process = [s for s in target if s["code"] not in present_codes]
-        log.info(f"Skipping {len(target) - len(to_process)} already-present series (use --refresh to force)")
+        log.info(
+            f"Skipping {len(target) - len(to_process)} already-present series (use --refresh to force)"
+        )
     else:
         to_process = target
         log.info(f"--refresh mode: will re-fetch all {len(to_process)} target series")
@@ -354,7 +382,9 @@ def main():
 
             inserted = upsert_batch(conn, insert_sql, rows, args.dry_run)
             total_rows += inserted
-            log.info(f"  ✓ {code}: {inserted} rows {'(would insert)' if args.dry_run else 'inserted'}")
+            log.info(
+                f"  ✓ {code}: {inserted} rows {'(would insert)' if args.dry_run else 'inserted'}"
+            )
 
         except KeyboardInterrupt:
             log.warning("\nInterrupted — committing progress so far.")
@@ -365,7 +395,7 @@ def main():
             continue
 
     # ── Summary ───────────────────────────────────────────────────────────────
-    log.info("\n" + "═"*50)
+    log.info("\n" + "═" * 50)
     log.info(f"  DONE — {total_rows:,} rows {'would be ' if args.dry_run else ''}written")
     log.info(f"  Processed: {i}/{len(to_process)} series")
     if errors:
@@ -373,7 +403,7 @@ def main():
         for code, err in errors:
             log.warning(f"    {code}: {err}")
         log.warning("  Re-run the script — errors are idempotent (ON CONFLICT DO NOTHING)")
-    log.info("═"*50)
+    log.info("═" * 50)
 
     conn.close()
 

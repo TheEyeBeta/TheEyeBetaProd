@@ -9,9 +9,13 @@ import pytest
 
 _zinc_risk = _sys.modules.get("zinc_native._zinc_risk")
 if _zinc_risk is None:
-    pytest.importorskip("zinc_native._zinc_risk", reason="C++ kernels not compiled — run make build-cpp")
+    pytest.importorskip(
+        "zinc_native._zinc_risk", reason="C++ kernels not compiled — run make build-cpp"
+    )
 elif not getattr(_zinc_risk, "__file__", None):
-    pytest.skip("C++ kernels not compiled — zinc_native.risk is a Python stub", allow_module_level=True)
+    pytest.skip(
+        "C++ kernels not compiled — zinc_native.risk is a Python stub", allow_module_level=True
+    )
 from zinc_native import risk
 
 PHI_INV_005 = -1.6448536269514102

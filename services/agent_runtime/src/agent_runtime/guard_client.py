@@ -161,8 +161,7 @@ async def _validate_grpc(
         response = await stub.ValidateAgentOutput(request, timeout=30.0)
     outcome = _PROTO_OUTCOME_TO_STR.get(response.outcome, _OUTCOME_REJECT)
     violations = [
-        {"type": v.type, "severity": v.severity, "detail": v.detail}
-        for v in response.violations
+        {"type": v.type, "severity": v.severity, "detail": v.detail} for v in response.violations
     ]
     return GuardValidationResult(
         approved=outcome == _OUTCOME_PASS,

@@ -25,7 +25,9 @@ def test_snapshots_build_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
         universe_size=1,
     )
 
-    monkeypatch.setenv("INGEST_DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:5432/theeyebeta")
+    monkeypatch.setenv(
+        "INGEST_DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:5432/theeyebeta"
+    )
 
     mock_pool = MagicMock()
     mock_pool.close = AsyncMock()

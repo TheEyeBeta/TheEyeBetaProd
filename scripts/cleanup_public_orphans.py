@@ -63,11 +63,11 @@ def run_diagnostics(conn: psycopg.Connection[Any]) -> dict[str, Any]:
     _p("─── DIAGNOSTICS ───────────────────────────────────────────────")
 
     findings: dict[str, Any] = {
-        "public_orphans": {},     # table_name → row_count (None for alembic_version)
-        "av_public": None,        # version_num from public.alembic_version
-        "av_theeyebeta": None,    # version_num from theeyebeta.alembic_version
-        "extra_leaks": [],        # theeyebeta-named tables in public outside allowed set
-        "public_hypertables": [], # hypertable names in schema public
+        "public_orphans": {},  # table_name → row_count (None for alembic_version)
+        "av_public": None,  # version_num from public.alembic_version
+        "av_theeyebeta": None,  # version_num from theeyebeta.alembic_version
+        "extra_leaks": [],  # theeyebeta-named tables in public outside allowed set
+        "public_hypertables": [],  # hypertable names in schema public
     }
 
     # Which of the known candidates exist in public?
@@ -106,9 +106,7 @@ def run_diagnostics(conn: psycopg.Connection[Any]) -> dict[str, Any]:
         row = conn.execute("SELECT version_num FROM public.alembic_version").fetchone()
         findings["av_public"] = row[0] if row else None
     try:
-        row = conn.execute(
-            "SELECT version_num FROM theeyebeta.alembic_version"
-        ).fetchone()
+        row = conn.execute("SELECT version_num FROM theeyebeta.alembic_version").fetchone()
         findings["av_theeyebeta"] = row[0] if row else None
     except Exception as exc:
         findings["av_theeyebeta"] = f"ERROR: {exc}"
@@ -182,10 +180,7 @@ def check_gates(findings: dict[str, Any]) -> None:
     # GATE B — theeyebeta.alembic_version must be at 0009_audit
     if findings["av_theeyebeta"] != "0009_audit":
         _p(f"  GATE B: ✗  theeyebeta.alembic_version = {findings['av_theeyebeta']!r}")
-        _p(
-            f"ABORT: GATE B failed — expected '0009_audit', "
-            f"got {findings['av_theeyebeta']!r}"
-        )
+        _p(f"ABORT: GATE B failed — expected '0009_audit', got {findings['av_theeyebeta']!r}")
         sys.exit(2)
     _p("  GATE B: ✓  theeyebeta.alembic_version = '0009_audit'")
 

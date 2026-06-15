@@ -47,26 +47,26 @@ from tenacity import (
 # ---------------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------------
-SCHEMA     = "theeyebeta"
-TABLE      = "macro_indicators"
+SCHEMA = "theeyebeta"
+TABLE = "macro_indicators"
 FULL_TABLE = f"{SCHEMA}.{TABLE}"
 
-COL_TS          = "ts"
+COL_TS = "ts"
 COL_SERIES_CODE = "series_code"
-COL_VALUE       = "value"
-COL_SOURCE      = "source"
+COL_VALUE = "value"
+COL_SOURCE = "source"
 
 CONFLICT_COLS = f"({COL_SERIES_CODE}, {COL_TS})"
 
 # How far back to fetch per frequency
 LOOKBACK = {
-    "daily":     7,
-    "weekly":    21,
-    "monthly":   90,
+    "daily": 7,
+    "weekly": 21,
+    "monthly": 90,
     "quarterly": 180,
 }
 
-RATE_LIMIT_DELAY = 0.6   # seconds between FRED requests
+RATE_LIMIT_DELAY = 0.6  # seconds between FRED requests
 
 logging.basicConfig(
     level=logging.INFO,
@@ -78,6 +78,7 @@ log = logging.getLogger("macro_refresh")
 # ---------------------------------------------------------------------------
 # FRED
 # ---------------------------------------------------------------------------
+
 
 class RateLimitError(Exception):
     pass
@@ -116,6 +117,7 @@ def fetch(fred, code, start_date):
 # DB
 # ---------------------------------------------------------------------------
 
+
 def get_conn():
     url = os.environ.get("DB_URL") or os.environ.get("ADMIN_DATABASE_URL")
     if not url:
@@ -126,16 +128,19 @@ def get_conn():
 
 def get_actual_cols(conn):
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT column_name FROM information_schema.columns
             WHERE table_schema = %s AND table_name = %s
-        """, (SCHEMA, TABLE))
+        """,
+            (SCHEMA, TABLE),
+        )
         return {r[0] for r in cur.fetchall()}
 
 
 def build_insert(actual_cols):
-    cols   = [COL_TS, COL_SERIES_CODE, COL_VALUE]
-    values = ["%s",   "%s",            "%s"]
+    cols = [COL_TS, COL_SERIES_CODE, COL_VALUE]
+    values = ["%s", "%s", "%s"]
     if COL_SOURCE in actual_cols:
         cols.append(COL_SOURCE)
         values.append("%s")
@@ -151,6 +156,7 @@ def build_insert(actual_cols):
 # MAIN
 # ---------------------------------------------------------------------------
 
+
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--series", nargs="*", help="Specific codes to refresh")
@@ -160,12 +166,12 @@ def parse_args():
 
 def main():
     args = parse_args()
-    now  = datetime.now(UTC)
+    now = datetime.now(UTC)
 
-    conn        = get_conn()
+    conn = get_conn()
     actual_cols = get_actual_cols(conn)
-    insert_sql  = build_insert(actual_cols)
-    has_source  = COL_SOURCE in actual_cols
+    insert_sql = build_insert(actual_cols)
+    has_source = COL_SOURCE in actual_cols
 
     fred = make_fred()
 
@@ -179,10 +185,10 @@ def main():
     errors = []
 
     for meta in target:
-        code    = meta["code"]
-        freq    = meta.get("freq", "monthly")
-        days    = LOOKBACK.get(freq, 90)
-        start   = (now - timedelta(days=days)).date()
+        code = meta["code"]
+        freq = meta.get("freq", "monthly")
+        days = LOOKBACK.get(freq, 90)
+        start = (now - timedelta(days=days)).date()
 
         try:
             series = fetch(fred, code, start)

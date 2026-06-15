@@ -32,6 +32,7 @@ _REPO = Path(__file__).resolve().parents[1]
 # app.openapi() without building the C++ layer — mirrors the same technique
 # used in tests/conftest.py.
 
+
 def _install_zinc_native_oms_stub() -> None:
     if "zinc_native.oms" in sys.modules:
         return
@@ -104,7 +105,9 @@ def _install_zinc_native_oms_stub() -> None:
                 return TransitionResult(
                     ok=False,
                     order=order,
-                    error=TransitionError(TransitionErrorCode.IllegalTransition, order.status, event),
+                    error=TransitionError(
+                        TransitionErrorCode.IllegalTransition, order.status, event
+                    ),
                 )
             if order.status in _terminal:
                 return TransitionResult(
@@ -173,6 +176,7 @@ def _install_zinc_native_oms_stub() -> None:
 
 
 # ── service dumpers ──────────────────────────────────────────────────────────
+
 
 def _dump_admin() -> None:
     """Import admin-service and print its OpenAPI schema."""

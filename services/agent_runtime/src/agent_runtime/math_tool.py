@@ -79,6 +79,7 @@ def _dispatch(req: ComputeStatRequest) -> Any:  # noqa: ANN401 — dispatch retu
 
     if req.kernel == "ta":
         from zinc_native import ta  # noqa: PLC0415
+
         if op == "rsi":
             closes = _as_float_array(params.get("closes"), name="closes")
             period = int(params.get("period", 14))

@@ -23,7 +23,9 @@ from zinc_schemas.snapshot_validator import SnapshotValidationError, validate_sn
 load_dotenv()
 log = structlog.get_logger()
 
-app = typer.Typer(no_args_is_help=True, help="Packaged snapshot backfill and verification")
+app = typer.Typer(
+    no_args_is_help=True, help="Packaged snapshot backfill and verification"
+)
 
 DEFAULT_PACKAGER_URL = "http://127.0.0.1:7011"
 
@@ -83,7 +85,9 @@ def _business_days(start: date, end: date) -> list[date]:
 
 @app.command("backfill")
 def backfill(
-    market: str = typer.Option(..., "--market", "-m", help="Market code (US, HK, JP, TW, CN)"),
+    market: str = typer.Option(
+        ..., "--market", "-m", help="Market code (US, HK, JP, TW, CN)"
+    ),
     start: str = typer.Option(..., "--start", help="Start date YYYY-MM-DD (inclusive)"),
     end: str = typer.Option(..., "--end", help="End date YYYY-MM-DD (inclusive)"),
 ) -> None:
@@ -95,7 +99,9 @@ def backfill(
         raise typer.BadParameter("--end must be on or after --start")
 
     targets = _business_days(start_date, end_date)
-    typer.echo(f"Backfilling {len(targets)} weekdays for {market_upper} via {_packager_url()}")
+    typer.echo(
+        f"Backfilling {len(targets)} weekdays for {market_upper} via {_packager_url()}"
+    )
 
     ok = 0
     failed = 0
@@ -103,7 +109,9 @@ def backfill(
         for trade_date in targets:
             payload = {"market": market_upper, "date": trade_date.isoformat()}
             try:
-                response = client.post(f"{_packager_url()}/snapshots/build", json=payload)
+                response = client.post(
+                    f"{_packager_url()}/snapshots/build", json=payload
+                )
                 response.raise_for_status()
                 body = response.json()
                 typer.echo(
@@ -115,7 +123,9 @@ def backfill(
                 failed += 1
                 typer.echo(f"  {trade_date}  FAILED  {exc}", err=True)
 
-    typer.echo(f"Done: {ok} succeeded, {failed} failed (expected ~22 files per calendar month).")
+    typer.echo(
+        f"Done: {ok} succeeded, {failed} failed (expected ~22 files per calendar month)."
+    )
     if failed:
         raise typer.Exit(code=1)
 
@@ -149,7 +159,9 @@ def verify(
                 msg = f"No catalog row for {market_upper} {trade_date}"
                 raise typer.BadParameter(msg)
 
-            payload_bytes = await asyncio.to_thread(_fetch_blob_bytes, market_upper, trade_date)
+            payload_bytes = await asyncio.to_thread(
+                _fetch_blob_bytes, market_upper, trade_date
+            )
             payload = json.loads(payload_bytes.decode("utf-8"))
             validate_snapshot(payload)
             digest = hashlib.sha256(payload_bytes).hexdigest()

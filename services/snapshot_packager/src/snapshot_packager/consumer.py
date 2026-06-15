@@ -29,9 +29,8 @@ def database_url() -> str:
     if not raw:
         msg = "INGEST_DATABASE_URL is not set"
         raise OSError(msg)
-    return (
-        raw.replace("postgresql+asyncpg://", "postgresql://")
-        .replace("postgresql+psycopg2://", "postgresql://")
+    return raw.replace("postgresql+asyncpg://", "postgresql://").replace(
+        "postgresql+psycopg2://", "postgresql://"
     )
 
 

@@ -112,9 +112,7 @@ def register_services_routes(limiter: Limiter) -> APIRouter:
     ) -> ServiceStatusResponse:
         """Return systemd unit status for all known TheEyeBeta services."""
         entries = list(
-            await asyncio.gather(
-                *[_unit_to_entry(name, unit) for name, unit in ALL_UNITS.items()]
-            )
+            await asyncio.gather(*[_unit_to_entry(name, unit) for name, unit in ALL_UNITS.items()])
         )
         log.info("admin_services_status_listed", count=len(entries), sub=user["sub"])
         return ServiceStatusResponse(services=entries, network="systemd")

@@ -112,18 +112,21 @@ def main() -> None:
 
     print("\n=== DECISION INPUTS ===")
     print(f"universe_size: {ACTIVE_UNIVERSE}")
-    print(f"per_15m_cycle_per_ticker_calls: {per_ticker_calls if a_ok else 'N/A (endpoint failed)'}")
+    print(
+        f"per_15m_cycle_per_ticker_calls: {per_ticker_calls if a_ok else 'N/A (endpoint failed)'}"
+    )
     print(f"per_15m_cycle_grouped_calls: {grouped_calls} (grouped is daily, not intraday)")
 
     if not a_ok:
-        print("\nSTOP: 15-min per-ticker endpoint not available on this plan — operator decides on upgrade")
+        print(
+            "\nSTOP: 15-min per-ticker endpoint not available on this plan — operator decides on upgrade"
+        )
         sys.exit(1)
 
     limit_hdr = results[0]["rate_limits"].get("x-ratelimit-limit", "—")
     print(f"plan_rate_limit_header: {limit_hdr}")
     print(
-        "recommendation: token-bucket per ticker if limit < universe; "
-        "else batch parallel with cap",
+        "recommendation: token-bucket per ticker if limit < universe; else batch parallel with cap",
     )
 
 

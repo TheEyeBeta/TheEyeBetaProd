@@ -68,10 +68,7 @@ def add_technicals(bars: pl.DataFrame) -> pl.DataFrame:
         )
         .with_columns(
             [
-                (
-                    100
-                    - (100 / (1 + pl.col("_avg_gain") / pl.col("_avg_loss")))
-                ).alias("rsi14"),
+                (100 - (100 / (1 + pl.col("_avg_gain") / pl.col("_avg_loss")))).alias("rsi14"),
             ]
         )
         .drop(["_tr", "_std20", "_gain", "_loss", "_avg_gain", "_avg_loss"])

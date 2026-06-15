@@ -77,9 +77,7 @@ MASSIVE_ERA_START = date(2026, 6, 10)
 
 BACKUP_DIR = Path("/home/the-eye-beta/backups")
 MIN_BACKUP_BYTES = 5 * 1024**3  # 5 GiB sanity floor for ~118 GB DB
-NO_BACKUP_MESSAGE = (
-    "\033[91mNO DATABASE BACKUP MECHANISM EXISTS — LAUNCH BLOCKER\033[0m"
-)
+NO_BACKUP_MESSAGE = "\033[91mNO DATABASE BACKUP MECHANISM EXISTS — LAUNCH BLOCKER\033[0m"
 
 
 @dataclass(slots=True)
@@ -442,9 +440,7 @@ def render_table(results: list[CheckResult]) -> str:
         f"{'#':>2}  {'CHECK':<{name_w}}  {'STATUS':<6}  EVIDENCE",
         f"{'-' * 2}  {'-' * name_w}  {'-' * 6}  {'-' * 60}",
     ]
-    lines.extend(
-        f"{r.number:>2}  {r.name:<{name_w}}  {r.status:<6}  {r.evidence}" for r in results
-    )
+    lines.extend(f"{r.number:>2}  {r.name:<{name_w}}  {r.status:<6}  {r.evidence}" for r in results)
     fails = sum(1 for r in results if r.status == "FAIL")
     warns = sum(1 for r in results if r.status == "WARN")
     lines.append("")

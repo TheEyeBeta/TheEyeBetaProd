@@ -120,8 +120,7 @@ def simulate_fractional_week(
         close = closes[sym_idx] if sym_idx < len(closes) else closes[0]
         weight = min(1.0, max(0.0, weight))
         equity = cash + sum(
-            shares[s] * (closes[i] if i < len(closes) else closes[0])
-            for i, s in enumerate(symbols)
+            shares[s] * (closes[i] if i < len(closes) else closes[0]) for i, s in enumerate(symbols)
         )
         target_value = equity * weight
         current_value = shares[symbol] * close
@@ -133,8 +132,7 @@ def simulate_fractional_week(
             cash -= trade_shares * exec_price
             shares[symbol] += trade_shares
         equity = cash + sum(
-            shares[s] * (closes[i] if i < len(closes) else closes[0])
-            for i, s in enumerate(symbols)
+            shares[s] * (closes[i] if i < len(closes) else closes[0]) for i, s in enumerate(symbols)
         )
         pnl = (equity - prev_equity) / prev_equity if prev_equity > 0 else 0.0
         daily.append(pnl)

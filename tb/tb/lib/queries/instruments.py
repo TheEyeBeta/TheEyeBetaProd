@@ -8,7 +8,9 @@ from typing import Any
 import asyncpg
 
 
-async def resolve_symbol(conn: asyncpg.Connection, symbol: str) -> dict[str, Any] | None:
+async def resolve_symbol(
+    conn: asyncpg.Connection, symbol: str
+) -> dict[str, Any] | None:
     """Lookup instrument by symbol (instruments table only)."""
     row = await conn.fetchrow(
         """
@@ -22,7 +24,9 @@ async def resolve_symbol(conn: asyncpg.Connection, symbol: str) -> dict[str, Any
     return dict(row) if row else None
 
 
-async def fetch_latest_price(conn: asyncpg.Connection, instrument_id: int) -> dict[str, Any] | None:
+async def fetch_latest_price(
+    conn: asyncpg.Connection, instrument_id: int
+) -> dict[str, Any] | None:
     """Latest daily close for an instrument."""
     row = await conn.fetchrow(
         """

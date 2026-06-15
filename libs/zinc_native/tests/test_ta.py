@@ -240,9 +240,7 @@ class TestHmmRegime:
             for index in range(100):
                 truth.append(state)
                 value = (
-                    -2.0 + 0.01 * float(index % 5)
-                    if state == 0
-                    else 2.0 + 0.01 * float(index % 5)
+                    -2.0 + 0.01 * float(index % 5) if state == 0 else 2.0 + 0.01 * float(index % 5)
                 )
                 observations.append(value)
 
@@ -255,6 +253,7 @@ class TestHmmRegime:
         base_result = ta.hmm_regime(base_obs, 2, 100)
         shifted_result = ta.hmm_regime(shifted, 2, 100)
         assert len(base_result.states) == len(shifted_result.states)
-        assert _regime_accuracy(
-            np.asarray(base_result.states), np.asarray(shifted_result.states)
-        ) > 0.85
+        assert (
+            _regime_accuracy(np.asarray(base_result.states), np.asarray(shifted_result.states))
+            > 0.85
+        )
