@@ -1,0 +1,35 @@
+[Unit]
+Description=TheEyeBeta API (FastAPI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+User=the-eye-beta
+Group=the-eye-beta
+
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal
+
+# Environment
+EnvironmentFile=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/.env
+Environment="PYTHONPATH=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/packages/core/src:/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/packages/data_access/src:/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/packages/providers/src:/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/services/api/src"
+
+# Run API (production-ish)
+ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/.venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8000
+
+Restart=always
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=theeyebeta-api
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+TimeoutStopSec=60
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
