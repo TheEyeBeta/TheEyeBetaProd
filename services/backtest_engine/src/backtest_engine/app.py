@@ -1,3 +1,4 @@
+# STATUS: scaffolded, not deployed. Pending: deploy unit + data/snapshot wiring.
 """FastAPI application for the backtest engine."""
 
 from __future__ import annotations

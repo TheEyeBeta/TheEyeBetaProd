@@ -1,3 +1,4 @@
+# STATUS: scaffolded, not deployed. Pending: deploy unit; gates risk_metrics (#4).
 """FastAPI entrypoint for master-orchestrator (port 7050)."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# STATUS: scaffolded, not deployed. Pending: deploy unit + gRPC infra.
 """Compliance-service entrypoint — gRPC on 7070 and HTTP bridge on 8008."""
 
 from __future__ import annotations

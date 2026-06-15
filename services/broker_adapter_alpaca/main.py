@@ -1,3 +1,4 @@
+# STATUS: scaffolded, not deployed. Pending: deploy unit + Alpaca creds (live-trading gated).
 """Broker-adapter entrypoint — FastAPI on 127.0.0.1:7090."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# STATUS: scaffolded, not deployed. Pending: deploy unit (live-trading-adjacent; approval req).
 """OMS entrypoint — FastAPI on 127.0.0.1:7080."""
 
 from __future__ import annotations

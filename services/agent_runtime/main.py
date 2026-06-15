@@ -1,3 +1,4 @@
+# STATUS: scaffolded, not deployed. Pending: deploy unit + NATS/LLM wiring.
 """FastAPI entrypoint for agent-runtime (port 8004)."""
 
 from __future__ import annotations

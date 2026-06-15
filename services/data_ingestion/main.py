@@ -1,3 +1,4 @@
+# STATUS: scaffolded; not deployed as a service (prices/macro/news run via standalone timers).
 """FastAPI entrypoint for the data-ingestion service.
 
 Exposes health/metrics endpoints, admin-triggered ingest runs, and a daily
