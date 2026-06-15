@@ -212,7 +212,7 @@ class MacroIngestionWorker(BaseWorker):
             expected_end = datetime.combine(trade_date, time.max, tzinfo=UTC)
             gap_id = await conn.fetchval(
                 """
-                INSERT INTO public.audit_data_gaps
+                INSERT INTO theeyebeta.audit_data_gaps
                     (dataset_type, trade_date, expected_start, expected_end,
                      expected_count, actual_count, gap_start, gap_end,
                      severity, remediation_state, remediation_notes, metadata)
@@ -245,7 +245,7 @@ class MacroIngestionWorker(BaseWorker):
             )
             await conn.execute(
                 """
-                INSERT INTO public.audit_alerts
+                INSERT INTO theeyebeta.audit_alerts
                     (alert_type, severity, trade_date, worker_name, gap_id, run_id,
                      title, message, metadata)
                 VALUES (

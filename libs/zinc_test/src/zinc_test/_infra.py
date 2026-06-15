@@ -92,7 +92,7 @@ def seed_agents(admin_dsn: str) -> None:
         return
     env = os.environ.copy()
     env["DATABASE_URL"] = _normalize_psycopg_dsn(admin_dsn)
-    subprocess.run(
+    subprocess.run(  # noqa: S603 — trusted internal script path, not user-supplied
         [sys.executable, str(_SEEDS_SCRIPT)],
         check=True,
         env=env,

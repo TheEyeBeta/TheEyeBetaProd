@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from uuid import UUID
 
 import pytest
+
 from zinc_schemas.snapshot_validator import SnapshotValidationError, validate_snapshot
 
 _VALID: dict = {

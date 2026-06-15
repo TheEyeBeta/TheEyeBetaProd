@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from data_ingestion.adapters.cn_proxy import CnProxyAdapter
+
 from zinc_schemas.ingestion import PriceDailyRecord
 
 

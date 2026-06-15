@@ -56,12 +56,12 @@ class ParquetWriter:
         self._bucket = bucket or os.environ.get("MINIO_SNAPSHOT_BUCKET", DEFAULT_BUCKET)
 
     def _object_key(self, market: str, trade_date: date) -> str:
-        return f"{market}/{trade_date.year:04d}/{trade_date.month:02d}/{trade_date.isoformat()}.parquet"
+        return f"{market}/{trade_date.year:04d}/{trade_date.month:02d}/{trade_date.isoformat()}.parquet"  # noqa: E501
 
     def _blob_uri(self, market: str, trade_date: date) -> str:
         return f"s3://{self._bucket}/{self._object_key(market, trade_date)}"
 
-    def _write_sync(self, market: str, trade_date: date, frame: pl.DataFrame) -> SnapshotWriteResult:
+    def _write_sync(self, market: str, trade_date: date, frame: pl.DataFrame) -> SnapshotWriteResult:  # noqa: E501
         if not self._client.bucket_exists(self._bucket):
             self._client.make_bucket(self._bucket)
         buffer = io.BytesIO()

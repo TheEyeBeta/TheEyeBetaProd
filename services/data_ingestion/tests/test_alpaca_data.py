@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pytest
 from data_ingestion.adapters.alpaca_data import AlpacaDataAdapter
+
 from zinc_schemas.ingestion import IntradayBarRecord
 
 

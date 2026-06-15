@@ -476,7 +476,7 @@ class ConstitutionGuard:
                             detail=f"{symbol}: forbidden suffix {suffix!r} for {agent_id}",
                         ),
                     )
-            if valid_symbols is not None and symbol and symbol not in valid_symbols:
+            if valid_symbols is not None and symbol and symbol not in valid_symbols:  # noqa: SIM102 — inner if guards a separate condition; merging would hide the two-level logic
                 if rules.allowed_markets:
                     hits.append(
                         Violation(
@@ -493,7 +493,7 @@ class ConstitutionGuard:
         constitution: AgentConstitution,
         text: str,
     ) -> list[Violation] | None:
-        forbidden = set(constitution.forbidden_targets or FORBIDDEN_TARGET_DEFAULTS.get(agent_id, []))
+        forbidden = set(constitution.forbidden_targets or FORBIDDEN_TARGET_DEFAULTS.get(agent_id, []))  # noqa: E501
         if not forbidden:
             return None
         lowered = text.lower()

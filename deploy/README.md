@@ -1,5 +1,20 @@
 # Deployment Helpers
 
+All runtime paths use **TheEyeBetaProd** + `theeyebeta.*` only. Operator CLI:
+`uv run tb` — see [docs/CLI_REFERENCE.md](../docs/CLI_REFERENCE.md).
+
+```bash
+uv sync
+uv run tb status
+uv run tb prelive
+uv run tb trask status
+uv run tb workers list
+```
+
+Install all units: `sudo ./deploy/install_systemd_units.sh`
+
+See [MACMINI_OPERATOR_RUNBOOK.md](MACMINI_OPERATOR_RUNBOOK.md) for the full cutover guide.
+
 ## Massive Canonical Price Ingestion Timer
 
 Install and enable the canonical price ingestion timer (runs before the legacy
@@ -52,8 +67,12 @@ systemctl list-timers theeye-daily-pipeline.timer
 Run manually:
 
 ```bash
+uv run tb workers run daily-pipeline --dry-run
 uv run python -m workers.daily_pipeline_runner --run-type manual
 ```
+
+Pipeline steps: `IndicatorComputeWorker` → `TheeyebetaIndicatorWorker` (validation).
+No `public.*` mirror. No `TheEyeBetaLocal` ETL.
 
 ## Gap Sentinel Timer
 
@@ -118,7 +137,29 @@ scripts/backup_db.sh
 Read-only; exit 0 only with zero FAILs:
 
 ```bash
+uv run tb prelive
+uv run tb prelive --json
 uv run python scripts/prelive_check.py
 uv run python scripts/prelive_check.py --json
+```
+
+## Intraday 15m Timer (>= $500M tier)
+
+```bash
+sudo systemctl enable --now theeye-intraday-ingest.timer
+uv run tb workers run intraday-ingest --dry-run --force
+```
+
+## Market Cap + EOD Universe Timer
+
+```bash
+sudo systemctl enable --now theeye-market-cap.timer
+uv run tb universe sync --tier eod --apply
+```
+
+## Legacy Reference Check
+
+```bash
+uv run python scripts/check_no_public_refs.py
 ```
 

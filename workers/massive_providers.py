@@ -23,6 +23,9 @@ MAX_SINGLE_DAY_MOVE = 0.25
 SPOT_CHECK_TOLERANCE = 0.005
 COVERAGE_FAIL_THRESHOLD = 0.95
 COVERAGE_WARN_THRESHOLD = 0.98
+FINNHUB_FALLBACK_MAX = int(os.environ.get("FINNHUB_FALLBACK_MAX", "200"))
+FINNHUB_TIMEOUT_SECONDS = float(os.environ.get("FINNHUB_TIMEOUT_SECONDS", "45.0"))
+YFINANCE_FALLBACK_MAX = int(os.environ.get("YFINANCE_FALLBACK_MAX", "200"))
 
 CoverageOutcome = Literal["ok", "warn", "fail"]
 
@@ -109,6 +112,28 @@ def validate_bar(
     return None
 
 
+def symbol_aliases(symbol: str) -> list[str]:
+    """Return Massive ↔ DB ticker spelling variants for class shares."""
+    sym = symbol.upper()
+    aliases = [sym]
+    if "-" in sym:
+        aliases.append(sym.replace("-", "."))
+    if "." in sym:
+        aliases.append(sym.replace(".", "-"))
+    return list(dict.fromkeys(aliases))
+
+
+def expanded_symbol_lookup(
+    symbol_map: dict[str, UniverseInstrument],
+) -> dict[str, UniverseInstrument]:
+    """Map Massive ticker spellings to canonical universe instruments."""
+    lookup: dict[str, UniverseInstrument] = {}
+    for symbol, inst in symbol_map.items():
+        for alias in symbol_aliases(symbol):
+            lookup.setdefault(alias, inst)
+    return lookup
+
+
 def parse_massive_grouped(
     payload: dict[str, Any],
     *,
@@ -116,17 +141,21 @@ def parse_massive_grouped(
     trade_date: date,
 ) -> dict[str, DailyBar]:
     """Parse Massive grouped-daily response into symbol → bar."""
+    lookup = expanded_symbol_lookup(symbol_map)
     bars: dict[str, DailyBar] = {}
     for row in payload.get("results") or []:
-        symbol = str(row.get("T") or row.get("ticker") or "").upper()
-        inst = symbol_map.get(symbol)
+        raw_symbol = str(row.get("T") or row.get("ticker") or "").upper()
+        inst = lookup.get(raw_symbol)
         if inst is None:
+            continue
+        canonical = inst.symbol.upper()
+        if canonical in bars:
             continue
         try:
             close = float(row["c"])
-            bars[symbol] = DailyBar(
+            bars[canonical] = DailyBar(
                 instrument_id=inst.instrument_id,
-                symbol=symbol,
+                symbol=canonical,
                 trade_date=trade_date,
                 open=float(row["o"]),
                 high=float(row["h"]),
@@ -137,7 +166,7 @@ def parse_massive_grouped(
                 source="massive",
             )
         except (KeyError, TypeError, ValueError) as exc:
-            log.warning("massive_row_rejected", symbol=symbol, error=str(exc))
+            log.warning("massive_row_rejected", symbol=raw_symbol, error=str(exc))
     return bars
 
 
@@ -203,7 +232,9 @@ class FinnhubClient:
             msg = "FINNHUB_API_KEY is not set"
             raise OSError(msg)
         self.api_key = key
-        self._client = httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=10.0))
+        self._client = httpx.AsyncClient(
+            timeout=httpx.Timeout(FINNHUB_TIMEOUT_SECONDS, connect=10.0),
+        )
         self._lock = asyncio.Lock()
         self._last_request = 0.0
 
@@ -226,7 +257,14 @@ class FinnhubClient:
             wait = 1.1 - (now - self._last_request)
             if wait > 0:
                 await asyncio.sleep(wait)
-            response = await self._client.get(f"{FINNHUB_BASE_URL}/stock/candle", params=params)
+            try:
+                response = await self._client.get(
+                    f"{FINNHUB_BASE_URL}/stock/candle",
+                    params=params,
+                )
+            except httpx.HTTPError as exc:
+                log.warning("finnhub_request_failed", symbol=symbol, error=str(exc))
+                return None
             self._last_request = asyncio.get_running_loop().time()
 
         if response.status_code != 200:

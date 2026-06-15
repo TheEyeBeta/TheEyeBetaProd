@@ -245,9 +245,7 @@ def aggregate_sectors(
         n = len(members)
         avg_r30 = _policy_mean([m.return_30d for m in members], n)
         rel_strength = (
-            avg_r30 - spx_return_30d
-            if avg_r30 is not None and spx_return_30d is not None
-            else None
+            avg_r30 - spx_return_30d if avg_r30 is not None and spx_return_30d is not None else None
         )
         contributors = sorted(
             (m for m in members if m.return_1d is not None),
@@ -380,7 +378,7 @@ class SectorAggregationWorker(BaseWorker):
         if spx_return is None and not dry_run:
             await conn.execute(
                 """
-                INSERT INTO public.audit_alerts
+                INSERT INTO theeyebeta.audit_alerts
                     (alert_type, severity, trade_date, worker_name, title, message, metadata)
                 VALUES ('DATA_GAP', 'WARN', $1, $2, $3, $4, $5::jsonb)
                 """,
@@ -457,7 +455,7 @@ async def resolve_target_trade_date(conn: asyncpg.Connection, trade_date: date) 
     value = await conn.fetchval(
         """
         SELECT calendar_date
-          FROM public.trading_calendar
+          FROM theeyebeta.trading_calendar
          WHERE is_trading_day
            AND calendar_date <= $1
          ORDER BY calendar_date DESC

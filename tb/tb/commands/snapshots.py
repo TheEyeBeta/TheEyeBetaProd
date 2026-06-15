@@ -16,6 +16,7 @@ import structlog
 import typer
 from dotenv import load_dotenv
 from minio import Minio
+
 from zinc_schemas.packaged_snapshot import PACKAGED_SCHEMA_VERSION
 from zinc_schemas.snapshot_validator import SnapshotValidationError, validate_snapshot
 

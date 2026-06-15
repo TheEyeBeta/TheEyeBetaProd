@@ -14,8 +14,8 @@ from __future__ import annotations
 import os
 import re
 import sys
-import uuid
 import urllib.parse as _up
+import uuid
 from typing import Any
 
 import psycopg
@@ -70,7 +70,7 @@ def _record(name: str, passed: bool, detail: str = "") -> None:
     p, t = _section_counts.get(_current_section, (0, 0))
     _section_counts[_current_section] = (p + (1 if passed else 0), t + 1)
     mark = TICK if passed else CROSS
-    if detail:
+    if detail:  # noqa: SIM108 — multiline form is more readable than a long ternary here
         suffix = f"  → {detail}"
     else:
         suffix = ""
@@ -106,7 +106,7 @@ def _swap_creds(url: str, user: str, password: str) -> str:
     return p._replace(netloc=netloc).geturl()
 
 
-def _conn(url: str = DATABASE_URL, **kwargs: Any) -> psycopg.Connection[Any]:
+def _conn(url: str = DATABASE_URL, **kwargs: Any) -> psycopg.Connection[Any]:  # noqa: ANN401 — psycopg kwargs are heterogeneous by design
     """Open a psycopg3 connection with autocommit enabled."""
     return psycopg.connect(url, autocommit=True, **kwargs)
 
@@ -702,7 +702,7 @@ def section_8(conn: psycopg.Connection[Any]) -> None:
     ).fetchone()
     num_parts: int = int(row[0]) if row else 0
     _record(
-        f"audit_log has >= 6 partitions",
+        "audit_log has >= 6 partitions",
         num_parts >= 6,
         f"got: {num_parts}",
     )
@@ -834,7 +834,7 @@ def section_10(superconn: psycopg.Connection[Any]) -> None:
         *,
         expect_denied: bool = False,
         label: str,
-    ) -> Any:
+    ) -> Any:  # noqa: ANN401 — return is row tuple or None; narrowing here adds no value
         """Execute *sql* and record pass/fail.
 
         Returns the first row fetched on success, None otherwise.
@@ -959,11 +959,11 @@ def section_10(superconn: psycopg.Connection[Any]) -> None:
                 if table == "audit_log":
                     continue  # already tested
                 try:
-                    app.execute(f"SELECT 1 FROM theeyebeta.{table} LIMIT 1")
+                    app.execute(f"SELECT 1 FROM theeyebeta.{table} LIMIT 1")  # noqa: S608 — table name from EXPECTED_TABLES constant, not user input
                 except psycopg.errors.InsufficientPrivilege:
                     denied_tables.append(table)
-                except Exception:
-                    pass  # empty table / non-privilege error is fine
+                except Exception:  # noqa: S110 — non-privilege errors (empty table, etc.) are benign in this probe
+                    pass
             _record(
                 "tb_app: SELECT from every base table allowed",
                 not denied_tables,
@@ -1027,7 +1027,7 @@ def section_10(superconn: psycopg.Connection[Any]) -> None:
             ]:
                 _try(
                     rnd,
-                    f"SELECT 1 FROM theeyebeta.{table} LIMIT 1",
+                    f"SELECT 1 FROM theeyebeta.{table} LIMIT 1",  # noqa: S608 — table name from hardcoded list, not user input
                     label=f"tb_rnd_readonly: SELECT from {table} allowed",
                 )
 
@@ -1047,7 +1047,7 @@ def section_10(superconn: psycopg.Connection[Any]) -> None:
         for table, pk_col, pk_val in cleanup_ids:
             try:
                 superconn.execute(
-                    f"DELETE FROM theeyebeta.{table} WHERE {pk_col}=%s",
+                    f"DELETE FROM theeyebeta.{table} WHERE {pk_col}=%s",  # noqa: S608 — table/col from hardcoded cleanup_ids list, not user input
                     (pk_val,),
                 )
             except Exception as exc:
@@ -1157,7 +1157,7 @@ def section_12(conn: psycopg.Connection[Any]) -> None:
     _record(
         "No theeyebeta-specific tables leak into other schemas",
         not wrong_schema_rows,
-        f"found elsewhere: {[(r[0], r[1]) for r in wrong_schema_rows]}" if wrong_schema_rows else "",
+        f"found elsewhere: {[(r[0], r[1]) for r in wrong_schema_rows]}" if wrong_schema_rows else "",  # noqa: E501
     )
 
     # _audit_summary_placeholder was dropped (does not exist anywhere)

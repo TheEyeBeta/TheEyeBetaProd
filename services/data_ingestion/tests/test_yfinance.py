@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from data_ingestion.adapters.yfinance import YfinanceAdapter, make_ticker
+
 from zinc_schemas.ingestion import PriceDailyRecord
 
 

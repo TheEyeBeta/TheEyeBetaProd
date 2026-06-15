@@ -9,9 +9,9 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
 import structlog
-from zinc_schemas.ingestion import IntradayBarRecord, Record
 
 from data_ingestion.adapters.base import _US_EXCHANGES, load_active_instruments, make_http_client
+from zinc_schemas.ingestion import IntradayBarRecord, Record
 
 log = structlog.get_logger()
 

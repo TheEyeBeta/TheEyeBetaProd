@@ -12,11 +12,11 @@ import asyncpg
 import structlog
 import typer
 from dotenv import load_dotenv
-from zinc_schemas.packaged_snapshot import PackagedSnapshotV1
 
 from snapshot_packager.builder import SnapshotBuilder
 from snapshot_packager.markets import VALID_MARKETS
 from snapshot_packager.writers import PackagedSnapshotWriter
+from zinc_schemas.packaged_snapshot import PackagedSnapshotV1
 
 load_dotenv()
 log = structlog.get_logger()

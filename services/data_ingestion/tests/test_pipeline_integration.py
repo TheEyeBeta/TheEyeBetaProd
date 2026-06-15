@@ -12,6 +12,7 @@ import nats
 import pytest
 from data_ingestion.pipeline import IngestionPipeline
 from minio import Minio
+
 from zinc_schemas.ingestion import PriceDailyRecord
 
 

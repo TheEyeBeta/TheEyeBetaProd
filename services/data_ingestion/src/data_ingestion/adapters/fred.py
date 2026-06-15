@@ -10,9 +10,9 @@ import httpx
 import structlog
 import yaml
 from tenacity import retry, stop_after_attempt, wait_exponential
-from zinc_schemas.ingestion import MacroRecord, Record
 
 from data_ingestion.adapters.base import _CONFIG_DIR, make_http_client
+from zinc_schemas.ingestion import MacroRecord, Record
 
 log = structlog.get_logger()
 

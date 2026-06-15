@@ -39,7 +39,7 @@ _SCHEDULE_UTC = (
 class Settings(BaseSettings):
     """Service configuration loaded from environment variables."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     service_name: str = "data-ingestion"
     version: str = "0.1.0"
@@ -159,7 +159,6 @@ async def _run_ingest(
 
     from data_ingestion.adapters import resolve_adapter_name  # noqa: PLC0415
     from data_ingestion.pipeline import (  # noqa: PLC0415
-        DEFAULT_ADAPTER_NAMES,
         IngestionPipeline,
         run_adapter,
     )

@@ -8,13 +8,15 @@ from decimal import Decimal
 
 import asyncpg
 
+# ``cpi_surprise`` is intentionally unset until a consensus-expectations feed exists.
+OPTIONAL_DERIVED_FEATURE_KEYS = frozenset({"cpi_surprise"})
+
 DERIVED_FEATURE_KEYS = [
     "fed_funds_change_30d",
     "yield_10y_change_30d",
     "yield_2y_change_30d",
     "ten_year_yield_change_30d",
     "spread_2s10s_change_30d",
-    "cpi_surprise",
     "cpi_yoy_pct",
     "gdp_qoq_pct",
     "vix_change_5d",
@@ -88,7 +90,11 @@ def build_macro_feature_block_from_row(
         "style_tilts": _json_scalar(source.get("style_tilts") or {}),
         "data_gaps": [],
     }
-    block["data_gaps"] = [key for key in DERIVED_FEATURE_KEYS if block.get(key) is None]
+    block["data_gaps"] = [
+        key
+        for key in DERIVED_FEATURE_KEYS
+        if key not in OPTIONAL_DERIVED_FEATURE_KEYS and block.get(key) is None
+    ]
     return block
 
 
@@ -102,7 +108,7 @@ async def fetch_argos_macro_feature_block(
     last_trading_day = await conn.fetchval(
         """
         SELECT calendar_date
-          FROM public.trading_calendar
+          FROM theeyebeta.trading_calendar
          WHERE calendar_date <= $1
            AND is_trading_day
          ORDER BY calendar_date DESC
@@ -124,7 +130,7 @@ async def fetch_argos_macro_feature_block(
     if row is None:
         await conn.execute(
             """
-            INSERT INTO public.audit_alerts
+            INSERT INTO theeyebeta.audit_alerts
                 (alert_type, severity, trade_date, worker_name, title, message, metadata)
             VALUES (
                 'DATA_GAP',

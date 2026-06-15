@@ -37,6 +37,7 @@ async def integration_env(
 ) -> object:
     """Apply env vars and reset asyncpg pool for one data-ingestion integration test."""
     from data_ingestion.writers.postgres_writer import close_pool  # noqa: PLC0415
+
     from zinc_test import IntegrationInfra  # noqa: PLC0415
 
     infra: IntegrationInfra = integration_infra  # type: ignore[assignment]

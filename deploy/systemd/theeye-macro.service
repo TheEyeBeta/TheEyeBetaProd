@@ -11,6 +11,7 @@ WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
 EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
 ExecStart=/home/the-eye-beta/.local/bin/uv run python -m workers.macro_pipeline --run-type scheduled
 TimeoutStartSec=900
+RuntimeMaxSec=3600
 
 [Install]
 WantedBy=multi-user.target

@@ -9,6 +9,7 @@ from uuid import UUID
 
 import pytest
 from snapshot_packager.builder import SnapshotBuilder
+
 from zinc_schemas.packaged_snapshot import PackagedSnapshotV1
 
 

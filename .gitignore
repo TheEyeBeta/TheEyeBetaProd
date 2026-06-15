@@ -80,3 +80,6 @@ temp/
 *.enc.plain
 snapshots/
 backups/
+
+# Claude Code — personal, per-project settings (never commit; may enable bypassPermissions)
+.claude/settings.local.json

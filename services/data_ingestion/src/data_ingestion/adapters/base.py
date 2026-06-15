@@ -11,6 +11,7 @@ from typing import Any, Protocol
 
 import httpx
 import structlog
+
 from zinc_schemas.ingestion import Record
 
 log = structlog.get_logger()

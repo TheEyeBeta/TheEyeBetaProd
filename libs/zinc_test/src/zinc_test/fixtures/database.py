@@ -46,9 +46,9 @@ def seed_data(alembic_upgraded: str) -> Generator[str, None, None]:
 @pytest.fixture(scope="session")
 def integration_infra(
     seed_data: str,
-    redis_container: object,
-    nats_container: object,
-    minio_container: object,
+    redis_container: object,  # noqa: F811 – pytest fixture request; import above is re-export
+    nats_container: object,  # noqa: F811
+    minio_container: object,  # noqa: F811
 ) -> IntegrationInfra:
     """Composite fixture: all four containers + migrations + seeds.
 

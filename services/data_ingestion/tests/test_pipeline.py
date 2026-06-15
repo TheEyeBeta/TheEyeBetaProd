@@ -5,11 +5,10 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import polars as pl
 import pytest
-
 from data_ingestion.pipeline import IngestionPipeline
 from data_ingestion.writers.parquet_writer import SnapshotWriteResult
+
 from zinc_schemas.ingestion import PriceDailyRecord
 
 

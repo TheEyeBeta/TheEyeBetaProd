@@ -107,7 +107,7 @@ def load_constitution(path: Path) -> AgentConstitution:
     if missing:
         raise ValueError(f"Constitution {path} missing required frontmatter: {missing}")
     raw_tools = fm.get("tools") or []
-    if isinstance(raw_tools, str):
+    if isinstance(raw_tools, str):  # noqa: SIM108 — ternary would exceed line length and hurt readability
         tools = [raw_tools]
     else:
         tools = [str(t) for t in raw_tools]

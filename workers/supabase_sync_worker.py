@@ -46,13 +46,19 @@ class SupabaseSyncV2Worker(BaseWorker):
             msg = "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set for sync v2"
             raise RuntimeError(msg)
 
-        # D0 contract: primary table today is latest_snapshot via legacy script.
-        legacy_count = await conn.fetchval("SELECT COUNT(*) FROM public.latest_snapshot")
-        computed_count = int(legacy_count or 0)
+        canonical_count = await conn.fetchval(
+            "SELECT COUNT(*) FROM theeyebeta.data_snapshots_packaged"
+        )
+        computed_count = int(canonical_count or 0)
         metadata = {
             "trade_date": trade_date.isoformat(),
             "shadow": self.shadow or dry_run,
-            "tables": {"latest_snapshot": {"legacy_rows": int(legacy_count or 0), "computed_rows": computed_count}},
+            "tables": {
+                "data_snapshots_packaged": {
+                    "canonical_rows": int(canonical_count or 0),
+                    "computed_rows": computed_count,
+                },
+            },
         }
 
         if self.shadow or dry_run:
@@ -64,7 +70,7 @@ class SupabaseSyncV2Worker(BaseWorker):
                         f"# Supabase shadow report {trade_date.isoformat()}",
                         "",
                         f"- mode: {'shadow' if self.shadow else 'live'}",
-                        f"- latest_snapshot legacy rows: {legacy_count}",
+                        f"- data_snapshots_packaged rows: {canonical_count}",
                         f"- computed rows (stub): {computed_count}",
                         "",
                         "Legacy sync keeps running until 3 clean shadow days + operator approval.",

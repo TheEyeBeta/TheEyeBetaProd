@@ -9,7 +9,6 @@ from typing import Any
 
 import structlog
 import yaml
-from zinc_schemas.ingestion import PriceDailyRecord, Record
 
 from data_ingestion.adapters.base import (
     _CN_EXCHANGES,
@@ -18,6 +17,7 @@ from data_ingestion.adapters.base import (
     make_http_client,
 )
 from data_ingestion.adapters.yfinance import _fetch_sync, make_ticker
+from zinc_schemas.ingestion import PriceDailyRecord, Record
 
 log = structlog.get_logger()
 

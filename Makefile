@@ -99,7 +99,7 @@ logs-%: ## Tail logs for a service, e.g. make logs-postgres
 # ─────────────────────────────────────────────────────────────────────────────
 
 .PHONY: lint
-lint: lint-python lint-cpp lint-sql ## Run all linters (ruff + mypy + clang-format + sqlfluff)
+lint: lint-python lint-cpp lint-sql lint-public ## Run all linters (ruff + mypy + clang-format + sqlfluff)
 
 .PHONY: lint-python
 lint-python: ## ruff check + ruff format --check + mypy --strict
@@ -136,6 +136,13 @@ lint-sql: ## sqlfluff lint on migrations and raw SQL
 	else \
 	    printf "$(GREY)  No .sql files found — skipping sqlfluff$(RESET)\n"; \
 	fi
+
+.PHONY: lint-public
+lint-public: ## Fail if workers/ or tb/ reference public.* or TheEyeBetaLocal
+	@printf "$(BOLD)▶ check_no_public_refs$(RESET)\n"
+	$(UV) run python scripts/check_no_public_refs.py
+	@printf "$(BOLD)▶ tb_command_tree_check$(RESET)\n"
+	$(UV) run python scripts/tb_command_tree_check.py
 
 # ─────────────────────────────────────────────────────────────────────────────
 ##@ Formatting

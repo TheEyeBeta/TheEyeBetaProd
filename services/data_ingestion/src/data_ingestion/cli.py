@@ -52,7 +52,7 @@ def _parse_date(date_str: str | None) -> date:
         return date.fromisoformat(date_str)
     except ValueError:
         typer.echo(f"Invalid date: {date_str!r}. Expected YYYY-MM-DD.", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
 
 @app.command()
@@ -74,7 +74,7 @@ def prices(
     except Exception as exc:  # noqa: BLE001
         log.error("prices_failed", error=str(exc))
         typer.echo(f"FAILED: {exc}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     typer.echo(
         f"prices done — date={result['date']} requested={result['requested']} "
@@ -101,7 +101,7 @@ def macro(
     except Exception as exc:  # noqa: BLE001
         log.error("macro_failed", error=str(exc))
         typer.echo(f"FAILED: {exc}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     typer.echo(
         f"macro done — series={result['series']} "
@@ -186,7 +186,7 @@ def backfill_prices(
     except Exception as exc:  # noqa: BLE001
         log.error("backfill_prices_failed", error=str(exc))
         typer.echo(f"FAILED: {exc}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     typer.echo(
         f"backfill prices done — instruments={result['requested']} "
@@ -218,7 +218,7 @@ def backfill_macro(
     except Exception as exc:  # noqa: BLE001
         log.error("backfill_macro_failed", error=str(exc))
         typer.echo(f"FAILED: {exc}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     typer.echo(
         f"backfill macro done — series={result['series']} "

@@ -9,8 +9,17 @@
 ## ⚡ Cheat Sheet
 
 ```
-HEALTH          tb status
-LOGS            tb logs <svc>            make logs-<svc>
+HEALTH          uv run tb status
+TRASK           uv run tb trask status
+PRELIVE         uv run tb prelive
+WORKERS         uv run tb workers list / tb workers run <name>
+UNIVERSE        uv run tb universe sync --tier eod --apply
+CANONICAL       uv run tb canonical status
+INTRADAY        uv run tb intraday coverage
+DOCTOR          uv run tb meta doctor
+CHEAT           uv run tb meta cheat
+MIGRATE         uv run tb db migrate
+LOGS            tb logs <svc>            tb workers tail <alias> -f
 RESTART         tb restart <svc>         (confirms before acting)
 DEPLOY ONE      tb deploy <svc>          (pull + restart, confirms)
 DEPLOY ALL      tb deploy --all          (rolling, confirms)
@@ -19,10 +28,11 @@ START INFRA     make up                  docker compose up -d --wait
 STOP ALL        make down
 SSH TO BOX      ssh <user>@theeyebeta-mac
 DB SHELL        tb db shell
-MIGRATE         tb db migrate --prod     (dry-run first, confirms)
-ROLLBACK        git reset --hard <sha> && docker compose up -d --force-recreate
+MIGRATE PROD    tb db migrate --prod     (dry-run first, confirms)
 SECRET EDIT     tb secrets edit dev
 FULL RESTART    make down && make up
+CLI REF         docs/CLI_REFERENCE.md
+COMPLETION      uv run tb --install-completion
 ```
 
 **Service ports (all on 127.0.0.1 unless noted):**

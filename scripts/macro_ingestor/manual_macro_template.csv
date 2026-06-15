@@ -1,0 +1,99 @@
+series_code,obs_date,value,series_name,source,units,frequency,seasonal_adj,notes
+# ============================================================================
+# MANUAL MACRO DATA TEMPLATE — TheEyeBeta2025Live
+# ============================================================================
+# HOW TO USE:
+#   1. Delete these comment rows (rows starting with #) before running the script
+#   2. Fill in one row per observation
+#   3. obs_date format: YYYY-MM-DD (use the month-end date for monthly data,
+#      e.g., 2025-01-31 for the January 2025 PMI release)
+#   4. Run: python 03_manual_file_ingestor.py --file this_file.csv
+#
+# REQUIRED columns: series_code, obs_date, value
+# OPTIONAL columns: series_name, source, units, frequency, seasonal_adj, notes
+#
+# ============================================================================
+# WHERE TO DOWNLOAD EACH SERIES:
+# ============================================================================
+#
+# ISM_MFG_PMI (ISM Manufacturing PMI)
+#   URL: https://www.ismworld.org/supply-management-news-and-reports/reports/ism-pmi-reports/pmi/
+#   How: Click each month's report -> find "PMI" row in the main table
+#   Or:  Download the historical data Excel from the "Historical Data" tab
+#   Freq: Monthly — released 1st business day of following month
+#   Note: Values like 47.8 / 52.3 etc. Index >50 = expansion
+#
+# ISM_MFG_NEW_ORDERS (ISM Mfg New Orders sub-index)
+#   URL: Same page as ISM_MFG_PMI — it's in the same table, "New Orders" row
+#
+# ISM_MFG_EMPLOYMENT (ISM Mfg Employment sub-index)
+#   URL: Same page as ISM_MFG_PMI — "Employment" row in the main table
+#
+# ISM_SVCS_PMI (ISM Services PMI — NMI)
+#   URL: https://www.ismworld.org/supply-management-news-and-reports/reports/ism-pmi-reports/services/
+#   Freq: Monthly — released 3rd business day of following month
+#
+# CB_LEI (Conference Board Leading Economic Index)
+#   URL: https://www.conference-board.org/topics/us-leading-indicators
+#   How: Free registration required -> download "Historical Data" Excel
+#   Freq: Monthly — released ~3rd week of following month
+#
+# CB_CONSUMER_CONF (Conference Board Consumer Confidence Index)
+#   URL: https://www.conference-board.org/topics/consumer-confidence
+#   How: Free registration required -> download historical Excel
+#   Freq: Monthly — released last Tuesday of the reference month
+#
+# NAHB_HMI (NAHB Housing Market Index)
+#   URL: https://www.nahb.org/news-and-economics/housing-economics/indices/housing-market-index
+#   How: Historical data downloadable as Excel from the page
+#   Freq: Monthly — released 3rd Wednesday of reference month
+#
+# ADP_PRIVATE_PAYROLLS (ADP National Employment Report)
+#   URL: https://adpemploymentreport.com/
+#   How: Click "Download Historical Data" button -> Excel/CSV
+#   Units: Change in thousands (e.g. 150 = 150000 jobs added)
+#   Freq: Monthly — released Wednesday before BLS NFP Friday
+#
+# MOVE_INDEX (MOVE Bond Volatility Index)
+#   URL: https://indices.theice.com/marketplace/indices/move-index
+#   Alt:  TradingView ticker: TVC:MOVE (manual price lookup per day)
+#         Or check if your Massive.com plan includes it
+#   Freq: Daily — market days only
+#   Note: Similar to VIX but for bonds (Treasuries). Value ~100 = avg vol
+#
+# US_PMI_COMPOSITE (S&P Global US PMI Composite)
+#   URL: https://www.pmi.spglobal.com/
+#   How: Flash PMI press release is free; historical requires subscription
+#   Freq: Monthly — flash ~3rd week, final ~month-end
+#
+# ============================================================================
+#
+# EXAMPLE DATA (delete these example rows):
+#
+ISM_MFG_PMI,2025-01-31,50.9,ISM Manufacturing PMI,ISM,Index (50=neutral),monthly,TRUE,
+ISM_MFG_PMI,2025-02-28,50.3,ISM Manufacturing PMI,ISM,Index (50=neutral),monthly,TRUE,
+ISM_MFG_PMI,2025-03-31,49.0,ISM Manufacturing PMI,ISM,Index (50=neutral),monthly,TRUE,
+ISM_MFG_PMI,2025-04-30,48.7,ISM Manufacturing PMI,ISM,Index (50=neutral),monthly,TRUE,
+ISM_MFG_PMI,2025-05-31,48.5,ISM Manufacturing PMI,ISM,Index (50=neutral),monthly,TRUE,
+ISM_MFG_PMI,2025-06-30,49.3,ISM Manufacturing PMI,ISM,Index (50=neutral),monthly,TRUE,
+#
+ISM_MFG_NEW_ORDERS,2025-01-31,55.1,ISM Mfg New Orders,ISM,Index (50=neutral),monthly,TRUE,
+ISM_MFG_NEW_ORDERS,2025-02-28,52.5,ISM Mfg New Orders,ISM,Index (50=neutral),monthly,TRUE,
+#
+ISM_SVCS_PMI,2025-01-31,52.8,ISM Services PMI,ISM,Index (50=neutral),monthly,TRUE,
+ISM_SVCS_PMI,2025-02-28,53.5,ISM Services PMI,ISM,Index (50=neutral),monthly,TRUE,
+#
+CB_LEI,2025-01-31,99.7,Conference Board LEI,Conference Board,Index 2016=100,monthly,TRUE,
+CB_LEI,2025-02-28,99.3,Conference Board LEI,Conference Board,Index 2016=100,monthly,TRUE,
+#
+CB_CONSUMER_CONF,2025-01-31,105.3,Conference Board Consumer Confidence,Conference Board,Index 1985=100,monthly,TRUE,
+CB_CONSUMER_CONF,2025-02-28,98.3,Conference Board Consumer Confidence,Conference Board,Index 1985=100,monthly,TRUE,
+#
+NAHB_HMI,2025-01-31,47,NAHB Housing Market Index,NAHB,Index (50=neutral),monthly,TRUE,
+NAHB_HMI,2025-02-28,42,NAHB Housing Market Index,NAHB,Index (50=neutral),monthly,TRUE,
+#
+ADP_PRIVATE_PAYROLLS,2025-01-31,183,ADP Private Payrolls,ADP,Thousands of Persons SA,monthly,TRUE,
+ADP_PRIVATE_PAYROLLS,2025-02-28,77,ADP Private Payrolls,ADP,Thousands of Persons SA,monthly,TRUE,
+#
+MOVE_INDEX,2025-01-02,89.2,MOVE Bond Volatility Index,ICE BofA,Index,daily,FALSE,
+MOVE_INDEX,2025-01-03,91.5,MOVE Bond Volatility Index,ICE BofA,Index,daily,FALSE,

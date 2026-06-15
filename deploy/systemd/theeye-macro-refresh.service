@@ -1,0 +1,22 @@
+[Unit]
+Description=TheEyeBeta macro incremental refresh (04 FRED + 05 gold/yfinance)
+Wants=network-online.target
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=the-eye-beta
+Group=the-eye-beta
+# Run from the macro_ingestor dir so `import macro_series_registry` resolves as a sibling.
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/scripts/macro_ingestor
+# Provides FRED_API_KEY + ADMIN_DATABASE_URL; 04 falls back DB_URL -> ADMIN_DATABASE_URL itself.
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.venv/bin/python 04_macro_refresh.py
+ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.venv/bin/python 05_gold_ingestor.py --refresh
+TimeoutStartSec=900
+RuntimeMaxSec=1800
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

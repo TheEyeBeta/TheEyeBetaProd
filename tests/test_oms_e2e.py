@@ -8,9 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from broker_adapter_alpaca.adapter import AlpacaAdapter  # noqa: E402
 from broker_adapter_alpaca.settings import Settings as BrokerSettings  # noqa: E402
-from zinc_schemas.broker_base import SubmitOrderRequest  # noqa: E402
 from oms.audit import count_audit_trail, insert_audit_log
 from oms.db import (
     fetch_first_portfolio_id,
@@ -19,6 +17,7 @@ from oms.db import (
     resolve_instrument_id,
 )
 from oms.state import OrderManager
+from zinc_schemas.broker_base import SubmitOrderRequest  # noqa: E402
 
 
 def _pg_dsn() -> str:

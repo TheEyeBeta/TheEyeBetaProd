@@ -11,7 +11,6 @@ from typing import Any
 import nats
 import polars as pl
 import structlog
-from zinc_schemas.ingestion import Record
 
 from data_ingestion.adapters import get_adapter
 from data_ingestion.adapters.base import _YFINANCE_EXCHANGES, load_active_instruments
@@ -26,6 +25,7 @@ from data_ingestion.observability import (
 )
 from data_ingestion.writers.parquet_writer import ParquetWriter
 from data_ingestion.writers.postgres_writer import PostgresWriter, get_pool
+from zinc_schemas.ingestion import Record
 
 log = structlog.get_logger()
 
@@ -92,7 +92,7 @@ class IngestionPipeline:
             "nats_events": [],
         }
 
-        async with observe_duration("pipeline", "all"):
+        async with observe_duration("pipeline", "all"):  # noqa: SIM117 — two different async context managers; combining would obscure their distinct roles
             async with span("pipeline.run", date=str(target_date)):
                 fetch_tasks = {
                     name: asyncio.create_task(_fetch_adapter_records(name, target_date))

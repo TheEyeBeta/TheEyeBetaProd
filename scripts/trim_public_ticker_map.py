@@ -15,6 +15,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+
 import psycopg
 from dotenv import load_dotenv
 

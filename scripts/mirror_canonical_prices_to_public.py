@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""TEMPORARY-BRIDGE: mirror theeyebeta.prices_daily into public.price_daily.
+"""TEMPORARY-BRIDGE (DEPRECATED): mirror theeyebeta.prices_daily into public.price_daily.
 
-Delete in Phase C cutover when the native indicator worker retires legacy compute.
-Nothing should write public.price_daily daily after the one-shot massive_backfill;
+Removed from systemd daily pipeline as of Prod-only cutover (June 2026).
+Do not run on schedule. Scheduled for deletion June 30.
 this bridge keeps the 21:35 legacy pipeline fed until Prompt 7 lands.
 
 CLI examples:
@@ -321,8 +321,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--run-type",
-        default="scheduled",
+        default="manual",
         choices=["manual", "scheduled", "recovery"],
+        help="Default manual; systemd passes --run-type scheduled explicitly",
     )
     parser.add_argument("--dry-run", action="store_true")
     asyncio.run(_async_main(parser.parse_args()))

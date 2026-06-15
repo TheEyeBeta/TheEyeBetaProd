@@ -7,7 +7,6 @@ import os
 import psycopg
 import pytest
 
-
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://zinc:zinc_dev@localhost:5432/zinc",

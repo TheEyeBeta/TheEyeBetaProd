@@ -20,6 +20,8 @@ import structlog
 from workers.base_worker import BaseWorker, WorkerResult
 from workers.massive_providers import (
     COVERAGE_FAIL_THRESHOLD,
+    FINNHUB_FALLBACK_MAX,
+    YFINANCE_FALLBACK_MAX,
     DailyBar,
     FinnhubClient,
     MassiveClient,
@@ -64,10 +66,12 @@ class MassiveDailyIngestionWorker(BaseWorker):
         database_url: str | None = None,
         massive_client: MassiveClient | None = None,
         finnhub_client: FinnhubClient | None = None,
+        target_symbol: str | None = None,
     ) -> None:
         super().__init__(database_url=database_url)
         self._massive = massive_client
         self._finnhub = finnhub_client
+        self._target_symbol = target_symbol.upper() if target_symbol else None
 
     async def execute(
         self,
@@ -92,6 +96,12 @@ class MassiveDailyIngestionWorker(BaseWorker):
             )
 
         universe = await load_universe(conn)
+        if self._target_symbol is not None:
+            universe = [inst for inst in universe if inst.symbol == self._target_symbol]
+            if not universe:
+                raise ValueError(
+                    f"Symbol {self._target_symbol!r} not found in active canonical universe"
+                )
         expected = len(universe)
         symbol_map = {inst.symbol: inst for inst in universe}
         if dry_run and not os.environ.get("MASSIVE_API_KEY") and self._massive is None:
@@ -224,7 +234,7 @@ async def resolve_target_trade_date(conn: asyncpg.Connection, as_of: date) -> da
     value = await conn.fetchval(
         """
         SELECT is_trading_day
-          FROM public.trading_calendar
+          FROM theeyebeta.trading_calendar
          WHERE calendar_date = $1
          LIMIT 1
         """,
@@ -270,7 +280,7 @@ async def load_prev_closes(
     ref_date = await conn.fetchval(
         """
         SELECT calendar_date
-          FROM public.trading_calendar
+          FROM theeyebeta.trading_calendar
          WHERE is_trading_day
            AND calendar_date < $1
          ORDER BY calendar_date DESC
@@ -280,35 +290,36 @@ async def load_prev_closes(
     )
     if ref_date is None:
         return {}
-    ticker_ids = [inst.ticker_id for inst in universe]
+    instrument_ids = [inst.instrument_id for inst in universe]
     rows = await conn.fetch(
         """
-        SELECT ticker_id, close::float AS close
-          FROM public.price_daily
-         WHERE date = $1
-           AND ticker_id = ANY($2::bigint[])
+        SELECT m.public_ticker_id AS ticker_id, p.close::float AS close
+          FROM theeyebeta.prices_daily p
+          JOIN theeyebeta.public_ticker_map m ON m.instrument_id = p.instrument_id
+         WHERE p.ts::date = $1
+           AND p.instrument_id = ANY($2::bigint[])
         """,
         ref_date,
-        ticker_ids,
+        instrument_ids,
     )
     return {int(row["ticker_id"]): float(row["close"]) for row in rows}
 
 
 async def has_corporate_action(
     conn: asyncpg.Connection,
-    ticker_id: int,
+    instrument_id: int,
     trade_date: date,
 ) -> bool:
     """Return whether a corporate action exists near ``trade_date``."""
     value = await conn.fetchval(
         """
         SELECT 1
-          FROM public.corporate_actions
-         WHERE ticker_id = $1
-           AND action_date BETWEEN ($2::date - 3) AND ($2::date + 3)
+          FROM theeyebeta.corporate_actions
+         WHERE instrument_id = $1
+           AND ex_date BETWEEN ($2::date - 3) AND ($2::date + 3)
          LIMIT 1
         """,
-        ticker_id,
+        instrument_id,
         trade_date,
     )
     return value is not None
@@ -331,6 +342,9 @@ async def build_ingestion_plan(
     collected: dict[str, DailyBar] = {}
     rejected: list[str] = []
     provider_plan = provider_chain_plan(universe, massive_bars)
+    finnhub_attempts = 0
+    yfinance_attempts = 0
+    fallback_budget_exhausted = 0
 
     for inst, primary in provider_plan:
         if primary == "massive":
@@ -354,7 +368,12 @@ async def build_ingestion_plan(
                 continue
 
         if primary != "massive" or bar is None:
-            finn = await finnhub.daily_bar(inst.symbol, trade_date)
+            finn = None
+            if finnhub_attempts < FINNHUB_FALLBACK_MAX:
+                finnhub_attempts += 1
+                finn = await finnhub.daily_bar(inst.symbol, trade_date)
+            else:
+                fallback_budget_exhausted += 1
             if finn is not None:
                 finn.instrument_id = inst.instrument_id
                 reason = await validate_with_db(
@@ -369,7 +388,16 @@ async def build_ingestion_plan(
                     collected[inst.symbol] = finn
                     continue
 
-            yf_bar = await asyncio.to_thread(fetch_yfinance_bar, inst, trade_date)
+            if yfinance_attempts < YFINANCE_FALLBACK_MAX:
+                yfinance_attempts += 1
+                try:
+                    yf_bar = await asyncio.to_thread(fetch_yfinance_bar, inst, trade_date)
+                except Exception as exc:  # noqa: BLE001 — provider failure is non-fatal
+                    log.warning("yfinance_fallback_failed", symbol=inst.symbol, error=str(exc))
+                    yf_bar = None
+            else:
+                fallback_budget_exhausted += 1
+                yf_bar = None
             if yf_bar is not None:
                 reason = await validate_with_db(
                     conn,
@@ -407,6 +435,9 @@ async def build_ingestion_plan(
         ],
         "missing_after_fallback": missing,
         "rejected_sample": rejected[:20],
+        "finnhub_fallback_attempts": finnhub_attempts,
+        "yfinance_fallback_attempts": yfinance_attempts,
+        "fallback_budget_skipped": fallback_budget_exhausted,
         "spot_check_symbols": pick_spot_check_symbols(set(massive_bars)),
         "dry_run": True,
     }
@@ -426,7 +457,7 @@ async def validate_with_db(
     prev_close: float | None,
 ) -> str | None:
     """Validate a bar using DB-backed corporate-action lookup."""
-    corp = await has_corporate_action(conn, inst.ticker_id, bar.trade_date)
+    corp = await has_corporate_action(conn, inst.instrument_id, bar.trade_date)
     reason = validate_bar(
         symbol=inst.symbol,
         open_=bar.open,
@@ -512,7 +543,7 @@ async def create_coverage_alert(
     day_end = day_start + timedelta(days=1)
     gap_id = await conn.fetchval(
         """
-        INSERT INTO public.audit_data_gaps
+        INSERT INTO theeyebeta.audit_data_gaps
             (dataset_type, trade_date, expected_start, expected_end,
              expected_count, actual_count, gap_start, gap_end,
              severity, remediation_state, remediation_notes, metadata)
@@ -543,7 +574,7 @@ async def create_coverage_alert(
     )
     await conn.execute(
         """
-        INSERT INTO public.audit_alerts
+        INSERT INTO theeyebeta.audit_alerts
             (alert_type, severity, trade_date, worker_name, gap_id, run_id,
              title, message, metadata)
         VALUES (
@@ -580,7 +611,7 @@ async def create_provider_divergence_alert(
     """Record a provider divergence WARN alert."""
     await conn.execute(
         """
-        INSERT INTO public.audit_alerts
+        INSERT INTO theeyebeta.audit_alerts
             (alert_type, severity, trade_date, worker_name, run_id, title, message, metadata)
         VALUES (
             'PROVIDER_DIVERGENCE',
@@ -607,7 +638,7 @@ def _parse_date(raw: str | None) -> date:
 
 async def _async_main(args: argparse.Namespace) -> None:
     target_date = _parse_date(args.date)
-    worker = MassiveDailyIngestionWorker()
+    worker = MassiveDailyIngestionWorker(target_symbol=getattr(args, "symbol", None))
     result = await worker.run(
         target_date,
         run_type=args.run_type,
@@ -629,6 +660,12 @@ def main() -> None:
         choices=["manual", "scheduled", "recovery"],
     )
     parser.add_argument("--dry-run", action="store_true", help="Plan only; no DB writes")
+    parser.add_argument(
+        "--symbol",
+        metavar="TICKER",
+        default=None,
+        help="Ingest only this ticker (case-insensitive); default: full universe",
+    )
     asyncio.run(_async_main(parser.parse_args()))
 
 

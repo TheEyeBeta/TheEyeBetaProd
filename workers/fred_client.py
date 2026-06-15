@@ -86,4 +86,3 @@ class FredClient:
             msg = f"No FRED observations for {series_id} on or before {as_of}"
             raise ValueError(msg)
         return observations[-1]
-

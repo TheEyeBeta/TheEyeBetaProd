@@ -167,4 +167,3 @@ def compute_style_tilts(
 
     tilts["computed_at"] = datetime.now(tz=UTC).isoformat()
     return tilts
-
