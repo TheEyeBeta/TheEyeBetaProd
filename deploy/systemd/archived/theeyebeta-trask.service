@@ -1,0 +1,35 @@
+[Unit]
+Description=TheEyeBeta Trask Monitoring Daemon
+After=network-online.target theeyebeta-engine.service
+Wants=network-online.target
+# Start after engine so trask_components table is populated
+After=theeyebeta-engine.service
+
+[Service]
+Type=simple
+
+User=the-eye-beta
+Group=the-eye-beta
+
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal
+
+EnvironmentFile=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/.env
+Environment="PYTHONPATH=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/packages/core/src:/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/packages/data_access/src:/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/packages/providers/src:/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/services/engine/src:/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/services/sentinel/src:/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/services/trask/src"
+
+ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal/.venv/bin/python -m trask
+
+Restart=always
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=theeyebeta-trask
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
