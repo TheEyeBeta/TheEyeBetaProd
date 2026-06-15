@@ -51,4 +51,4 @@ class ZincCppConan(ConanFile):
 
     def configure(self) -> None:
         """Align with project C++20 requirement."""
-        self.settings.compiler.set_safe("cppstd", "20")
+        self.settings.compiler.cppstd = "20"

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run TheEyeBeta risk metrics refresh every 5 minutes
+Requires=theeye-risk-metrics-refresh.service
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+RandomizedDelaySec=30
+
+[Install]
+WantedBy=timers.target
