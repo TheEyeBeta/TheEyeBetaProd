@@ -181,10 +181,36 @@ Write a brief analyst note covering: (1) overall fund performance, (2) notable m
     return "(AI analyst unavailable)"
 
 
-# ── EOD email ──────────────────────────────────────────────────────────────────
+# ── HTML email builder ─────────────────────────────────────────────────────────
 
-def send_eod_email(snap: dict) -> None:
-    date_str    = datetime.now(timezone.utc).strftime("%A, %B %d %Y")
+def _color(val: float, positive: str = "#22c55e", negative: str = "#ef4444") -> str:
+    return positive if val >= 0 else negative
+
+
+def _arrow(val: float) -> str:
+    return "▲" if val >= 0 else "▼"
+
+
+def _holding_rows_html(positions: list[dict]) -> str:
+    rows = ""
+    for i, p in enumerate(positions):
+        bg = "#1a1f2e" if i % 2 == 0 else "#141824"
+        day_col  = _color(p["day_pct"])
+        tot_col  = _color(p["unrealized_pct"])
+        rows += f"""
+        <tr style="background:{bg};">
+          <td style="padding:12px 16px;font-weight:700;font-size:15px;color:#e2e8f0;letter-spacing:0.5px;">{p['symbol']}</td>
+          <td style="padding:12px 8px;font-size:13px;color:#94a3b8;text-align:right;">{p['qty']:.0f}</td>
+          <td style="padding:12px 8px;font-size:14px;color:#e2e8f0;text-align:right;font-weight:600;">${p['market_value']:,.0f}</td>
+          <td style="padding:12px 8px;font-size:13px;color:#64748b;text-align:right;">{p['weight_pct']:.1f}%</td>
+          <td style="padding:12px 16px;font-size:14px;color:{day_col};text-align:right;font-weight:700;">{_arrow(p['day_pct'])} {abs(p['day_pct']):.2f}%</td>
+          <td style="padding:12px 16px;font-size:13px;color:{tot_col};text-align:right;">{_arrow(p['unrealized_pct'])} {abs(p['unrealized_pct']):.2f}%</td>
+        </tr>"""
+    return rows
+
+
+def _build_html(snap: dict, ai_brief: str) -> str:
+    date_str    = datetime.now(timezone.utc).strftime("%A, %b %d %Y")
     equity      = snap["equity"]
     last_equity = snap["last_equity"]
     day_pnl     = snap["day_pnl"]
@@ -193,67 +219,150 @@ def send_eod_email(snap: dict) -> None:
     gross_exp   = snap["market_value"]
     cash        = snap["cash"]
     total_unreal = snap["unrealized_pnl"]
+    positions   = sorted(snap["positions"], key=lambda x: x["market_value"], reverse=True)
 
-    pnl_arrow = "▲" if day_pnl >= 0 else "▼"
+    day_col   = _color(day_pnl)
+    unreal_col = _color(total_unreal)
     day_sign  = "+" if day_pnl >= 0 else ""
+    pnl_arrow = _arrow(day_pnl)
+
+    holding_rows = _holding_rows_html(positions)
+
+    no_pos_msg = ""
+    if not positions:
+        no_pos_msg = """
+        <tr><td colspan="6" style="padding:20px;text-align:center;color:#64748b;font-size:13px;">
+          Orders pending — positions will appear after market open
+        </td></tr>"""
+
+    ai_paragraphs = "".join(
+        f'<p style="margin:0 0 10px;line-height:1.6;color:#cbd5e1;">{line}</p>'
+        for line in ai_brief.split("\n") if line.strip()
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZINC INVESTMENTS EOD</title></head>
+<body style="margin:0;padding:0;background:#0b0f1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0b0f1a;">
+<tr><td align="center" style="padding:20px 12px 32px;">
+<table width="100%" style="max-width:600px;" cellpadding="0" cellspacing="0">
+
+  <!-- HEADER -->
+  <tr><td style="background:linear-gradient(135deg,#1e3a5f 0%,#0f2040 100%);border-radius:16px 16px 0 0;padding:28px 24px 22px;">
+    <p style="margin:0 0 4px;font-size:11px;letter-spacing:3px;color:#64a0d4;text-transform:uppercase;font-weight:600;">End of Day Report</p>
+    <h1 style="margin:0 0 6px;font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">ZINC INVESTMENTS</h1>
+    <p style="margin:0;font-size:13px;color:#8fb3d0;">{date_str} &nbsp;·&nbsp; Paper Trading &nbsp;·&nbsp; 4× Leveraged</p>
+  </td></tr>
+
+  <!-- NAV HERO -->
+  <tr><td style="background:#111827;padding:24px 24px 20px;border-left:1px solid #1e293b;border-right:1px solid #1e293b;">
+    <p style="margin:0 0 6px;font-size:11px;letter-spacing:2px;color:#64748b;text-transform:uppercase;">Fund NAV</p>
+    <p style="margin:0 0 8px;font-size:42px;font-weight:800;color:#f1f5f9;letter-spacing:-1px;">${equity:,.2f}</p>
+    <p style="margin:0;font-size:18px;font-weight:700;color:{day_col};">
+      {pnl_arrow} {day_sign}${abs(day_pnl):,.2f} &nbsp; ({day_sign}{day_pct:.2f}%) today
+    </p>
+  </td></tr>
+
+  <!-- STATS ROW -->
+  <tr><td style="background:#111827;padding:0 24px 24px;border-left:1px solid #1e293b;border-right:1px solid #1e293b;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td width="33%" style="background:#0f172a;border-radius:12px;padding:16px;margin-right:8px;">
+        <p style="margin:0 0 4px;font-size:10px;letter-spacing:2px;color:#64748b;text-transform:uppercase;">Leverage</p>
+        <p style="margin:0;font-size:22px;font-weight:800;color:#f59e0b;">{leverage:.2f}×</p>
+      </td>
+      <td width="4%"></td>
+      <td width="33%" style="background:#0f172a;border-radius:12px;padding:16px;">
+        <p style="margin:0 0 4px;font-size:10px;letter-spacing:2px;color:#64748b;text-transform:uppercase;">Gross Exposure</p>
+        <p style="margin:0;font-size:18px;font-weight:700;color:#e2e8f0;">${gross_exp:,.0f}</p>
+      </td>
+      <td width="4%"></td>
+      <td width="33%" style="background:#0f172a;border-radius:12px;padding:16px;">
+        <p style="margin:0 0 4px;font-size:10px;letter-spacing:2px;color:#64748b;text-transform:uppercase;">Total P&amp;L</p>
+        <p style="margin:0;font-size:18px;font-weight:700;color:{unreal_col};">{_arrow(total_unreal)} ${abs(total_unreal):,.0f}</p>
+      </td>
+    </tr>
+    </table>
+  </td></tr>
+
+  <!-- SECONDARY STATS -->
+  <tr><td style="background:#111827;padding:0 24px 24px;border-left:1px solid #1e293b;border-right:1px solid #1e293b;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #1e293b;padding-top:16px;">
+    <tr>
+      <td style="padding:6px 0;font-size:13px;color:#94a3b8;">Yesterday Close</td>
+      <td style="padding:6px 0;font-size:13px;color:#e2e8f0;text-align:right;font-weight:600;">${last_equity:,.2f}</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 0;font-size:13px;color:#94a3b8;">Cash</td>
+      <td style="padding:6px 0;font-size:13px;color:#e2e8f0;text-align:right;font-weight:600;">${cash:,.2f}</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 0;font-size:13px;color:#94a3b8;">Positions</td>
+      <td style="padding:6px 0;font-size:13px;color:#e2e8f0;text-align:right;font-weight:600;">{len(positions)}</td>
+    </tr>
+    </table>
+  </td></tr>
+
+  <!-- HOLDINGS HEADER -->
+  <tr><td style="background:#0f172a;padding:16px 24px 12px;border-left:1px solid #1e293b;border-right:1px solid #1e293b;">
+    <p style="margin:0;font-size:11px;letter-spacing:3px;color:#64748b;text-transform:uppercase;font-weight:600;">Holdings</p>
+  </td></tr>
+
+  <!-- HOLDINGS TABLE -->
+  <tr><td style="border-left:1px solid #1e293b;border-right:1px solid #1e293b;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr style="background:#0d1220;">
+        <th style="padding:8px 16px;font-size:10px;letter-spacing:1px;color:#475569;text-align:left;font-weight:600;text-transform:uppercase;">Symbol</th>
+        <th style="padding:8px 8px;font-size:10px;letter-spacing:1px;color:#475569;text-align:right;font-weight:600;text-transform:uppercase;">Shares</th>
+        <th style="padding:8px 8px;font-size:10px;letter-spacing:1px;color:#475569;text-align:right;font-weight:600;text-transform:uppercase;">Value</th>
+        <th style="padding:8px 8px;font-size:10px;letter-spacing:1px;color:#475569;text-align:right;font-weight:600;text-transform:uppercase;">Wt</th>
+        <th style="padding:8px 16px;font-size:10px;letter-spacing:1px;color:#475569;text-align:right;font-weight:600;text-transform:uppercase;">Today</th>
+        <th style="padding:8px 16px;font-size:10px;letter-spacing:1px;color:#475569;text-align:right;font-weight:600;text-transform:uppercase;">Total</th>
+      </tr>
+      {holding_rows}{no_pos_msg}
+    </table>
+  </td></tr>
+
+  <!-- AI BRIEF -->
+  <tr><td style="background:#111827;padding:24px;border-left:1px solid #1e293b;border-right:1px solid #1e293b;">
+    <p style="margin:0 0 14px;font-size:11px;letter-spacing:3px;color:#64748b;text-transform:uppercase;font-weight:600;">AI Analyst Brief</p>
+    <div style="background:#0f172a;border-left:3px solid #3b82f6;border-radius:0 8px 8px 0;padding:16px 18px;">
+      {ai_paragraphs}
+    </div>
+  </td></tr>
+
+  <!-- FOOTER -->
+  <tr><td style="background:#0a0e1a;border-radius:0 0 16px 16px;padding:20px 24px;border:1px solid #1e293b;border-top:none;text-align:center;">
+    <p style="margin:0;font-size:11px;color:#334155;">TheEyeBeta &nbsp;·&nbsp; ZINC INVESTMENTS &nbsp;·&nbsp; Paper Trading Stack</p>
+  </td></tr>
+
+</table>
+</td></tr></table>
+</body></html>"""
+
+
+# ── EOD email ──────────────────────────────────────────────────────────────────
+
+def send_eod_email(snap: dict) -> None:
+    date_str  = datetime.now(timezone.utc).strftime("%A, %b %d %Y")
+    day_pnl   = snap["day_pnl"]
+    day_pct   = snap["day_pct"]
+    equity    = snap["equity"]
+    day_sign  = "+" if day_pnl >= 0 else ""
+    pnl_arrow = _arrow(day_pnl)
 
     ai_brief = generate_ai_brief(snap)
+    html     = _build_html(snap, ai_brief)
 
-    # ── Holdings table ──
-    positions = sorted(snap["positions"], key=lambda x: x["market_value"], reverse=True)
-    hold_rows = ""
-    for p in positions:
-        day_arrow = "▲" if p["day_pct"] >= 0 else "▼"
-        tot_arrow = "▲" if p["unrealized_pct"] >= 0 else "▼"
-        hold_rows += (
-            f"  {p['symbol']:<5}  {p['qty']:>5.0f} sh  "
-            f"${p['market_value']:>10,.2f}  "
-            f"{p['weight_pct']:>5.1f}%  "
-            f"{day_arrow} {abs(p['day_pct']):>5.2f}%  "
-            f"{tot_arrow} {abs(p['unrealized_pct']):>5.2f}%  "
-            f"${p['day_pnl']:>+9,.2f}\n"
-        )
-
-    plain = f"""\
-╔══════════════════════════════════════════════════════════════╗
-  ZINC INVESTMENTS  |  EOD REPORT  |  {date_str}
-╚══════════════════════════════════════════════════════════════╝
-
-  FUND SUMMARY
-  ─────────────────────────────────────────────────────────────
-  NAV (Equity)        ${equity:>12,.2f}
-  Yesterday Close     ${last_equity:>12,.2f}
-  Today's P&L         ${day_pnl:>+12,.2f}   {pnl_arrow} {abs(day_pct):.2f}%
-
-  Gross Exposure      ${gross_exp:>12,.2f}
-  Cash                ${cash:>12,.2f}
-  Leverage            {leverage:>11.2f}x
-  Unrealized (total)  ${total_unreal:>+12,.2f}
-
-  HOLDINGS  (sorted by position size)
-  ─────────────────────────────────────────────────────────────
-  {'Sym':<5}  {'Shares':>5}    {'Mkt Value':>11}  {'Wt%':>5}  {'Day%':>7}  {'Entry%':>7}  {'Day P&L':>10}
-  {'─'*66}
-{hold_rows}
-  AI ANALYST BRIEF
-  ─────────────────────────────────────────────────────────────
-  {ai_brief.replace(chr(10), chr(10)+'  ')}
-
-══════════════════════════════════════════════════════════════════
-  TheEyeBeta · ZINC INVESTMENTS paper stack · 4× leveraged
-══════════════════════════════════════════════════════════════════
-"""
-
-    subject = (
-        f"ZINC INVESTMENTS EOD {date_str.split(',')[0]}  |  "
-        f"NAV ${equity:,.0f}  {pnl_arrow} {day_sign}{day_pct:.2f}%"
-    )
+    subject = f"ZINC  {pnl_arrow} {day_sign}{day_pct:.2f}%  ·  NAV ${equity:,.0f}  ·  {date_str}"
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"]    = SMTP_USER
     msg["To"]      = EMAIL_TO
-    msg.attach(MIMEText(plain, "plain"))
+    msg.attach(MIMEText(html, "html"))
 
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
         smtp.starttls()
