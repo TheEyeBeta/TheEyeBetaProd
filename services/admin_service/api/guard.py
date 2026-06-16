@@ -250,8 +250,8 @@ def register_guard_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         violation_id: int,
         body: ResolveGuardViolationRequest,
-        user: dict[str, str] = require_role(Role.OPERATOR),
         conn: DbConn,
+        user: dict[str, str] = require_role(Role.OPERATOR),
     ) -> ResolveGuardViolationResponse:
         """Mark a guard violation as resolved by the current operator."""
         result = await resolve_guard_violation_impl(

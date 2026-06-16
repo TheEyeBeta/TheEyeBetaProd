@@ -525,9 +525,9 @@ def register_proposals_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         proposal_id: UUID,
         body: ApproveProposalRequest,
-        user: dict[str, str] = require_role(Role.OPERATOR),
         conn: DbConn,
         nats: NatsClient,
+        user: dict[str, str] = require_role(Role.OPERATOR),
     ) -> ApproveProposalResponse:
         """Transition a proposal to ``approved`` and request a validation backtest."""
         actor = _actor(user)
@@ -554,8 +554,8 @@ def register_proposals_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         proposal_id: UUID,
         body: RejectProposalRequest,
-        user: dict[str, str] = require_role(Role.OPERATOR),
         conn: DbConn,
+        user: dict[str, str] = require_role(Role.OPERATOR),
     ) -> RejectProposalResponse:
         """Transition a proposal to ``rejected`` with a required ``review_notes``."""
         actor = _actor(user)

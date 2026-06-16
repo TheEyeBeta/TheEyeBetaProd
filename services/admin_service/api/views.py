@@ -1156,12 +1156,12 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
     @limiter.limit("20/minute")
     async def fragment_sql_execute(
         request: Request,
-        user: dict[str, str] = require_role(Role.MASTER_ADMIN),
         conn: DbConn,
         statement: Annotated[str, Form(min_length=1, max_length=20_000)],
         idempotency_key: Annotated[str, Form(min_length=1, max_length=64)],
         confirm_phrase: Annotated[str, Form(min_length=1, max_length=64)],
         parameters: Annotated[str, Form(max_length=8_000)] = "",
+        user: dict[str, str] = require_role(Role.MASTER_ADMIN),
     ) -> HTMLResponse:
         """Run a write statement after the operator typed the confirm phrase."""
         if confirm_phrase.strip() != _SQL_CONFIRM_PHRASE:

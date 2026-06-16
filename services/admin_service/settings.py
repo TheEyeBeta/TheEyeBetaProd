@@ -26,9 +26,6 @@ class Settings(BaseSettings):
     host: str = Field(default="0.0.0.0", validation_alias="ADMIN_SERVICE_HOST")
     port: int = Field(default=7200, validation_alias="ADMIN_SERVICE_PORT")
 
-    admin_username: str = Field(default="admin", validation_alias="ADMIN_USERNAME")
-    admin_password_bcrypt: str = Field(default="", validation_alias="ADMIN_PASSWORD_BCRYPT")
-
     jwt_private_key: str = Field(default="", validation_alias="JWT_PRIVATE_KEY")
     jwt_public_key: str = Field(default="", validation_alias="JWT_PUBLIC_KEY")
     jwt_private_key_path: str | None = Field(

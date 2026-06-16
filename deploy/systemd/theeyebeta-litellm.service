@@ -1,0 +1,18 @@
+[Unit]
+Description=theeyebeta LiteLLM Proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=the-eye-beta
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env.theeyebeta-litellm
+ExecStart=/usr/bin/env -u DATABASE_URL -u ADMIN_DATABASE_URL -u INGEST_DATABASE_URL -u LITELLM_DATABASE_URL -u DEBUG -u LITELLM_DEBUG LITELLM_MODE=PRODUCTION /home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.venv/bin/litellm --config /home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/config/litellm.yaml --port 4000 --host 127.0.0.1
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

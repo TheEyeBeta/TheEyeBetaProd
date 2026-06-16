@@ -9,7 +9,7 @@ Type=simple
 User=the-eye-beta
 Group=the-eye-beta
 WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/services/agent_runtime
-EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env.theeye-agent-runtime
 Environment=PYTHONPATH=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/services/agent_runtime/src
 Environment=AGENT_RUNTIME_HOST=127.0.0.1
 Environment=AGENT_RUNTIME_PORT=8004

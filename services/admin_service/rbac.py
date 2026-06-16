@@ -17,7 +17,6 @@ ROLE_ORDER: dict[str, int] = {
 }
 
 DEFAULT_ROLE = "OPERATOR"
-ENV_BOOTSTRAP_ROLE = "MASTER_ADMIN"
 
 
 class Role(IntEnum):

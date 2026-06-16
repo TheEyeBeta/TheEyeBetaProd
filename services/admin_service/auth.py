@@ -21,7 +21,7 @@ from auth_sessions import (
 from deps import DbConn, RedisDep, SettingsDep
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
-from rbac import DEFAULT_ROLE, ENV_BOOTSTRAP_ROLE, Role, highest_role, require_role
+from rbac import DEFAULT_ROLE, Role, highest_role, require_role
 from redis.asyncio import Redis
 from settings import Settings
 from slowapi import Limiter
@@ -196,7 +196,7 @@ def register_auth_routes(limiter: Limiter) -> APIRouter:
     ) -> LoginResponse:
         """Verify operator credentials; issue tokens or MFA challenge."""
         _require_auth_config(settings)
-        role = await _authenticate(body.username, body.password, settings, conn)
+        role = await _authenticate(body.username, body.password, conn)
 
         mfa_state = await _fetch_mfa_state(conn, body.username)
         is_master = role == Role.MASTER_ADMIN.name
@@ -389,10 +389,9 @@ def _client_ip(request: Request) -> str | None:
 async def _authenticate(
     username: str,
     password: str,
-    settings: Settings,
     conn: asyncpg.Connection,
 ) -> str:
-    """Authenticate against DB users, falling back to env bootstrap admin."""
+    """Authenticate against DB-backed admin users only."""
     try:
         db_roles = await verify_db_credentials(conn, username, password)
         if db_roles is not None:
@@ -400,19 +399,6 @@ async def _authenticate(
     except asyncpg.UndefinedTableError:
         log.warning("admin_rbac_tables_missing", hint="run db migration 0026_admin_rbac")
 
-    if not settings.admin_password_bcrypt:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
-    _verify_env_password(
-        password,
-        username,
-        settings.admin_username,
-        settings.admin_password_bcrypt,
-    )
-    if username == settings.admin_username:
-        return ENV_BOOTSTRAP_ROLE
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid credentials",
@@ -425,33 +411,6 @@ def _require_auth_config(settings: Settings) -> None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Admin auth is not configured (JWT_PRIVATE_KEY or JWT_PRIVATE_KEY_PATH)",
-        )
-
-
-def _verify_env_password(
-    password: str,
-    username: str,
-    expected: str,
-    password_hash: str,
-) -> None:
-    """Check bcrypt password for env bootstrap user."""
-    if username != expected:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
-    try:
-        ok = bcrypt.checkpw(password.encode(), password_hash.encode())
-    except ValueError as exc:
-        log.error("admin_bcrypt_invalid", error=str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Admin auth misconfigured",
-        ) from exc
-    if not ok:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
         )
 
 

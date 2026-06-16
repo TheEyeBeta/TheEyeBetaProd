@@ -96,7 +96,8 @@ and update the tables in §3.
 ## 4. Admin service (`:7200`) — planned `/admin/*` catalog
 
 **Application:** `admin-service` (htmx + Jinja2).  
-**Auth:** HTTP Basic (`ADMIN_USERNAME` + `ADMIN_PASSWORD_BCRYPT`) on every request — no anonymous access ([`admin-service.md`](admin-service.md)).
+**Auth:** DB-backed JWT/RBAC with MFA for `MASTER_ADMIN`; no env bootstrap admin
+fallback ([`admin-service.md`](admin-service.md)).
 
 Page routes from [`admin-service.md`](admin-service.md), normalized to the **P-AG-01 `/admin` prefix**:
 

@@ -287,9 +287,9 @@ def register_orders_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         order_id: UUID,
         body: ApproveOrderRequest,
-        user: dict[str, str] = require_role(Role.OPERATOR),
         conn: DbConn,
         nats: NatsClient,
+        user: dict[str, str] = require_role(Role.OPERATOR),
     ) -> ApproveOrderResponse:
         """Transition ``pending_approval`` → ``approved`` and publish NATS event."""
         return await approve_pending_order(
@@ -306,8 +306,8 @@ def register_orders_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         order_id: UUID,
         body: RejectOrderRequest,
-        user: dict[str, str] = require_role(Role.OPERATOR),
         conn: DbConn,
+        user: dict[str, str] = require_role(Role.OPERATOR),
     ) -> RejectOrderResponse:
         """Transition ``pending_approval`` → ``rejected`` with reason in metadata."""
         return await reject_pending_order(

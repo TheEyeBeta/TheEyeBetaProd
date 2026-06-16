@@ -37,6 +37,7 @@ Makefile.cmake
 .env
 .env.*
 !.env.example
+!.env.age
 *.plain                        # plaintext copies of encrypted files
 secrets/*.plain
 # age private key — lives in 1Password, not in the repo
