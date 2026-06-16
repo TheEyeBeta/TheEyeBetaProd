@@ -1,0 +1,25 @@
+[Unit]
+Description=TheEyeBeta OMS (order management + reconciliation)
+Wants=network-online.target nats.service postgresql.service
+After=network-online.target nats.service postgresql.service theeye-risk-service.service theeye-compliance-service.service
+
+[Service]
+Type=simple
+User=the-eye-beta
+Group=the-eye-beta
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+Environment=PYTHONPATH=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/services/oms/src
+ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.venv/bin/python services/oms/main.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=theeye-oms
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStopSec=30
+OnFailure=theeye-notify-failure@%n.service
+
+[Install]
+WantedBy=multi-user.target

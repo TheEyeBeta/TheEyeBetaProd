@@ -36,6 +36,8 @@ class ZincCppConan(ConanFile):
 
     def requirements(self) -> None:
         """Declare runtime and test dependencies from Conan Center."""
+        # quantlib/1.30 pins boost/1.80.0; arrow/grpc resolve to 1.90 — force one version.
+        self.requires("boost/1.80.0", override=True)
         self.requires("eigen/3.4.0")
         self.requires("abseil/20240722.0")
         self.requires("fmt/10.2.1")

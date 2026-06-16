@@ -1,0 +1,25 @@
+[Unit]
+Description=TheEyeBeta master-orchestrator (snapshot workflow + risk metrics scheduler)
+Wants=network-online.target nats.service postgresql.service
+After=network-online.target nats.service postgresql.service theeye-risk-service.service theeye-compliance-service.service theeye-oms.service theeye-broker-adapter-alpaca.service
+
+[Service]
+Type=simple
+User=the-eye-beta
+Group=the-eye-beta
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/services/master_orchestrator
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+Environment=PYTHONPATH=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/services/master_orchestrator/src
+ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.venv/bin/python main.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=theeye-master-orchestrator
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStopSec=30
+OnFailure=theeye-notify-failure@%n.service
+
+[Install]
+WantedBy=multi-user.target

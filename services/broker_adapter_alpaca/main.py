@@ -1,4 +1,4 @@
-# STATUS: scaffolded, not deployed. Pending: deploy unit + Alpaca creds (live-trading gated).
+# STATUS: deployed via theeye-broker-adapter-alpaca.service (paper mode default).
 """Broker-adapter entrypoint — FastAPI on 127.0.0.1:7090."""
 
 from __future__ import annotations

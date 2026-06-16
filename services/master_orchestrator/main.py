@@ -1,4 +1,4 @@
-# STATUS: scaffolded, not deployed. Pending: deploy unit; gates risk_metrics (#4).
+# STATUS: deployed via theeye-master-orchestrator.service.
 """FastAPI entrypoint for master-orchestrator (port 7050)."""
 
 from __future__ import annotations
@@ -42,7 +42,10 @@ class MarketTrioRequest(BaseModel):
 
     market: str
     snapshot_id: UUID
-    date: date | None = Field(default=None, description="Trading date for idempotency key")
+    trade_date: date | None = Field(
+        default=None,
+        description="Trading date for idempotency key",
+    )
 
 
 @asynccontextmanager
@@ -93,7 +96,7 @@ def create_app() -> FastAPI:
         """Run market-trio workflow synchronously (testing/backfill)."""
         workflow = MarketTrioWorkflow(settings)
         try:
-            return await workflow.run(body.market, body.snapshot_id, trade_date=body.date)
+            return await workflow.run(body.market, body.snapshot_id, trade_date=body.trade_date)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except Exception as exc:  # noqa: BLE001

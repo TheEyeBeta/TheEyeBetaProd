@@ -47,6 +47,7 @@ class Settings(BaseSettings):
         return (
             os.environ.get("ALPACA_API_KEY_PAPER", "").strip()
             or os.environ.get("ALPACA_API_KEY", "").strip()
+            or os.environ.get("APCA_API_KEY_ID", "").strip()
         )
 
     def api_secret(self) -> str:
@@ -61,6 +62,7 @@ class Settings(BaseSettings):
             os.environ.get("ALPACA_API_SECRET_PAPER", "").strip()
             or os.environ.get("ALPACA_SECRET_KEY", "").strip()
             or os.environ.get("ALPACA_API_SECRET_KEY", "").strip()
+            or os.environ.get("APCA_API_SECRET_KEY", "").strip()
         )
 
     def credentials_configured(self) -> bool:

@@ -13,7 +13,7 @@
 
 ## Services deployed (paper mode)
 
-- [x] audit-service (+ daily chain verify timer) — active on :7110; NATS consumer warns until JetStream up
+- [x] audit-service (+ daily chain verify timer) — active on :7110; JetStream consumer connected
 - [x] broker-adapter (paper credentials only) — `theeye-broker-adapter-alpaca.service` on :7090
 - [x] risk-service — active :8007/:7060
 - [x] compliance-service — active :8008/:7070

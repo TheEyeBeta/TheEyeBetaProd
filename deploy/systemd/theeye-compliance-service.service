@@ -1,0 +1,25 @@
+[Unit]
+Description=TheEyeBeta compliance-service (pre-trade compliance gRPC + HTTP)
+Wants=network-online.target postgresql.service
+After=network-online.target postgresql.service
+
+[Service]
+Type=simple
+User=the-eye-beta
+Group=the-eye-beta
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+Environment=PYTHONPATH=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/services/compliance_service/src
+ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.venv/bin/python services/compliance_service/main.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=theeye-compliance-service
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStopSec=30
+OnFailure=theeye-notify-failure@%n.service
+
+[Install]
+WantedBy=multi-user.target
