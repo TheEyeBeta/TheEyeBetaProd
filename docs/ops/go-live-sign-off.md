@@ -13,12 +13,12 @@
 
 ## Services deployed (paper mode)
 
-- [ ] audit-service (+ daily chain verify timer)
-- [ ] risk-service
-- [ ] compliance-service
-- [ ] OMS
-- [ ] broker-adapter (paper credentials only)
-- [ ] master-orchestrator
+- [x] audit-service (+ daily chain verify timer) — active on :7110; NATS consumer warns until JetStream up
+- [x] broker-adapter (paper credentials only) — `theeye-broker-adapter-alpaca.service` on :7090
+- [x] risk-service — active :8007/:7060
+- [x] compliance-service — active :8008/:7070
+- [ ] OMS — blocked until `make build-cpp` (needs `zinc_native._zinc_oms`)
+- [x] master-orchestrator — active :7050
 
 ## Testing
 
@@ -29,7 +29,11 @@
 
 ## Operations
 
-- [ ] Heartbeat monitor timer active (15 min)
+- [x] Heartbeat monitor timer active (15 min)
+- [x] Migration head at `0030_audit_chain_status`
+- [x] All prelive checks pass (2026-06-16 activation run)
+- [x] No stale heartbeats (IndicatorComputeWorker refreshed 2026-06-16)
+- [x] Audit-service active; `theeye-audit-verify` timer enabled (04:00 UTC)
 - [ ] Prometheus `/metrics` scraped
 - [ ] Alerting rules configured (Telegram/email)
 - [ ] `docs/ops/paper-trading-runbook.md` criteria met

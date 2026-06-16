@@ -51,8 +51,14 @@ THEEYEBETA_SEQUENCE = [
     "0022_ind_technical_daily",
     "0023_sector_daily",
     "0024_public_ticker_map",
+    "0025_signals_status_comment",
+    "0026_admin_rbac",
+    "0027_signals_schema_realign",
+    "0028_totp_mfa",
+    "0029_audit_worm_policy",
+    "0030_audit_chain_status",
 ]
-THEEYEBETA_REQUIRED = "0020_worker_ops"
+THEEYEBETA_REQUIRED = "0030_audit_chain_status"
 
 WORKER_SET: list[str] = [
     "MacroIngestionWorker",
