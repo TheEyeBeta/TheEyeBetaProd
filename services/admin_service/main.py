@@ -16,12 +16,18 @@ from api.audit import register_audit_routes
 from api.audit import router as audit_router
 from api.backtest import register_backtest_routes
 from api.backtest import router as backtest_router
+from api.broker import register_broker_routes
+from api.broker import router as broker_router
+from api.compliance import register_compliance_routes
+from api.compliance import router as compliance_router
 from api.costs import register_costs_routes
 from api.costs import router as costs_router
 from api.events import register_events_routes, start_nats_event_bridge
 from api.events import router as events_router
 from api.guard import register_guard_routes
 from api.guard import router as guard_router
+from api.oms import register_oms_routes
+from api.oms import router as oms_router
 from api.ops import register_ops_routes
 from api.ops import router as ops_router
 from api.orders import register_orders_routes
@@ -30,6 +36,8 @@ from api.prelive import register_prelive_routes
 from api.prelive import router as prelive_router
 from api.proposals import register_proposals_routes
 from api.proposals import router as proposals_router
+from api.risk import register_risk_routes
+from api.risk import router as risk_router
 from api.services import register_services_routes
 from api.services import router as services_router
 from api.sql import register_sql_routes
@@ -52,6 +60,7 @@ from errors import register_error_handlers
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from lib.event_broadcaster import EventBroadcaster
+from lib.metrics import metrics_response, prometheus_middleware
 from settings import Settings, get_settings
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -85,6 +94,10 @@ register_prelive_routes()
 register_trading_routes(limiter)
 register_timers_routes(limiter)
 register_events_routes()
+register_risk_routes()
+register_compliance_routes()
+register_oms_routes()
+register_broker_routes()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -114,6 +127,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)
+    app.middleware("http")(prometheus_middleware)
 
     @app.middleware("http")
     async def correlation_id_middleware(
@@ -141,6 +155,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """Liveness probe for compose and load balancers."""
         return {"status": "ok", "service": cfg.service_name}
 
+    @app.get("/metrics")
+    @limiter.exempt
+    async def metrics(request: Request) -> Response:  # noqa: ARG001
+        """Prometheus scrape endpoint."""
+        return metrics_response()
+
     app.include_router(auth_router, prefix="/admin/auth")
     app.include_router(views_router, prefix="/admin")
     app.include_router(orders_router, prefix="/admin")
@@ -161,6 +181,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(trading_router, prefix="/admin")
     app.include_router(timers_router, prefix="/admin")
     app.include_router(events_router, prefix="/admin")
+    app.include_router(risk_router, prefix="/admin")
+    app.include_router(compliance_router, prefix="/admin")
+    app.include_router(oms_router, prefix="/admin")
+    app.include_router(broker_router, prefix="/admin")
 
     mount_static(app)
 

@@ -68,3 +68,25 @@ uv run pytest services/admin_service/tests/test_rbac.py \
 ```
 
 All unit tests green after hardening.
+
+
+## Phase 2 update (same day)
+
+### Newly completed
+- [x] Systemd units added for `theeye-audit-service`, `theeye-audit-verify.{service,timer}`, and `theeye-heartbeat-monitor.{service,timer}`.
+- [x] `scripts/audit_chain_verify.py` writes scheduled verify results to `theeyebeta.audit_chain_status`.
+- [x] `scripts/heartbeat_monitor.py` emits CRITICAL `audit_alerts` for stale worker heartbeats.
+- [x] `/metrics` endpoint added with request counter/latency middleware in admin-service.
+- [x] Admin proxy APIs added: `/admin/risk/*`, `/admin/compliance/checks`, `/admin/oms/reconciliation*`, `/admin/broker/*`.
+- [x] `GET /admin/audit/chain/verify` added and persists verification snapshots when table exists.
+- [x] `ops/pulse` now includes `audit_chain_status` summary.
+- [x] Prelive adds `data_quality.no_critical_gaps` check from DB.
+- [x] Broker live gate hardened with `data_gap_block` and Redis `trading:live_enabled` check.
+- [x] Added compliance edge tests (`test_rules_edge.py`) and migration smoke test (`tests/test_migrations.py`).
+- [x] Added go-live checklist doc (`docs/ops/go-live-sign-off.md`).
+
+### Still pending
+- Deploy and validate audit/risk/compliance/OMS/broker/master-orchestrator services on host.
+- Wire Prometheus scrape config and Grafana alert rules in infra deployment.
+- Regenerate and commit OpenAPI after host deployment verification.
+- Unskip/complete full integration suite for live Postgres-backed scenarios.

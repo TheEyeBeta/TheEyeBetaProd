@@ -10,6 +10,7 @@ import asyncpg
 import structlog
 from deps import DbConn, SettingsDep
 from fastapi import APIRouter, Query
+from lib.queries.data_quality import count_unacknowledged_critical_gaps
 from rbac import Role, require_role
 from settings import Settings
 
@@ -29,7 +30,25 @@ def _ensure_prelive_import(settings: Settings) -> None:
         sys.path.insert(0, root)
 
 
-async def run_prelive_checks(settings: Settings) -> PreliveResponse:
+async def _data_quality_gap_check(conn: asyncpg.Connection) -> PreliveCheckItem:
+    """Check for unacknowledged CRITICAL data-gap alerts."""
+    gap_count = await count_unacknowledged_critical_gaps(conn)
+    if gap_count == 0:
+        return PreliveCheckItem(
+            name="data_quality.no_critical_gaps",
+            status="pass",
+            detail="no unacknowledged CRITICAL gap alerts",
+            value=0,
+        )
+    return PreliveCheckItem(
+        name="data_quality.no_critical_gaps",
+        status="fail",
+        detail=f"{gap_count} unacknowledged CRITICAL gap alert(s)",
+        value=gap_count,
+    )
+
+
+async def run_prelive_checks(settings: Settings, conn: asyncpg.Connection) -> PreliveResponse:
     """Execute all prelive checks and return structured JSON."""
     _ensure_prelive_import(settings)
     from scripts.prelive_check import run_checks  # noqa: PLC0415
@@ -47,6 +66,7 @@ async def run_prelive_checks(settings: Settings) -> PreliveResponse:
                 value=None,
             ),
         )
+    checks.append(await _data_quality_gap_check(conn))
     fail_count = sum(1 for c in checks if c.status == "fail")
     overall = "pass" if fail_count == 0 else "fail"
     return PreliveResponse(
@@ -122,7 +142,7 @@ def register_prelive_routes() -> APIRouter:
     ) -> PreliveResponse:
         """Return prelive check results (cached or live)."""
         if run:
-            response = await run_prelive_checks(settings)
+            response = await run_prelive_checks(settings, conn)
             await cache_prelive_result(conn, response)
             log.info("admin_prelive_run", overall=response.overall, sub=user["sub"])
             return response
@@ -132,11 +152,12 @@ def register_prelive_routes() -> APIRouter:
             log.info("admin_prelive_cached", overall=cached.overall, sub=user["sub"])
             return cached
 
+        gap_check = await _data_quality_gap_check(conn)
         return PreliveResponse(
-            overall="stale",
+            overall="stale" if gap_check.status == "fail" else "stale",
             run_at=None,
             is_stale=True,
-            checks=[],
+            checks=[gap_check],
         )
 
     return router

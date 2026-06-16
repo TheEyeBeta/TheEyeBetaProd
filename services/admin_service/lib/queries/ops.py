@@ -240,6 +240,40 @@ async def fetch_prelive_last_result(conn: asyncpg.Connection) -> dict[str, Any]:
     }
 
 
+async def fetch_audit_chain_status(conn: asyncpg.Connection) -> dict[str, object]:
+    """Return latest audit chain verification row."""
+    try:
+        row = await conn.fetchrow(
+            """
+            SELECT verified_at, valid, entries_checked, error_message
+              FROM theeyebeta.audit_chain_status
+             ORDER BY verified_at DESC
+             LIMIT 1
+            """,
+        )
+    except asyncpg.UndefinedTableError:
+        return {
+            "last_verified_at": None,
+            "valid": None,
+            "entries_checked": 0,
+            "error_message": None,
+        }
+    if row is None:
+        return {
+            "last_verified_at": None,
+            "valid": None,
+            "entries_checked": 0,
+            "error_message": None,
+        }
+    verified = row["verified_at"]
+    return {
+        "last_verified_at": verified,
+        "valid": row["valid"],
+        "entries_checked": int(row["entries_checked"] or 0),
+        "error_message": row["error_message"],
+    }
+
+
 def compute_health(
     *,
     open_breakers: list[dict[str, Any]],

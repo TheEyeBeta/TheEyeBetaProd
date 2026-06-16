@@ -1,0 +1,15 @@
+[Unit]
+Description=TheEyeBeta worker heartbeat staleness monitor
+Wants=network-online.target postgresql.service
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=the-eye-beta
+Group=the-eye-beta
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.venv/bin/python scripts/heartbeat_monitor.py
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=theeye-heartbeat-monitor

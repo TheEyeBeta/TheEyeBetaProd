@@ -1,0 +1,10 @@
+[Unit]
+Description=Worker heartbeat monitor every 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+Unit=theeye-heartbeat-monitor.service
+
+[Install]
+WantedBy=timers.target

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from datetime import datetime
 from typing import Any
 
@@ -181,6 +182,33 @@ def register_audit_routes() -> APIRouter:
             has_more=next_cursor is not None,
         )
         return AuditLogPageResponse(entries=entries, limit=limit, next_cursor=next_cursor)
+
+    @router.get("/chain/verify", response_model=AuditVerifyResponse)
+    async def verify_audit_chain(
+        user: CurrentUser,
+        settings: SettingsDep,
+        conn: DbConn,
+    ) -> AuditVerifyResponse:
+        """Verify hash-chain for configured lookback window via audit-service."""
+        from datetime import UTC, datetime, timedelta
+
+        to_ts = datetime.now(tz=UTC)
+        from_ts = to_ts - timedelta(hours=settings.audit_verify_hours)
+        result = await call_audit_service_verify(settings, from_ts=from_ts, to_ts=to_ts)
+        with suppress(asyncpg.UndefinedTableError):
+            await conn.execute(
+                """
+                INSERT INTO theeyebeta.audit_chain_status
+                    (verified_at, valid, entries_checked, first_invalid_seq, error_message)
+                VALUES (now(), $1, $2, $3, $4)
+                """,
+                result.ok,
+                result.rows_checked,
+                result.mismatch_at_id,
+                None if result.ok else result.detail,
+            )
+        log.info("admin_audit_chain_verify", ok=result.ok, sub=user["sub"])
+        return result
 
     @router.get("/verify", response_model=AuditVerifyResponse)
     async def verify_audit_log(

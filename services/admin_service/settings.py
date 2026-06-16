@@ -59,6 +59,42 @@ class Settings(BaseSettings):
         default="http://127.0.0.1:7110",
         validation_alias="AUDIT_SERVICE_URL",
     )
+    risk_service_url: str = Field(
+        default="http://127.0.0.1:8007",
+        validation_alias="RISK_SERVICE_HTTP_URL",
+    )
+    compliance_service_url: str = Field(
+        default="http://127.0.0.1:8008",
+        validation_alias="COMPLIANCE_SERVICE_HTTP_URL",
+    )
+    oms_service_url: str = Field(
+        default="http://127.0.0.1:7080",
+        validation_alias="OMS_SERVICE_URL",
+    )
+    broker_adapter_url: str = Field(
+        default="http://127.0.0.1:7090",
+        validation_alias="BROKER_ADAPTER_URL",
+    )
+    max_position_size_usd: float = Field(
+        default=50000.0,
+        validation_alias="MAX_POSITION_SIZE_USD",
+    )
+    max_portfolio_concentration_pct: float = Field(
+        default=0.20,
+        validation_alias="MAX_PORTFOLIO_CONCENTRATION_PCT",
+    )
+    max_daily_loss_usd: float = Field(
+        default=5000.0,
+        validation_alias="MAX_DAILY_LOSS_USD",
+    )
+    var_confidence_level: float = Field(
+        default=0.99,
+        validation_alias="VAR_CONFIDENCE_LEVEL",
+    )
+    var_lookback_days: int = Field(
+        default=252,
+        validation_alias="VAR_LOOKBACK_DAYS",
+    )
     agent_runtime_url: str = Field(
         default="http://127.0.0.1:8004",
         validation_alias="AGENT_RUNTIME_URL",

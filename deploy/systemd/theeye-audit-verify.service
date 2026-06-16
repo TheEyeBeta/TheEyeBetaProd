@@ -1,0 +1,15 @@
+[Unit]
+Description=TheEyeBeta daily audit chain verification
+Wants=network-online.target theeye-audit-service.service
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=the-eye-beta
+Group=the-eye-beta
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.venv/bin/python scripts/audit_chain_verify.py
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=theeye-audit-verify

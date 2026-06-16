@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily audit chain verification at 03:00 UTC
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 UTC
+Persistent=true
+Unit=theeye-audit-verify.service
+
+[Install]
+WantedBy=timers.target

@@ -9,6 +9,7 @@ from deps import DbConn
 from fastapi import APIRouter
 from lib.queries.ops import (
     compute_health,
+    fetch_audit_chain_status,
     fetch_critical_alerts,
     fetch_last_worker_runs,
     fetch_llm_cost_mtd,
@@ -23,6 +24,7 @@ from rbac import Role, require_role
 from api.services import ALL_UNITS, _unit_to_entry
 from api.timers import fetch_timers_summary
 from zinc_schemas.admin_dto import (
+    AuditChainStatusSummary,
     CriticalAlertSummary,
     OpenBreakerSummary,
     OpsPulseResponse,
@@ -82,6 +84,7 @@ def register_ops_routes() -> APIRouter:
             prelive,
             timers,
             services,
+            audit_chain,
         ) = await asyncio.gather(
             fetch_open_breakers(conn),
             fetch_critical_alerts(conn),
@@ -93,7 +96,18 @@ def register_ops_routes() -> APIRouter:
             fetch_prelive_last_result(conn),
             fetch_timers_summary(),
             _services_summary(),
+            fetch_audit_chain_status(conn),
             return_exceptions=True,
+        )
+
+        audit_chain = _unwrap(
+            audit_chain,
+            {
+                "last_verified_at": None,
+                "valid": None,
+                "entries_checked": 0,
+                "error_message": None,
+            },
         )
 
         open_breakers = _unwrap(open_breakers, [])
@@ -131,6 +145,7 @@ def register_ops_routes() -> APIRouter:
             services_summary=services
             if isinstance(services, ServicesSummary)
             else ServicesSummary(**services),
+            audit_chain_status=AuditChainStatusSummary(**audit_chain),
         )
 
     return router

@@ -689,6 +689,17 @@ class ServicesSummary(BaseModel):
     down: int = 0
 
 
+class AuditChainStatusSummary(BaseModel):
+    """Latest scheduled audit chain verification."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    last_verified_at: datetime | None = None
+    valid: bool | None = None
+    entries_checked: int = 0
+    error_message: str | None = None
+
+
 class OpsPulseResponse(BaseModel):
     """``GET /admin/ops/pulse`` payload."""
 
@@ -705,6 +716,7 @@ class OpsPulseResponse(BaseModel):
     prelive_last_result: PreliveLastResult
     timers_summary: TimersSummary
     services_summary: ServicesSummary
+    audit_chain_status: AuditChainStatusSummary | None = None
 
 
 class WorkerRegistryEntry(BaseModel):

@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     port: int = Field(default=7090, validation_alias="BROKER_ADAPTER_PORT")
     nats_url: str = Field(default="nats://127.0.0.1:4222", validation_alias="NATS_URL")
     database_url: str = Field(default="", validation_alias="DATABASE_URL")
+    redis_url: str = Field(default="redis://127.0.0.1:6379/0", validation_alias="REDIS_OPS_URL")
     mode: BrokerMode = Field(default="paper", validation_alias="BROKER_MODE")
 
     def pg_dsn(self) -> str:

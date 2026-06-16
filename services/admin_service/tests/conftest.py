@@ -55,8 +55,65 @@ class _RecordingNats:
         return None
 
 
+class _MockRedis:
+    """In-memory Redis stub for integration tests."""
+
+    def __init__(self) -> None:
+        self._data: dict[str, str] = {}
+        self._sets: dict[str, set[str]] = {}
+
+    async def set(
+        self,
+        key: str,
+        value: str,
+        ex: int | None = None,  # noqa: ARG002
+        nx: bool = False,
+    ) -> bool | None:
+        if nx and key in self._data:
+            return False
+        self._data[key] = value
+        return True
+
+    async def get(self, key: str) -> str | None:
+        return self._data.get(key)
+
+    async def getdel(self, key: str) -> str | None:
+        return self._data.pop(key, None)
+
+    async def delete(self, *keys: str) -> int:
+        count = 0
+        for key in keys:
+            if key in self._data:
+                del self._data[key]
+                count += 1
+            if key in self._sets:
+                del self._sets[key]
+                count += 1
+        return count
+
+    async def sadd(self, key: str, member: str) -> int:
+        self._sets.setdefault(key, set()).add(member)
+        return 1
+
+    async def srem(self, key: str, member: str) -> int:
+        bucket = self._sets.get(key)
+        if bucket and member in bucket:
+            bucket.remove(member)
+            return 1
+        return 0
+
+    async def smembers(self, key: str) -> set[str]:
+        return set(self._sets.get(key, set()))
+
+    async def ping(self) -> bool:
+        return True
+
+    async def aclose(self) -> None:
+        return None
+
+
 async def _init_test_resources(settings: object) -> None:
-    """Start only asyncpg pool and mock NATS."""
+    """Start asyncpg pool, mock NATS, and in-memory Redis."""
     import deps  # noqa: PLC0415
 
     deps._pool = await asyncpg.create_pool(  # noqa: SLF001
@@ -66,8 +123,9 @@ async def _init_test_resources(settings: object) -> None:
         command_timeout=60,
     )
     deps._nats = _RecordingNats()  # noqa: SLF001
-    deps._redis = None  # noqa: SLF001
-    deps._redis_ops = None  # noqa: SLF001
+    mock_redis = _MockRedis()
+    deps._redis = mock_redis  # noqa: SLF001
+    deps._redis_ops = mock_redis  # noqa: SLF001
 
 
 async def _close_test_resources() -> None:

@@ -11,7 +11,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from broker_adapter_alpaca.adapter import AlpacaAdapter
 from broker_adapter_alpaca.consumer import ApprovedOrderConsumer
-from broker_adapter_alpaca.live_gate import LiveTradingNotApprovedError, assert_live_trading_allowed
+from broker_adapter_alpaca.live_gate import (
+    DataGapBlockError,
+    LiveTradingNotApprovedError,
+    TradingDisabledError,
+    assert_live_trading_allowed,
+    assert_order_submission_allowed,
+)
 from broker_adapter_alpaca.settings import Settings
 from broker_adapter_alpaca.streamer import TradeUpdateStreamer
 from zinc_schemas.broker_base import SubmitOrderRequest
@@ -99,8 +105,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=503, detail="Alpaca credentials not configured")
         if cfg.mode == "live":
             try:
-                await assert_live_trading_allowed(cfg.pg_dsn())
-            except LiveTradingNotApprovedError as exc:
+                await assert_order_submission_allowed(
+                    cfg.pg_dsn(),
+                    live_mode=True,
+                    redis_url=cfg.redis_url or None,
+                )
+            except (LiveTradingNotApprovedError, DataGapBlockError, TradingDisabledError) as exc:
+                raise HTTPException(status_code=403, detail=str(exc)) from exc
+        else:
+            try:
+                await assert_order_submission_allowed(cfg.pg_dsn(), live_mode=False)
+            except DataGapBlockError as exc:
                 raise HTTPException(status_code=403, detail=str(exc)) from exc
         order_id = body.order_id or body.symbol
         request = SubmitOrderRequest(

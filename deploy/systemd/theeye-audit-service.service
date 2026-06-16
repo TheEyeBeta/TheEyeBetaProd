@@ -1,0 +1,25 @@
+[Unit]
+Description=TheEyeBeta audit-service (NATS consumer + chain verify API)
+Wants=network-online.target nats.service postgresql.service
+After=network-online.target nats.service postgresql.service
+
+[Service]
+Type=simple
+User=the-eye-beta
+Group=the-eye-beta
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.venv/bin/python -m audit_service.main
+Environment=PYTHONPATH=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/services/audit_service/src
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=theeye-audit-service
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStopSec=30
+OnFailure=theeye-notify-failure@%n.service
+
+[Install]
+WantedBy=multi-user.target
