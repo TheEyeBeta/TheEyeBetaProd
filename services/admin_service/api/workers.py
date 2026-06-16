@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import uuid
 from datetime import UTC, date, datetime
 
 import asyncpg
 import structlog
 from audit_log import write_audit_log
-from deps import DbConn, SettingsDep
+from deps import DbConn, RedisOpsDep, SettingsDep
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from lib.worker_registry import (
+    WORKER_ALLOWLIST,
     WORKER_CLASS_NAMES,
-    WORKER_MODULES,
+    resolve_worker_module,
 )
 from rbac import Role, require_role
+from redis.asyncio import Redis
 from settings import Settings
 from slowapi import Limiter
 
@@ -31,27 +35,27 @@ log = structlog.get_logger()
 
 router = APIRouter(prefix="/workers", tags=["workers"])
 
+_WORKER_LOCK_PREFIX = "worker:run_lock:"
+
 
 def _actor(user: dict[str, str]) -> str:
     return f"admin-api:{user['sub']}"
 
 
-def _resolve_worker(name: str) -> tuple[str, str, str]:
-    """Map API worker name to alias, module, and DB class name."""
-    if name in WORKER_MODULES:
-        alias = name
-    else:
-        alias = None
-        for key, class_name in WORKER_CLASS_NAMES.items():
-            if class_name == name or key == name:
-                alias = key
-                break
-    if alias is None:
+async def _acquire_worker_lock(redis: Redis, name: str, lock_token: str) -> None:
+    """Acquire distributed lock or raise 409 if worker already running."""
+    lock_key = f"{_WORKER_LOCK_PREFIX}{name}"
+    acquired = await redis.set(lock_key, lock_token, ex=3600, nx=True)
+    if not acquired:
+        existing = await redis.get(lock_key)
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Unknown worker {name!r}",
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "worker_already_running",
+                "message": f"Worker {name} is already running",
+                "run_id": existing,
+            },
         )
-    return alias, WORKER_MODULES[alias], WORKER_CLASS_NAMES[alias]
 
 
 async def fetch_workers_registry(conn: asyncpg.Connection) -> list[WorkerRegistryEntry]:
@@ -95,7 +99,8 @@ async def fetch_workers_registry(conn: asyncpg.Connection) -> list[WorkerRegistr
     entries: list[WorkerRegistryEntry] = []
     seen: set[str] = set()
 
-    for alias, class_name in WORKER_CLASS_NAMES.items():
+    for alias in WORKER_ALLOWLIST:
+        class_name = WORKER_CLASS_NAMES[alias]
         seen.add(class_name)
         hb = hb_map.get(class_name)
         run = run_map.get(class_name)
@@ -201,8 +206,14 @@ async def trigger_worker_run(
     settings: Settings,
     conn: asyncpg.Connection,
     actor: str,
+    redis: Redis,
+    correlation_id: str | None = None,
 ) -> WorkerRunResponse:
     """Spawn a worker subprocess and record audit attribution."""
+    lock_token = str(uuid.uuid4())
+    lock_key = f"{_WORKER_LOCK_PREFIX}{alias}"
+    await _acquire_worker_lock(redis, alias, lock_token)
+
     repo_root = settings.repo_root_path()
     cmd = ["uv", "run", "python", "-m", module, "--run-type", "manual"]
     if body.dry_run:
@@ -214,14 +225,35 @@ async def trigger_worker_run(
         cmd.extend(["--date", str(trade_date)])
 
     triggered_at = datetime.now(tz=UTC)
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        cwd=str(repo_root),
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    _, stderr = await proc.communicate()
-    exit_code = proc.returncode
+    stdout = b""
+    stderr = b""
+    env = os.environ.copy()
+    if correlation_id:
+        env["CORRELATION_ID"] = correlation_id
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            cwd=str(repo_root),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(),
+                timeout=settings.worker_run_timeout_seconds,
+            )
+        except TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail=f"Worker exceeded {settings.worker_run_timeout_seconds}s timeout",
+            ) from None
+        exit_code = proc.returncode
+    finally:
+        await redis.delete(lock_key)
 
     run_row = await conn.fetchrow(
         """
@@ -233,7 +265,7 @@ async def trigger_worker_run(
         """,
         class_name,
     )
-    run_id = int(run_row["run_id"]) if run_row else None
+    db_run_id = int(run_row["run_id"]) if run_row else None
     run_status = str(run_row["status"]) if run_row else ("FAILED" if exit_code else "UNKNOWN")
 
     audit_payload = {
@@ -245,8 +277,9 @@ async def trigger_worker_run(
         "args": body.args,
         "reason": body.reason,
         "triggered_at": triggered_at.isoformat(),
-        "run_id": run_id,
+        "run_id": db_run_id,
         "exit_code": exit_code,
+        "stdout_tail": stdout.decode(errors="replace")[-500:] if stdout else None,
         "stderr_tail": stderr.decode(errors="replace")[-500:] if stderr else None,
         "override": False,
     }
@@ -264,15 +297,17 @@ async def trigger_worker_run(
             "worker_manual_run_failed",
             worker=class_name,
             exit_code=exit_code,
-            run_id=run_id,
+            run_id=db_run_id,
         )
 
     return WorkerRunResponse(
         worker_name=class_name,
         triggered_at=triggered_at,
-        run_id=run_id,
+        run_id=db_run_id,
         exit_code=exit_code,
         status=run_status,
+        stdout_tail=stdout.decode(errors="replace")[-2000:] if stdout else None,
+        stderr_tail=stderr.decode(errors="replace")[-2000:] if stderr else None,
     )
 
 
@@ -328,16 +363,18 @@ def register_workers_routes(limiter: Limiter) -> APIRouter:
     )
     @limiter.limit("10/minute")
     async def run_worker(
-        request: Request,  # noqa: ARG001
+        request: Request,
         name: str,
         body: WorkerRunRequest,
         conn: DbConn,
         settings: SettingsDep,
+        redis: RedisOpsDep,
         user: dict[str, str] = require_role(Role.OPERATOR),
     ) -> WorkerRunResponse:
         """Trigger a manual worker run with durable audit attribution."""
-        alias, module, class_name = _resolve_worker(name)
+        alias, module, class_name = resolve_worker_module(name)
         actor = _actor(user)
+        correlation_id = getattr(request.state, "correlation_id", None)
         result = await trigger_worker_run(
             alias=alias,
             module=module,
@@ -346,6 +383,8 @@ def register_workers_routes(limiter: Limiter) -> APIRouter:
             settings=settings,
             conn=conn,
             actor=actor,
+            redis=redis,
+            correlation_id=correlation_id,
         )
         log.info(
             "admin_worker_triggered",

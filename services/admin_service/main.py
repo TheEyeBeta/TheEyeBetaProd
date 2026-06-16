@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
 import structlog
 import uvicorn
@@ -17,9 +18,8 @@ from api.backtest import register_backtest_routes
 from api.backtest import router as backtest_router
 from api.costs import register_costs_routes
 from api.costs import router as costs_router
-from api.events import register_events_routes
+from api.events import register_events_routes, start_nats_event_bridge
 from api.events import router as events_router
-from api.events import start_nats_event_bridge
 from api.guard import register_guard_routes
 from api.guard import router as guard_router
 from api.ops import register_ops_routes
@@ -49,7 +49,7 @@ from auth import router as auth_router
 from deps import bind_app_state, close_resources, init_resources
 from dotenv import load_dotenv
 from errors import register_error_handlers
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from lib.event_broadcaster import EventBroadcaster
 from settings import Settings, get_settings
@@ -107,13 +107,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="admin-service",
-        version="0.2.0",
+        version="0.3.0",
         lifespan=lifespan,
     )
     register_error_handlers(app)
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)
+
+    @app.middleware("http")
+    async def correlation_id_middleware(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        """Propagate X-Request-ID through request lifecycle."""
+        correlation_id = request.headers.get("X-Request-ID") or str(uuid4())
+        request.state.correlation_id = correlation_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = correlation_id
+        return response
 
     app.add_middleware(
         CORSMiddleware,

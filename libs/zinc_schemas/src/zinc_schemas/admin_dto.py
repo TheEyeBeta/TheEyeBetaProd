@@ -780,6 +780,8 @@ class WorkerRunResponse(BaseModel):
     run_id: int | None = None
     exit_code: int | None = None
     status: str
+    stdout_tail: str | None = None
+    stderr_tail: str | None = None
 
 
 class TraskFailureSummary(BaseModel):

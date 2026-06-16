@@ -125,6 +125,17 @@ class Settings(BaseSettings):
     refresh_cookie_name: str = "admin_refresh_token"
     refresh_cookie_path: str = "/admin/auth"
 
+    worker_run_timeout_seconds: int = Field(
+        default=300,
+        validation_alias="ADMIN_WORKER_RUN_TIMEOUT_SECONDS",
+        ge=30,
+        le=3600,
+    )
+    mfa_token_minutes: int = Field(default=5, validation_alias="ADMIN_MFA_TOKEN_MINUTES")
+    mfa_max_failed_attempts: int = Field(
+        default=5, validation_alias="ADMIN_MFA_MAX_FAILED_ATTEMPTS"
+    )
+
     def jwt_private_pem(self) -> str:
         """Return PEM private key for RS256 signing."""
         if self.jwt_private_key_path:

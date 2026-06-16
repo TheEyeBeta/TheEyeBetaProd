@@ -8,9 +8,10 @@ from datetime import UTC, datetime
 
 import structlog
 from audit_log import write_audit_log
-from deps import DbConn
+from deps import DbConn, RedisOpsDep
 from fastapi import APIRouter, HTTPException, Request, status
 from rbac import Role, require_role
+from redis.asyncio import Redis
 from slowapi import Limiter
 
 from zinc_schemas.admin_dto import (
@@ -24,7 +25,22 @@ log = structlog.get_logger()
 
 router = APIRouter(prefix="/timers", tags=["timers"])
 
-# Whitelisted systemd timer units (12 production timers).
+# Whitelisted systemd timer short names (12 production timers).
+TIMER_ALLOWLIST: set[str] = {
+    "backup",
+    "gap-sentinel",
+    "news-ingest",
+    "risk-metrics-refresh",
+    "market-cap",
+    "macro",
+    "massive-ingest",
+    "macro-refresh",
+    "daily-pipeline",
+    "sector",
+    "supabase-sync",
+    "intraday-ingest",
+}
+
 WHITELISTED_TIMERS: dict[str, str] = {
     "macro": "theeye-macro.timer",
     "massive-ingest": "theeye-massive-ingest.timer",
@@ -120,8 +136,22 @@ async def fetch_timers_summary() -> dict[str, int]:
     return {"active": active, "inactive": inactive}
 
 
+_TIMER_LOCK_PREFIX = "timer:run_lock:"
+
+
 def _actor(user: dict[str, str]) -> str:
     return f"admin-api:{user['sub']}"
+
+
+async def _acquire_timer_lock(redis: Redis, name: str) -> None:
+    """Prevent concurrent manual timer triggers."""
+    lock_key = f"{_TIMER_LOCK_PREFIX}{name}"
+    acquired = await redis.set(lock_key, "1", ex=3600, nx=True)
+    if not acquired:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "timer_already_running", "message": f"Timer {name} is busy"},
+        )
 
 
 def register_timers_routes(limiter: Limiter) -> APIRouter:
@@ -155,31 +185,37 @@ def register_timers_routes(limiter: Limiter) -> APIRouter:
         name: str,
         body: TimerTriggerRequest,
         conn: DbConn,
+        redis: RedisOpsDep,
         user: dict[str, str] = require_role(Role.OPERATOR),
     ) -> TimerTriggerResponse:
         """Manually fire a whitelisted systemd timer."""
-        unit = WHITELISTED_TIMERS.get(name)
-        if unit is None:
+        if name not in TIMER_ALLOWLIST:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Timer {name!r} is not whitelisted",
             )
+        unit = WHITELISTED_TIMERS[name]
+        lock_key = f"{_TIMER_LOCK_PREFIX}{name}"
+        await _acquire_timer_lock(redis, name)
 
         triggered_at = datetime.now(tz=UTC)
-        proc = await asyncio.create_subprocess_exec(
-            "systemctl",
-            "start",
-            unit,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, stderr = await proc.communicate()
-        exit_code = proc.returncode or 0
-        if exit_code != 0:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"systemctl start failed: {stderr.decode().strip()}",
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "systemctl",
+                "start",
+                unit,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
+            _, stderr = await proc.communicate()
+            exit_code = proc.returncode or 0
+            if exit_code != 0:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"systemctl start failed: {stderr.decode().strip()}",
+                )
+        finally:
+            await redis.delete(lock_key)
 
         actor = _actor(user)
         await write_audit_log(

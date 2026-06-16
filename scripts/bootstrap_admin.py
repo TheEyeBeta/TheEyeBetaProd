@@ -111,8 +111,35 @@ async def create_admin_user(
         await conn.close()
 
 
+def _warn_tailscale_dns() -> None:
+    """Warn if theeyebeta-mac does not resolve to a Tailscale CGNAT address."""
+    import socket
+
+    try:
+        results = socket.getaddrinfo("theeyebeta-mac", None)
+        addrs = {item[4][0] for item in results}
+    except socket.gaierror:
+        log.warning("bootstrap_dns_check_skipped", host="theeyebeta-mac")
+        return
+    for addr in addrs:
+        if addr.startswith("100."):
+            return
+    log.warning(
+        "bootstrap_wrong_dns",
+        host="theeyebeta-mac",
+        resolved=sorted(addrs),
+        hint="use the-eye-beta-server.taild51795.ts.net — see docs/ops/connectivity.md",
+    )
+    print(
+        "WARNING: theeyebeta-mac does not resolve to Tailscale (100.x.x.x). "
+        "Use the-eye-beta-server.taild51795.ts.net for admin API.",
+        file=sys.stderr,
+    )
+
+
 def main() -> None:
     """CLI entry point."""
+    _warn_tailscale_dns()
     parser = argparse.ArgumentParser(description="Bootstrap admin-service RBAC user")
     parser.add_argument("--username", required=True)
     parser.add_argument("--email", default=None)

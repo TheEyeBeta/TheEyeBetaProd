@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from datetime import date, datetime
 from decimal import Decimal
@@ -31,7 +32,27 @@ log = structlog.get_logger()
 router = APIRouter(prefix="/sql", tags=["sql"])
 
 _QUERY_TIMEOUT_SECONDS = 30.0
-_QUERY_MAX_ROWS = 5000
+_QUERY_MAX_ROWS = 1000
+
+_BLOCKED_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
+    re.compile(p, re.IGNORECASE)
+    for p in (
+        r"\bDROP\b",
+        r"\bTRUNCATE\b",
+        r"\bALTER\b",
+        r"\bCREATE\b",
+        r"\bDELETE\s+FROM\s+audit",
+        r"\bUPDATE\s+audit",
+        r"\bDELETE\s+FROM\s+admin_users",
+        r"\bUPDATE\s+admin_users",
+        r"\bpg_read_file\b",
+        r"\bpg_ls_dir\b",
+        r"\bCOPY\b",
+        r"\bcreate_extension\b",
+        r"--.*secret",
+        r"--.*password",
+    )
+)
 
 # DML/DDL keywords forbidden in /query (anything that mutates state).
 _FORBIDDEN_QUERY_KEYWORDS: frozenset[str] = frozenset(
@@ -61,11 +82,30 @@ _PROTECTED_TABLES: frozenset[str] = frozenset(
         "audit_log",
         "audit_checkpoints",
         "proposals",
+        "admin_users",
     },
 )
 
 
+def _check_blocked_patterns(statement: str) -> None:
+    """Reject dangerous SQL patterns before execution."""
+    for pattern in _BLOCKED_PATTERNS:
+        if pattern.search(statement):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Blocked SQL pattern: {pattern.pattern}",
+            )
+
+
+async def _apply_sql_guardrails(conn: asyncpg.Connection) -> None:
+    """Set per-statement Postgres limits for SQL console."""
+    await conn.execute("SET LOCAL statement_timeout = '30s'")
+    await conn.execute("SET LOCAL work_mem = '16MB'")
+
+
 def _actor(user: dict[str, str]) -> str:
+    """Build audit actor string from JWT subject."""
+    return f"admin-api:{user['sub']}"
     """Build audit actor string from JWT subject."""
     return f"admin-api:{user['sub']}"
 
@@ -102,6 +142,7 @@ def _statement_keywords(stmt: Statement) -> set[str]:
 
 def _validate_select_only(statement: str) -> Statement:
     """Ensure ``statement`` is a single read-only SELECT/WITH expression."""
+    _check_blocked_patterns(statement)
     stmt = _parse_one(statement)
     stmt_type = (stmt.get_type() or "").upper()
     if stmt_type not in {"SELECT", "UNKNOWN"}:
@@ -133,6 +174,7 @@ def _validate_select_only(statement: str) -> Statement:
 
 def _validate_execute(statement: str) -> Statement:
     """Reject empty / multi-statement / protected-table writes."""
+    _check_blocked_patterns(statement)
     stmt = _parse_one(statement)
     lowered = statement.lower()
     for table in _PROTECTED_TABLES:
@@ -194,10 +236,12 @@ async def run_select_statement(
     params = list(parameters or [])
     started = time.perf_counter()
     try:
-        rows = await asyncio.wait_for(
-            conn.fetch(statement, *params),
-            timeout=_QUERY_TIMEOUT_SECONDS,
-        )
+        async with conn.transaction():
+            await _apply_sql_guardrails(conn)
+            rows = await asyncio.wait_for(
+                conn.fetch(statement, *params),
+                timeout=_QUERY_TIMEOUT_SECONDS,
+            )
     except TimeoutError as exc:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
@@ -253,17 +297,24 @@ async def run_write_statement(
     started = time.perf_counter()
     try:
         async with conn.transaction():
+            await _apply_sql_guardrails(conn)
             command_tag = await asyncio.wait_for(
                 conn.execute(statement, *params),
                 timeout=_QUERY_TIMEOUT_SECONDS,
             )
+            elapsed_ms = int((time.perf_counter() - started) * 1000)
+            rows_affected = _command_tag_rows(command_tag)
             await write_audit_log(
                 conn,
                 actor=actor,
                 action="execute.sql",
                 entity_type="sql",
                 entity_id=idempotency_key,
-                payload=audit_payload,
+                payload={
+                    **audit_payload,
+                    "elapsed_ms": elapsed_ms,
+                    "rows_affected": rows_affected,
+                },
             )
     except TimeoutError as exc:
         raise HTTPException(

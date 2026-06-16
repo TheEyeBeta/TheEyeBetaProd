@@ -1,0 +1,26 @@
+{
+  "acls": [
+    {
+      "action": "accept",
+      "src": ["tag:operator"],
+      "dst": ["tag:server:7200", "tag:server:7000", "tag:server:5432", "tag:server:22"]
+    },
+    {
+      "action": "reject",
+      "src": ["tag:server"],
+      "dst": ["tag:server:*"]
+    },
+    {
+      "action": "accept",
+      "src": ["autogroup:members"],
+      "dst": ["autogroup:internet:*"]
+    }
+  ],
+  "tagOwners": {
+    "tag:server": ["autogroup:admin"],
+    "tag:operator": ["autogroup:admin"]
+  },
+  "hosts": {
+    "the-eye-beta-server": "100.77.87.18"
+  }
+}

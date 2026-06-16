@@ -49,6 +49,14 @@ async def _services_summary() -> ServicesSummary:
     return ServicesSummary(healthy=healthy, degraded=0, down=down)
 
 
+def _unwrap(result: object, fallback: object) -> object:
+    """Return result or fallback if a gather task raised."""
+    if isinstance(result, BaseException):
+        log.warning("ops_pulse_partial_failure", error=str(result))
+        return fallback
+    return result
+
+
 def register_ops_routes() -> APIRouter:
     """Attach ops pulse handler."""
 
@@ -63,16 +71,44 @@ def register_ops_routes() -> APIRouter:
         user: dict[str, str] = require_role(Role.READ_ONLY),
     ) -> OpsPulseResponse:
         """Return real-time ops aggregation from worker/trask/alert tables."""
-        open_breakers = await fetch_open_breakers(conn)
-        critical_alerts = await fetch_critical_alerts(conn)
-        last_runs = await fetch_last_worker_runs(conn)
-        stale = await fetch_stale_heartbeats(conn)
-        freshness = await fetch_pipeline_freshness(conn)
-        pending = await fetch_pending_orders_count(conn)
-        llm_cost = await fetch_llm_cost_mtd(conn)
-        prelive = await fetch_prelive_last_result(conn)
-        timers = await fetch_timers_summary()
-        services = await _services_summary()
+        (
+            open_breakers,
+            critical_alerts,
+            last_runs,
+            stale,
+            freshness,
+            pending,
+            llm_cost,
+            prelive,
+            timers,
+            services,
+        ) = await asyncio.gather(
+            fetch_open_breakers(conn),
+            fetch_critical_alerts(conn),
+            fetch_last_worker_runs(conn),
+            fetch_stale_heartbeats(conn),
+            fetch_pipeline_freshness(conn),
+            fetch_pending_orders_count(conn),
+            fetch_llm_cost_mtd(conn),
+            fetch_prelive_last_result(conn),
+            fetch_timers_summary(),
+            _services_summary(),
+            return_exceptions=True,
+        )
+
+        open_breakers = _unwrap(open_breakers, [])
+        critical_alerts = _unwrap(critical_alerts, [])
+        last_runs = _unwrap(last_runs, [])
+        stale = _unwrap(stale, [])
+        freshness = _unwrap(freshness, {})
+        pending = _unwrap(pending, 0)
+        llm_cost = _unwrap(llm_cost, 0.0)
+        prelive = _unwrap(
+            prelive,
+            {"passed": False, "run_at": None, "checks_passed": 0, "checks_failed": 0},
+        )
+        timers = _unwrap(timers, {"active": 0, "inactive": 0})
+        services = _unwrap(services, ServicesSummary(healthy=0, degraded=0, down=0))
 
         health = compute_health(
             open_breakers=open_breakers,
@@ -88,11 +124,13 @@ def register_ops_routes() -> APIRouter:
             last_worker_runs=[WorkerRunSummary(**row) for row in last_runs],
             stale_heartbeats=[StaleHeartbeatSummary(**row) for row in stale],
             pipeline_freshness=PipelineFreshness(**freshness),
-            pending_orders_count=pending,
-            llm_cost_mtd_usd=llm_cost,
+            pending_orders_count=int(pending),
+            llm_cost_mtd_usd=float(llm_cost),
             prelive_last_result=PreliveLastResult(**prelive),
             timers_summary=TimersSummary(**timers),
-            services_summary=services,
+            services_summary=services
+            if isinstance(services, ServicesSummary)
+            else ServicesSummary(**services),
         )
 
     return router
