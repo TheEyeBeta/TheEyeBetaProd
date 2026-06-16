@@ -46,7 +46,7 @@ TEST(TaAdxTest, SingleBarReturnsNan) {
 }
 
 TEST(TaAdxTest, RandomBarsAdxBoundedZeroToOneHundred) {
-    std::mt19937_64 rng(0xADX123ULL);
+    std::mt19937_64 rng(0xAD123ULL);
     std::uniform_real_distribution<double> price(20.0, 80.0);
 
     std::vector<zinc::ta::Bar> bars(120);

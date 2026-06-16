@@ -28,7 +28,7 @@ TEST(MaxDrawdownTest, HappyPathHandComputed) {
 }
 
 TEST(MaxDrawdownTest, EmptyAndInvalidInputReturnsNan) {
-    EXPECT_TRUE(IsNan(zinc::risk::max_drawdown(std::span<const double>{}));
+    EXPECT_TRUE(IsNan(zinc::risk::max_drawdown(std::span<const double>{})));
     const double non_positive[] = {100.0, 0.0, 50.0};
     EXPECT_TRUE(IsNan(zinc::risk::max_drawdown(non_positive)));
 }

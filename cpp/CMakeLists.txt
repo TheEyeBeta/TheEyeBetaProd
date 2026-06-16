@@ -15,13 +15,14 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 find_package(benchmark CONFIG REQUIRED)
 find_package(Arrow CONFIG REQUIRED)
-find_package(Parquet CONFIG REQUIRED)
 find_package(protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(QuantLib CONFIG REQUIRED)
+find_package(Python COMPONENTS Interpreter Development REQUIRED)
 find_package(nanobind CONFIG REQUIRED)
 
 add_library(zinc STATIC)
+set_target_properties(zinc PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_sources(
     zinc
     PRIVATE
@@ -67,7 +68,6 @@ target_link_libraries(
         protobuf::libprotobuf
         gRPC::grpc++
         QuantLib::QuantLib
-        nanobind::nanobind
 )
 # GTest and benchmark are resolved for tests/ and bench/ subdirectories.
 

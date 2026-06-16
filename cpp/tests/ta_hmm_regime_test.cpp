@@ -74,9 +74,9 @@ TEST(TaHmmRegimeTest, HappyPathRecoversSyntheticRegimesAboveEightyFivePercent) {
 }
 
 TEST(TaHmmRegimeTest, EmptyAndInvalidInputReturnsEmpty) {
-    EXPECT_TRUE(zinc::ta::hmm_regime({}, 2).states.empty());
-    EXPECT_TRUE(zinc::ta::hmm_regime({1.0, 2.0}, 2).states.empty());
-    EXPECT_TRUE(zinc::ta::hmm_regime({1.0, 2.0, 3.0}, 3).states.empty());
+    EXPECT_TRUE(zinc::ta::hmm_regime(std::vector<double>{}, 2).states.empty());
+    EXPECT_TRUE(zinc::ta::hmm_regime(std::vector<double>{1.0, 2.0}, 2).states.empty());
+    EXPECT_TRUE(zinc::ta::hmm_regime(std::vector<double>{1.0, 2.0, 3.0}, 3).states.empty());
 }
 
 TEST(TaHmmRegimeTest, SingleRegimeClusterStillReturnsStates) {

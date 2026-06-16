@@ -15,8 +15,8 @@
 namespace {
 
 constexpr int kPeriod = 14;
-const std::vector<zinc::ta::Bar> kBars = zinc::bench::make_ohlc_bars(1'000, 0xTA1KBAR);
-const std::vector<double> kObservations = zinc::bench::make_returns(500, 0xTA500);
+const std::vector<zinc::ta::Bar> kBars = zinc::bench::make_ohlc_bars(1'000, 0x1A1BA2ULL);
+const std::vector<double> kObservations = zinc::bench::make_returns(500, 0xA500ULL);
 
 }  // namespace
 

@@ -33,7 +33,7 @@ TransitionResult transition_order(zinc::oms::Order& order, const zinc::oms::Even
     const zinc::oms::expected<zinc::oms::Order, zinc::oms::TransitionError> result =
         zinc::oms::StateMachine::transition(order, event, fill_quantity);
     if (result.has_value()) {
-        return TransitionResult{.ok = true, .order = *result, .error = {}};
+        return TransitionResult{.ok = true, .order = result.value(), .error = {}};
     }
     return TransitionResult{.ok = false, .order = order, .error = result.error()};
 }

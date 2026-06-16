@@ -66,7 +66,7 @@ TEST(CorrelationMatrixTest, RandomMatrixIsSymmetricWithUnitDiagonal) {
     }
 
     const Eigen::MatrixXd correlation = zinc::risk::correlation_matrix(data);
-    EXPECT_NEAR(correlation, correlation.transpose(), 1e-12);
+    EXPECT_NEAR((correlation - correlation.transpose()).norm(), 0.0, 1e-12);
     for (Eigen::Index index = 0; index < correlation.rows(); ++index) {
         EXPECT_NEAR(correlation(index, index), 1.0, 1e-12);
         EXPECT_GE(correlation(index, (index + 1) % correlation.cols()), -1.0 - 1e-12);

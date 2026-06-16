@@ -20,7 +20,7 @@ zinc::oms::Order make_order(const int64_t quantity = 100) {
 void expect_success(const zinc::oms::expected<zinc::oms::Order, zinc::oms::TransitionError>& result,
                     const zinc::oms::OrderStatus expected_status) {
     ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->status, expected_status);
+    EXPECT_EQ(result.value().status, expected_status);
 }
 
 void expect_failure(const zinc::oms::expected<zinc::oms::Order, zinc::oms::TransitionError>& result,
@@ -160,6 +160,6 @@ TEST(OmsStateMachineTest, NumericalStabilityAgainstReferenceLiteral) {
         order, zinc::oms::Event::PartialFill, kReferenceFilledQuantity);
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(order.filled_quantity, kReferenceFilledQuantity);
-    EXPECT_EQ(result->filled_quantity, kReferenceFilledQuantity);
+    EXPECT_EQ(result.value().filled_quantity, kReferenceFilledQuantity);
     EXPECT_EQ(order.status, zinc::oms::OrderStatus::PartiallyFilled);
 }

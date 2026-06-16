@@ -4,7 +4,8 @@ enable_testing()
 
 function(zinc_add_risk_test test_name)
     add_executable(${test_name} ${test_name}.cpp)
-    target_link_libraries(${test_name} PRIVATE zinc GTest::gtest_main)
+    target_link_libraries(${test_name} PRIVATE GTest::gtest_main zinc)
+    target_link_options(${test_name} PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wl,--as-needed>)
     target_compile_options(
         ${test_name}
         PRIVATE
@@ -21,7 +22,8 @@ zinc_add_risk_test(risk_correlation_matrix_test)
 
 function(zinc_add_ta_test test_name)
     add_executable(${test_name} ${test_name}.cpp)
-    target_link_libraries(${test_name} PRIVATE zinc GTest::gtest_main)
+    target_link_libraries(${test_name} PRIVATE GTest::gtest_main zinc)
+    target_link_options(${test_name} PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wl,--as-needed>)
     target_compile_options(
         ${test_name}
         PRIVATE
@@ -39,7 +41,8 @@ zinc_add_ta_test(ta_hmm_regime_test)
 
 function(zinc_add_opt_test test_name)
     add_executable(${test_name} ${test_name}.cpp)
-    target_link_libraries(${test_name} PRIVATE zinc GTest::gtest_main)
+    target_link_libraries(${test_name} PRIVATE GTest::gtest_main zinc)
+    target_link_options(${test_name} PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wl,--as-needed>)
     target_compile_options(
         ${test_name}
         PRIVATE
@@ -55,7 +58,8 @@ zinc_add_opt_test(opt_hrp_test)
 
 function(zinc_add_bt_test test_name)
     add_executable(${test_name} ${test_name}.cpp)
-    target_link_libraries(${test_name} PRIVATE zinc GTest::gtest_main)
+    target_link_libraries(${test_name} PRIVATE GTest::gtest_main zinc)
+    target_link_options(${test_name} PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wl,--as-needed>)
     target_compile_options(
         ${test_name}
         PRIVATE
@@ -69,7 +73,8 @@ zinc_add_bt_test(bt_engine_test)
 
 function(zinc_add_oms_test test_name)
     add_executable(${test_name} ${test_name}.cpp)
-    target_link_libraries(${test_name} PRIVATE zinc GTest::gtest_main)
+    target_link_libraries(${test_name} PRIVATE GTest::gtest_main zinc)
+    target_link_options(${test_name} PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wl,--as-needed>)
     target_compile_options(
         ${test_name}
         PRIVATE

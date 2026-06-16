@@ -130,8 +130,10 @@ NB_MODULE(_zinc_bt, module) {
     nb::class_<zinc::bt::SlippageModel>(
         module, "SlippageModel",
         "Slippage as a function of ATR and participation (trade_size / ADV).")
-        .def(
-            nb::init([](nb::object formula) { return make_slippage_model(formula); }),
+        .def("__init__",
+            [](zinc::bt::SlippageModel* self, nb::object formula) {
+                new (self) zinc::bt::SlippageModel(make_slippage_model(formula));
+            },
             nb::arg("formula") = nb::none(),
             "Construct a model with an optional custom formula(atr, participation).");
 

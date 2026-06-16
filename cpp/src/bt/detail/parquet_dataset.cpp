@@ -52,7 +52,7 @@ LoadedDataset load_parquet_dataset(const std::filesystem::path& parquet_path,
     }
     std::shared_ptr<arrow::io::ReadableFile> input = *input_result;
 
-    const arrow::Result<std::unique_ptr<parquet::arrow::FileReader>> reader_result =
+    arrow::Result<std::unique_ptr<parquet::arrow::FileReader>> reader_result =
         parquet::arrow::OpenFile(input, pool);
     if (!reader_result.ok()) {
         return dataset;

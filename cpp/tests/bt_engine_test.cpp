@@ -24,8 +24,8 @@ constexpr double kGrowthPerDay = 1.0001;
 constexpr int kBuyHoldDays = 100;
 constexpr double kReferenceTotalReturn = 0.009950330903168;  // 1.0001^99 - 1
 
-SlippageModel ZeroSlippage() {
-    return SlippageModel([](const double, const double) { return 0.0; });
+zinc::bt::SlippageModel ZeroSlippage() {
+    return zinc::bt::SlippageModel([](const double, const double) { return 0.0; });
 }
 
 std::filesystem::path write_buy_hold_fixture() {

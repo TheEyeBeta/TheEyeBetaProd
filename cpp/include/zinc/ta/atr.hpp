@@ -28,7 +28,7 @@ namespace zinc::ta {
  *
  * @example
  * @code
- * const std::vector<Bar> bars = /* ... */;
+ * const std::vector<Bar> bars = ...;  // populate with OHLC data
  * const auto atr_values = zinc::ta::atr(bars, 14);
  * @endcode
  */

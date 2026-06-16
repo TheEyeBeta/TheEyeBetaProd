@@ -5,6 +5,7 @@
 
 #include "zinc/ta/adx.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <span>
