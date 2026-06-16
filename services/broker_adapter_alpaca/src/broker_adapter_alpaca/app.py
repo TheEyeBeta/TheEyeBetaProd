@@ -34,6 +34,7 @@ class MarketOrderBody(BaseModel):
     symbol: str
     qty: float = Field(gt=0)
     side: str = "buy"
+    account: str = "zinc"  # "zinc" | "nyse" | "nasdaq"
 
 
 async def _enforce_startup_gates(cfg: Settings) -> None:
@@ -85,18 +86,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         }
 
     @app.get("/v1/positions")
-    async def list_positions() -> dict[str, object]:
-        """List Alpaca positions for reconciliation."""
+    async def list_positions(account: str = "zinc") -> dict[str, object]:
+        """List Alpaca positions for one sub-account (?account=zinc|nyse|nasdaq)."""
         if not cfg.credentials_configured():
             raise HTTPException(status_code=503, detail="Alpaca credentials not configured")
-        return {"positions": adapter.list_positions()}
+        return {"account": account, "positions": adapter.list_positions(account)}
+
+    @app.get("/v1/positions/all")
+    async def list_all_positions() -> dict[str, object]:
+        """List Alpaca positions across all three sub-accounts."""
+        if not cfg.credentials_configured():
+            raise HTTPException(status_code=503, detail="Alpaca credentials not configured")
+        return {"positions": adapter.list_all_positions()}
 
     @app.get("/v1/orders")
-    async def list_orders() -> dict[str, object]:
-        """List recent Alpaca orders for reconciliation."""
+    async def list_orders(account: str = "zinc") -> dict[str, object]:
+        """List recent Alpaca orders for one sub-account (?account=zinc|nyse|nasdaq)."""
         if not cfg.credentials_configured():
             raise HTTPException(status_code=503, detail="Alpaca credentials not configured")
-        return {"orders": adapter.list_orders()}
+        return {"account": account, "orders": adapter.list_orders(account)}
 
     @app.post("/v1/orders/market")
     async def submit_market(body: MarketOrderBody) -> dict[str, object]:
@@ -123,6 +131,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             symbol=body.symbol,
             qty=body.qty,
             side=body.side,
+            account=body.account,
         )
         import asyncio
 
