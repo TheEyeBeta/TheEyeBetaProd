@@ -12,6 +12,7 @@ from audit_log import write_audit_log
 from auth import CurrentUser
 from deps import DbConn, SettingsDep
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from rbac import Role, require_role
 from settings import Settings
 from slowapi import Limiter
 
@@ -116,9 +117,9 @@ def register_backtest_routes(limiter: Limiter) -> APIRouter:
     async def start_backtest(
         request: Request,  # noqa: ARG001 — required by slowapi
         body: StartBacktestRequest,
-        user: CurrentUser,
         conn: DbConn,
         settings: SettingsDep,
+        user: dict[str, str] = require_role(Role.ANALYST),
     ) -> StartBacktestResponse:
         """Forward to ``backtest-engine POST /backtest/run`` and audit log."""
         if body.start_date > body.end_date:

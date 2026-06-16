@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
@@ -36,8 +37,51 @@ _TOKEN_TYPE_MFA_PENDING = "mfa_pending"
 _TOKEN_TYPE_MFA_ENROLL = "mfa_enrollment"
 
 
+# Per-user DB re-check cache: {username: (monotonic_expiry, role)}
+_user_db_cache: dict[str, tuple[float, str]] = {}
+_USER_DB_CACHE_TTL = 60.0  # seconds
+
+
+async def _db_role_for_user(request: Request, sub: str) -> str:
+    """Return the current DB role for ``sub``, cached for 60 seconds.
+
+    Also raises 401 if the account is inactive.  Falls back to JWT role if the
+    DB pool is unavailable (e.g. during tests without a real database).
+    """
+    now = time.monotonic()
+    cached = _user_db_cache.get(sub)
+    if cached and now < cached[0]:
+        return cached[1]
+
+    pool: asyncpg.Pool | None = getattr(request.app.state, "db_pool", None)
+    if pool is None:
+        return DEFAULT_ROLE
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT is_active FROM theeyebeta.admin_users WHERE username = $1",
+            sub,
+        )
+        if row is None or not row["is_active"]:
+            _user_db_cache.pop(sub, None)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User account is inactive",
+            )
+        db_roles = await fetch_user_roles(conn, sub)
+
+    db_role = highest_role(db_roles) if db_roles else DEFAULT_ROLE
+    _user_db_cache[sub] = (now + _USER_DB_CACHE_TTL, db_role)
+    return db_role
+
+
 async def get_current_user(request: Request) -> dict[str, str]:
-    """Validate Bearer access JWT and return ``{sub, role}``."""
+    """Validate Bearer access JWT; re-check DB for is_active and current role.
+
+    The DB lookup is cached per-user for 60 seconds.  If the DB role differs
+    from the JWT role the DB value wins — this ensures immediate effect for
+    role changes and revocations without waiting for token expiry.
+    """
     authorization = request.headers.get("Authorization")
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(
@@ -54,9 +98,7 @@ async def get_current_user(request: Request) -> dict[str, str]:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token subject",
         )
-    role = payload.get("role", DEFAULT_ROLE)
-    if not isinstance(role, str):
-        role = DEFAULT_ROLE
+    role = await _db_role_for_user(request, sub)
     return {"sub": sub, "role": role}
 
 

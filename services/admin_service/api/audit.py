@@ -13,6 +13,7 @@ import structlog
 from auth import CurrentUser
 from deps import DbConn, SettingsDep
 from fastapi import APIRouter, HTTPException, Query, status
+from rbac import Role, require_role
 from settings import Settings
 
 from zinc_schemas.admin_dto import (
@@ -155,8 +156,8 @@ def register_audit_routes() -> APIRouter:
 
     @router.get("/log", response_model=AuditLogPageResponse)
     async def list_audit_log(
-        user: CurrentUser,
         conn: DbConn,
+        user: dict[str, str] = require_role(Role.READ_ONLY),
         entity_id: str | None = Query(default=None),
         actor: str | None = Query(default=None),
         since: datetime | None = Query(default=None),
@@ -185,9 +186,9 @@ def register_audit_routes() -> APIRouter:
 
     @router.get("/chain/verify", response_model=AuditVerifyResponse)
     async def verify_audit_chain(
-        user: CurrentUser,
         settings: SettingsDep,
         conn: DbConn,
+        user: dict[str, str] = require_role(Role.COMPLIANCE),
     ) -> AuditVerifyResponse:
         """Verify hash-chain for configured lookback window via audit-service."""
         from datetime import UTC, datetime, timedelta
@@ -212,10 +213,10 @@ def register_audit_routes() -> APIRouter:
 
     @router.get("/verify", response_model=AuditVerifyResponse)
     async def verify_audit_log(
-        user: CurrentUser,
         settings: SettingsDep,
         from_ts: datetime = Query(..., alias="from"),
         to_ts: datetime = Query(..., alias="to"),
+        user: dict[str, str] = require_role(Role.COMPLIANCE),
     ) -> AuditVerifyResponse:
         """Verify hash-chain integrity for a timestamp range via audit-service."""
         result = await call_audit_service_verify(settings, from_ts=from_ts, to_ts=to_ts)
@@ -229,8 +230,8 @@ def register_audit_routes() -> APIRouter:
 
     @router.get("/checkpoints", response_model=AuditCheckpointsResponse)
     async def list_checkpoints(
-        user: CurrentUser,
         conn: DbConn,
+        user: dict[str, str] = require_role(Role.READ_ONLY),
     ) -> AuditCheckpointsResponse:
         """List WORM checkpoint metadata rows."""
         rows = await conn.fetch(

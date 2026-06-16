@@ -68,19 +68,15 @@ def register_events_routes() -> APIRouter:
 
     @router.websocket("/stream")
     async def events_stream(websocket: WebSocket) -> None:
-        """Stream normalized admin events; requires JWT via query param ``token``."""
-        settings = websocket.app.state.settings
-        token = websocket.query_params.get("token")
-        if not token:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
-        try:
-            payload = decode_access_token(token, settings)
-            actor = str(payload.get("sub", "unknown"))
-        except Exception:  # noqa: BLE001
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
+        """Stream normalized admin events.
 
+        Auth protocol (token never in URL):
+        1. Client connects (no token in URL).
+        2. Server accepts and waits up to 10 s for the first message.
+        3. Client sends ``{"type": "auth", "token": "<access_jwt>"}``.
+        4. Server validates the JWT; closes with 1008 on any failure.
+        5. On success the event stream starts.
+        """
         broadcaster: EventBroadcaster | None = getattr(
             websocket.app.state,
             "event_broadcaster",
@@ -91,6 +87,23 @@ def register_events_routes() -> APIRouter:
             return
 
         await websocket.accept()
+
+        # Phase 1 — authenticate via first message
+        settings = websocket.app.state.settings
+        actor = "unknown"
+        try:
+            raw = await asyncio.wait_for(websocket.receive_json(), timeout=10.0)
+            if not isinstance(raw, dict) or raw.get("type") != "auth":
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
+            token = str(raw.get("token", ""))
+            token_payload = decode_access_token(token, settings)
+            actor = str(token_payload.get("sub", "unknown"))
+        except Exception:  # noqa: BLE001 — any failure (timeout, bad token) closes the socket
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+        # Phase 2 — stream events
         queue = await broadcaster.subscribe()
         log.info("admin_ws_connected", sub=actor)
         try:

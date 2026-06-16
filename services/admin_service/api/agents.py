@@ -13,6 +13,7 @@ from audit_log import write_audit_log
 from auth import CurrentUser
 from deps import DbConn, SettingsDep
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from rbac import Role, require_role
 from slowapi import Limiter
 
 if TYPE_CHECKING:
@@ -342,9 +343,9 @@ def register_agents_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         agent_id: str,
         body: RunAgentRequest,
-        user: CurrentUser,
         conn: DbConn,
         settings: SettingsDep,
+        user: dict[str, str] = require_role(Role.OPERATOR),
     ) -> RunAgentResponse:
         """Forward to ``agent-runtime`` and audit log the trigger."""
         result = await trigger_agent_run_impl(
