@@ -21,8 +21,6 @@ TERMINAL_STATUSES = frozenset(
 )
 ACTIVE_STATUSES = frozenset(
     {
-        "pending_approval",
-        "approved",
         "submitted",
         "accepted",
         "partially_filled",

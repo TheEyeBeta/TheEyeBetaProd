@@ -36,10 +36,9 @@ class OrderManager:
         self._tracker = oms.PositionTracker()
 
     def _to_native(self, row: dict[str, Any]) -> oms.Order:
-        order = oms.Order(
-            order_id=row["id"],
-            quantity=int(row["qty"]),
-        )
+        order = oms.Order()
+        order.order_id = row["id"]
+        order.quantity = int(row["qty"])
         order.status = DB_TO_OMS[row["status"]]
         order.filled_quantity = int(row["filled_qty"])
         return order

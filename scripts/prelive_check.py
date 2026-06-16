@@ -27,6 +27,8 @@ import asyncpg
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from audit_service.chain import verify_chain as _verify_chain  # noqa: E402
+
 from workers.base_worker import worker_database_url
 from workers.gap_sentinel_worker import (
     check_canonical_freshness,
@@ -392,6 +394,27 @@ def _discover_backup_automation() -> list[str]:
     return hits
 
 
+async def check_audit_chain(_conn: asyncpg.Connection) -> CheckResult:
+    """Verify the audit_log hash chain is intact across all rows."""
+    try:
+        result = await _verify_chain(worker_database_url())
+    except Exception as exc:  # noqa: BLE001
+        return CheckResult(13, "AUDIT CHAIN", "FAIL", f"verify_chain raised: {exc}")
+    if result.status == "OK":
+        return CheckResult(
+            13,
+            "AUDIT CHAIN",
+            "PASS",
+            f"chain intact, rows_checked={result.rows_checked}",
+        )
+    return CheckResult(
+        13,
+        "AUDIT CHAIN",
+        "FAIL",
+        f"MISMATCH at row_id={result.first_bad_row_id}: {result.detail}",
+    )
+
+
 async def check_backup_recency(_conn: asyncpg.Connection) -> CheckResult:
     automation = _discover_backup_automation()
     now = time_mod.time()
@@ -437,6 +460,7 @@ CHECKS = [
     check_heartbeats,
     check_disk,
     check_backup_recency,
+    check_audit_chain,
 ]
 
 

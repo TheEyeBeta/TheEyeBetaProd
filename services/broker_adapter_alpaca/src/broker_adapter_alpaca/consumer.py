@@ -7,6 +7,7 @@ import json
 from typing import Any
 
 import nats
+import psycopg
 import structlog
 
 from broker_adapter_alpaca.adapter import AlpacaAdapter
@@ -66,7 +67,11 @@ class ApprovedOrderConsumer:
             payload = json.loads(msg.data.decode())
             order_id = str(payload["order_id"])
             instrument_id = int(payload["instrument_id"])
-            symbol = self._symbols.get(instrument_id) or payload.get("symbol")
+            symbol = (
+                self._symbols.get(instrument_id)
+                or payload.get("symbol")
+                or await self._resolve_symbol(instrument_id)
+            )
             if not symbol:
                 log.error(
                     "broker_adapter_missing_symbol",
@@ -96,6 +101,11 @@ class ApprovedOrderConsumer:
                 order_type="market",
             )
             result = await asyncio.to_thread(self._adapter.submit_order, request)
+            await self._persist_submission(
+                result.order_id,
+                result.client_order_id,
+                result.broker_order_id,
+            )
             log.info(
                 "broker_adapter_order_submitted",
                 order_id=order_id,
@@ -104,3 +114,41 @@ class ApprovedOrderConsumer:
             )
         except Exception as exc:  # noqa: BLE001
             log.warning("broker_adapter_approved_failed", error=str(exc))
+
+    async def _persist_submission(
+        self,
+        order_id: str,
+        client_order_id: str,
+        broker_order_id: str,
+    ) -> None:
+        """Persist broker identifiers once Alpaca accepts a submitted order."""
+        async with await psycopg.AsyncConnection.connect(self._settings.pg_dsn()) as conn:
+            await conn.execute(
+                """
+                UPDATE theeyebeta.orders
+                   SET client_order_id = %s,
+                       broker_order_id = %s,
+                       updated_at = now()
+                 WHERE id = %s
+                """,
+                (client_order_id, broker_order_id, order_id),
+            )
+            await conn.commit()
+
+    async def _resolve_symbol(self, instrument_id: int) -> str | None:
+        """Resolve ticker symbol from Postgres when the approved event only has an ID."""
+        try:
+            async with await psycopg.AsyncConnection.connect(self._settings.pg_dsn()) as conn:
+                cur = await conn.execute(
+                    "SELECT symbol FROM theeyebeta.instruments WHERE id = %s",
+                    (instrument_id,),
+                )
+                row = await cur.fetchone()
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "broker_adapter_symbol_lookup_failed",
+                instrument_id=instrument_id,
+                error=str(exc),
+            )
+            return None
+        return str(row[0]) if row else None

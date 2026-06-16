@@ -54,6 +54,7 @@ from api.workers import register_workers_routes
 from api.workers import router as workers_router
 from auth import register_auth_routes
 from auth import router as auth_router
+from audit_log import configure_audit_dsn
 from deps import bind_app_state, close_resources, init_resources
 from dotenv import load_dotenv
 from errors import register_error_handlers
@@ -108,6 +109,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await init_resources(cfg)
         bind_app_state(app, cfg)
+        configure_audit_dsn(cfg.database_url)
         app.state.event_broadcaster = EventBroadcaster()
         await start_nats_event_bridge(app)
         log.info("admin_service_started", host=cfg.host, port=cfg.port)

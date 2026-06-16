@@ -79,6 +79,7 @@ version = "0.1.0"
 source = { virtual = "services/admin_service" }
 dependencies = [
     { name = "asyncpg" },
+    { name = "audit-service" },
     { name = "bcrypt" },
     { name = "fastapi" },
     { name = "httpx" },
@@ -102,6 +103,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.30" },
+    { name = "audit-service", editable = "services/audit_service" },
     { name = "bcrypt", specifier = ">=4.2" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
@@ -2754,6 +2756,7 @@ name = "oms"
 version = "0.1.0"
 source = { editable = "services/oms" }
 dependencies = [
+    { name = "audit-service" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "nats-py" },
@@ -2769,6 +2772,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "audit-service", editable = "services/audit_service" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "nats-py", specifier = ">=2.8" },
