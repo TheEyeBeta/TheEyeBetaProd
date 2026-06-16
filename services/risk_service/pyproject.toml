@@ -17,6 +17,7 @@ dependencies = [
     "pydantic>=2.9",
     "pydantic-settings>=2.4",
     "numpy>=2.0",
+    "prometheus-client>=0.21",
 ]
 
 [tool.uv.sources]

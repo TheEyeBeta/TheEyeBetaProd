@@ -8,7 +8,7 @@ global:
 alerting:
   alertmanagers:
     - static_configs:
-        - targets: ["alertmanager:9093"]
+        - targets: ["127.0.0.1:9093"]
 
 rule_files:
   - /etc/prometheus/alerts.yml
@@ -41,13 +41,34 @@ scrape_configs:
       - targets: ["http://admin-service:7200/admin/health"]
         labels:
           service: admin-service
+      - targets: ["http://host.docker.internal:8007/health"]
+        labels:
+          service: risk-service
+      - targets: ["http://host.docker.internal:8008/health"]
+        labels:
+          service: compliance-service
+      - targets: ["http://host.docker.internal:7080/health"]
+        labels:
+          service: oms
+      - targets: ["http://host.docker.internal:7090/health"]
+        labels:
+          service: broker-adapter-alpaca
+      - targets: ["http://host.docker.internal:7050/health"]
+        labels:
+          service: master-orchestrator
+      - targets: ["http://host.docker.internal:7110/health"]
+        labels:
+          service: audit-service
+      - targets: ["http://host.docker.internal:8004/health"]
+        labels:
+          service: agent-runtime
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
       - source_labels: [__param_target]
         target_label: instance
       - target_label: __address__
-        replacement: blackbox-exporter:9115
+        replacement: 127.0.0.1:9115
 
   - job_name: audit-chain-verify
     metrics_path: /probe
@@ -55,7 +76,7 @@ scrape_configs:
       module: [audit_verify]
     static_configs:
       - targets:
-          - "http://audit-service:7110/audit/verify?from=1970-01-01T00:00:00Z&to=2999-12-31T23:59:59Z"
+          - "http://host.docker.internal:7110/audit/verify?from=1970-01-01T00:00:00Z&to=2999-12-31T23:59:59Z"
         labels:
           service: audit-service
     relabel_configs:
@@ -64,20 +85,58 @@ scrape_configs:
       - source_labels: [__param_target]
         target_label: instance
       - target_label: __address__
-        replacement: blackbox-exporter:9115
+        replacement: 127.0.0.1:9115
 
   - job_name: otel-collector
     static_configs:
       - targets: ["otel-collector:8888"]
 
   # ── Application services (add targets as services come online) ──────────────
-  - job_name: theeyebeta-services
+  - job_name: theeye-data-ingestion
     static_configs:
       - targets:
-          - host.docker.internal:7010
+          - 127.0.0.1:7010
         labels:
           service: data-ingestion
+
+  - job_name: theeye-snapshot-packager
+    static_configs:
       - targets:
-          - host.docker.internal:7011
+          - 127.0.0.1:7011
         labels:
           service: snapshot-packager
+
+  - job_name: theeye-risk-service
+    static_configs:
+      - targets:
+          - 127.0.0.1:8007
+        labels:
+          service: risk-service
+
+  - job_name: theeye-compliance-service
+    static_configs:
+      - targets:
+          - 127.0.0.1:8008
+        labels:
+          service: compliance-service
+
+  - job_name: theeye-oms
+    static_configs:
+      - targets:
+          - 127.0.0.1:7080
+        labels:
+          service: oms
+
+  - job_name: theeye-broker-adapter-alpaca
+    static_configs:
+      - targets:
+          - 127.0.0.1:7090
+        labels:
+          service: broker-adapter-alpaca
+
+  - job_name: theeye-master-orchestrator
+    static_configs:
+      - targets:
+          - 127.0.0.1:7050
+        labels:
+          service: master-orchestrator

@@ -21,11 +21,10 @@ env:
 # Reusable setup steps are defined as defaults; jobs inline what they need.
 # Job dependency graph:
 #
-#   lint ──┬── py-test ──┐
-#          ├── py-int    ├── all-ok
-#          ├── cpp-build─┤
-#          ├── sbom ─────┤
-#          └── docs ─────┘
+#   lint ──┬── py-test ── integration-tests ── smoke-staging ──┐
+#          ├── cpp-build ──────────────────────────────────────┤
+#          ├── sbom ───────────────────────────────────────────┤
+#          └── docs ───────────────────────────────────────────┴── all-ok
 # ─────────────────────────────────────────────────────────────────────────────
 
 jobs:
@@ -135,7 +134,10 @@ jobs:
           uv run pytest \
             -m "not integration and not smoke" \
             --tb=short -q \
-            --junitxml=reports/unit.xml
+            --junitxml=reports/unit.xml \
+            --cov=. \
+            --cov-report=xml:reports/coverage.xml \
+            --cov-report=term-missing:skip-covered
           # Exit 5 = no tests collected; treat as success on empty repo.
         continue-on-error: false
         id: pytest_unit
@@ -155,17 +157,28 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-report
-          path: reports/unit.xml
+          path: |
+            reports/unit.xml
+            reports/coverage.xml
           if-no-files-found: ignore
 
+      - name: Upload coverage
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: reports/coverage.xml
+          flags: unit
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # 3. py-int — Integration tests (testcontainers, Docker available)
+  # 3. integration-tests — Integration tests (testcontainers, Docker available)
   # ═══════════════════════════════════════════════════════════════════════════
-  py-int:
-    name: Python Integration Tests
+  integration-tests:
+    name: Integration Tests
     runs-on: ubuntu-latest
-    needs: lint
+    needs: py-test
 
     steps:
       - name: Checkout
@@ -193,20 +206,14 @@ jobs:
             services/data_ingestion/tests \
             services/agent_runtime/tests \
             services/risk_service/tests \
+            services/compliance_service/tests \
+            services/audit_service/tests \
+            services/admin_service/tests \
+            tests/integration \
             -m integration \
             --tb=short -q \
             --junitxml=reports/integration.xml
         id: pytest_int
-
-      - name: Handle no-tests-collected (exit 5)
-        if: failure() && steps.pytest_int.outcome == 'failure'
-        run: |
-          uv run pytest \
-            services/data_ingestion/tests \
-            services/agent_runtime/tests \
-            -m integration --co -q 2>&1 || true
-          exit_code=$?
-          [ "$exit_code" -eq 5 ] && echo "No integration tests yet — OK." || exit "$exit_code"
 
       - name: Upload test report
         if: always()
@@ -218,7 +225,57 @@ jobs:
 
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # 4. cpp-build — CMake + Conan matrix (Ubuntu 22.04, macOS 14 arm64)
+  # 4. smoke-staging — Live staging API smoke checks
+  # ═══════════════════════════════════════════════════════════════════════════
+  smoke-staging:
+    name: Staging Smoke Tests
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    env:
+      STAGING_API_URL: ${{ vars.STAGING_API_URL || 'https://api.theeyebeta.store' }}
+
+    steps:
+      - name: Hit staging health and macro API
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+
+          base = os.environ["STAGING_API_URL"].rstrip("/")
+          endpoints = [
+              ("/health", False),
+              ("/v1/macro/latest", True),
+              ("/v1/macro/series", True),
+          ]
+
+          def fetch(path: str) -> object:
+              url = f"{base}{path}"
+              last_error = None
+              for _ in range(3):
+                  try:
+                      with urllib.request.urlopen(url, timeout=15) as response:
+                          if response.status != 200:
+                              raise RuntimeError(f"{url} returned HTTP {response.status}")
+                          raw = response.read().decode("utf-8")
+                          return json.loads(raw) if raw else {}
+                  except (urllib.error.URLError, TimeoutError, RuntimeError) as exc:
+                      last_error = exc
+                      time.sleep(5)
+              raise RuntimeError(f"{url} failed after retries: {last_error}")
+
+          for path, require_data in endpoints:
+              payload = fetch(path)
+              if require_data and not payload:
+                  raise RuntimeError(f"{path} returned no data")
+              print(f"{path}: ok")
+          PY
+
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 5. cpp-build — CMake + Conan matrix (Ubuntu 22.04, macOS 14 arm64)
   # ═══════════════════════════════════════════════════════════════════════════
   cpp-build:
     name: C++ Build (${{ matrix.os }})
@@ -325,7 +382,7 @@ jobs:
 
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # 5. sbom — Software Bill of Materials via syft
+  # 6. sbom — Software Bill of Materials via syft
   # ═══════════════════════════════════════════════════════════════════════════
   sbom:
     name: SBOM
@@ -350,7 +407,7 @@ jobs:
 
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # 6. docs — Verify OpenAPI schemas are not stale
+  # 7. docs — Verify OpenAPI schemas are not stale
   # ═══════════════════════════════════════════════════════════════════════════
   docs:
     name: API Docs (OpenAPI staleness check)
@@ -386,7 +443,7 @@ jobs:
   all-ok:
     name: All checks passed
     if: always()
-    needs: [lint, py-test, py-int, cpp-build, sbom, docs]
+    needs: [lint, py-test, integration-tests, smoke-staging, cpp-build, sbom, docs]
     runs-on: ubuntu-latest
 
     steps:
@@ -395,7 +452,8 @@ jobs:
           RESULTS: >-
             lint=${{ needs.lint.result }}
             py-test=${{ needs.py-test.result }}
-            py-int=${{ needs.py-int.result }}
+            integration-tests=${{ needs.integration-tests.result }}
+            smoke-staging=${{ needs.smoke-staging.result }}
             cpp-build=${{ needs.cpp-build.result }}
             sbom=${{ needs.sbom.result }}
             docs=${{ needs.docs.result }}

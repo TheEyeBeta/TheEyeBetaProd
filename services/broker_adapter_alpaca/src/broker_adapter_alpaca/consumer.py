@@ -41,6 +41,11 @@ class ApprovedOrderConsumer:
         self._nc: nats.NATS | None = None
         self._tasks: set[asyncio.Task[Any]] = set()
 
+    @property
+    def inflight_tasks(self) -> int:
+        """Number of currently running async event handlers."""
+        return len(self._tasks)
+
     async def start(self) -> None:
         """Subscribe to approved orders."""
         self._nc = await nats.connect(self._settings.nats_url)

@@ -2,12 +2,30 @@ groups:
   - name: theeyebeta.incidents
     interval: 30s
     rules:
+      - alert: ServiceHealthProbeDown
+        expr: probe_success{job="service-health"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }} health probe is failing"
+          description: "{{ $labels.instance }} has failed the blackbox health probe for more than 2 minutes."
+
+      - alert: CriticalServiceMetricsMissing
+        expr: up{job=~"theeye-(oms|broker-adapter-alpaca|master-orchestrator)"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }} stopped emitting metrics"
+          description: "Prometheus has been unable to scrape {{ $labels.job }} for more than 2 minutes."
+
       - alert: HighErrorRate
         expr: |
           (
-            sum by (service) (rate(http_requests_total{status=~"5.."}[5m]))
+            sum by (service) (rate(theeye_http_request_count_total{status=~"5.."}[5m]))
             /
-            clamp_min(sum by (service) (rate(http_requests_total[5m])), 1)
+            clamp_min(sum by (service) (rate(theeye_http_request_count_total[5m])), 1)
           ) > 0.05
         for: 5m
         labels:
@@ -16,14 +34,29 @@ groups:
           summary: "High error rate on {{ $labels.service }}"
           description: "{{ $labels.service }} has returned more than 5% 5xx responses over the last 5 minutes."
 
-      - alert: ServiceDown
-        expr: probe_http_status_code{job="service-health"} == 503
-        for: 2m
+      - alert: OrderFlowLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (service, le) (
+              rate(theeye_http_request_latency_seconds_bucket{service=~"master-orchestrator|risk-service|compliance-service|oms|broker-adapter-alpaca"}[5m])
+            )
+          ) > 2
+        for: 5m
         labels:
-          severity: critical
+          severity: warning
         annotations:
-          summary: "Service health check is returning 503 for {{ $labels.service }}"
-          description: "{{ $labels.instance }} has returned HTTP 503 for more than 2 minutes."
+          summary: "High order-flow latency on {{ $labels.service }}"
+          description: "{{ $labels.service }} p95 request latency is above 2 seconds for 5 minutes."
+
+      - alert: QueueDepthHigh
+        expr: theeye_queue_depth{service=~"master-orchestrator|oms|broker-adapter-alpaca"} > 25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queue depth high on {{ $labels.service }}"
+          description: "{{ $labels.service }} has more than 25 in-flight async handlers for 5 minutes."
 
       - alert: AuditChainBroken
         expr: probe_success{job="audit-chain-verify"} == 0
@@ -33,39 +66,3 @@ groups:
         annotations:
           summary: "Audit hash-chain verification failed"
           description: "Audit verification probe failed for {{ $labels.instance }}. Investigate hash mismatch or verifier availability immediately."
-
-      - alert: PortfolioDrawdown15pct
-        expr: portfolio_drawdown_30d > 0.15
-        for: 0m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Portfolio drawdown exceeded 15%"
-          description: "Portfolio {{ $labels.portfolio_id }} has 30-day drawdown {{ $value | humanizePercentage }}."
-
-      - alert: LLMCostSpike
-        expr: sum(increase(llm_cost_usd_total[1h])) > 50
-        for: 0m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Hourly LLM cost exceeded $50"
-          description: "LLM spend in the last hour is ${{ $value | humanize }}."
-
-      - alert: ReconciliationDrift
-        expr: increase(risk_breaches_reconciliation_total[10m]) > 0
-        for: 0m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Broker reconciliation drift detected"
-          description: "At least one risk.breaches.reconciliation event was observed in the last 10 minutes."
-
-      - alert: GuardViolationsHigh
-        expr: sum(increase(guard_violations_total{severity="critical"}[1h])) > 10
-        for: 0m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High critical guard violation volume"
-          description: "More than 10 critical guard violations were observed in the last hour."

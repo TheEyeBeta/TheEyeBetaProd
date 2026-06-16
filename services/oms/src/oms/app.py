@@ -2,13 +2,23 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from uuid import UUID
 
 import structlog
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.responses import Response
 
 from oms.audit import insert_audit_log
 from oms.consumer import OmsEventConsumer
@@ -61,6 +71,69 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         log.info("oms_stopped")
 
     app = FastAPI(title="oms", version="0.1.0", lifespan=lifespan)
+    registry = CollectorRegistry()
+    request_count = Counter(
+        "theeye_http_request_count_total",
+        "HTTP requests handled by TheEye services",
+        ("service", "method", "path", "status"),
+        registry=registry,
+    )
+    request_latency = Histogram(
+        "theeye_http_request_latency_seconds",
+        "HTTP request latency for TheEye services",
+        ("service", "method", "path"),
+        buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+        registry=registry,
+    )
+    request_errors = Counter(
+        "theeye_http_request_errors_total",
+        "HTTP 5xx responses and unhandled exceptions in TheEye services",
+        ("service", "method", "path"),
+        registry=registry,
+    )
+    queue_depth = Gauge(
+        "theeye_queue_depth",
+        "In-process async work queue depth by service",
+        ("service",),
+        registry=registry,
+    )
+    service_info = Gauge(
+        "theeye_service_info",
+        "Static service identity for TheEye services",
+        ("service",),
+        registry=registry,
+    )
+    queue_depth.labels(service=cfg.service_name).set_function(
+        lambda: float(consumer.inflight_tasks)
+    )
+    service_info.labels(service=cfg.service_name).set(1)
+
+    @app.middleware("http")
+    async def prometheus_middleware(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        if request.url.path == "/metrics":
+            return await call_next(request)
+        started = time.perf_counter()
+        status = "500"
+        failed = False
+        try:
+            response = await call_next(request)
+            status = str(response.status_code)
+            return response
+        except Exception:
+            failed = True
+            raise
+        finally:
+            route = request.scope.get("route")
+            path = str(getattr(route, "path", request.url.path))
+            request_count.labels(cfg.service_name, request.method, path, status).inc()
+            request_latency.labels(cfg.service_name, request.method, path).observe(
+                time.perf_counter() - started,
+            )
+            if failed or status.startswith("5"):
+                request_errors.labels(cfg.service_name, request.method, path).inc()
 
     @app.get("/health")
     async def health() -> dict[str, object]:
@@ -70,6 +143,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "service": cfg.service_name,
             "submissions_paused": paused,
         }
+
+    @app.get("/metrics")
+    async def metrics() -> Response:
+        return Response(content=generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
 
     @app.post("/oms/reconciliation/resolve")
     async def resolve_reconciliation() -> dict[str, str]:

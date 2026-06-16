@@ -28,7 +28,7 @@ def postgres_container() -> Generator[PostgresContainer, None, None]:
         pytest.skip("Docker daemon not available (required for testcontainers)")
 
     container = (
-        PostgresContainer("timescale/timescaledb-ha:pg17-latest")
+        PostgresContainer("timescale/timescaledb-ha:pg17")
         .with_env("POSTGRES_USER", "postgres")
         .with_env("POSTGRES_PASSWORD", "postgres")
         .with_env("POSTGRES_DB", "theeyebeta")
