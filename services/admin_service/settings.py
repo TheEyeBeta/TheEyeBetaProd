@@ -31,6 +31,16 @@ class Settings(BaseSettings):
 
     jwt_private_key: str = Field(default="", validation_alias="JWT_PRIVATE_KEY")
     jwt_public_key: str = Field(default="", validation_alias="JWT_PUBLIC_KEY")
+    jwt_private_key_path: str | None = Field(
+        default=None,
+        validation_alias="JWT_PRIVATE_KEY_PATH",
+        description="Optional filesystem path to PEM private key (preferred under systemd).",
+    )
+    jwt_public_key_path: str | None = Field(
+        default=None,
+        validation_alias="JWT_PUBLIC_KEY_PATH",
+        description="Optional filesystem path to PEM public key (preferred under systemd).",
+    )
     jwt_issuer: str = Field(default="theeyebeta-admin", validation_alias="JWT_ISSUER")
     access_token_minutes: int = Field(default=15, validation_alias="JWT_ACCESS_MINUTES")
     refresh_token_days: int = Field(default=7, validation_alias="JWT_REFRESH_DAYS")
@@ -41,6 +51,10 @@ class Settings(BaseSettings):
     )
     nats_url: str = Field(default="nats://127.0.0.1:4222", validation_alias="NATS_URL")
     redis_url: str = Field(default="redis://127.0.0.1:6379/1", validation_alias="REDIS_URL")
+    redis_ops_url: str = Field(
+        default="redis://127.0.0.1:6379/0",
+        validation_alias="REDIS_OPS_URL",
+    )
     audit_service_url: str = Field(
         default="http://127.0.0.1:7110",
         validation_alias="AUDIT_SERVICE_URL",
@@ -102,6 +116,10 @@ class Settings(BaseSettings):
         default="http://127.0.0.1:7200",
         validation_alias="ADMIN_CORS_TAILSCALE_ORIGIN",
     )
+    cors_tauri_origin: str = Field(
+        default="https://tauri.localhost",
+        validation_alias="ADMIN_CORS_TAURI_ORIGIN",
+    )
     cookie_secure: bool = Field(default=False, validation_alias="ADMIN_COOKIE_SECURE")
 
     refresh_cookie_name: str = "admin_refresh_token"
@@ -109,15 +127,23 @@ class Settings(BaseSettings):
 
     def jwt_private_pem(self) -> str:
         """Return PEM private key for RS256 signing."""
+        if self.jwt_private_key_path:
+            return Path(self.jwt_private_key_path).read_text(encoding="utf-8").strip()
         return _normalize_pem(self.jwt_private_key)
 
     def jwt_public_pem(self) -> str:
         """Return PEM public key for RS256 verification."""
+        if self.jwt_public_key_path:
+            return Path(self.jwt_public_key_path).read_text(encoding="utf-8").strip()
         return _normalize_pem(self.jwt_public_key)
 
     def cors_origins(self) -> list[str]:
-        """Allowed browser origins (Cloudflare + Tailscale/local)."""
-        return [self.cors_cloudflare_origin, self.cors_tailscale_origin]
+        """Allowed browser origins (Cloudflare + Tailscale/local + Tauri desktop)."""
+        return [
+            self.cors_cloudflare_origin,
+            self.cors_tailscale_origin,
+            self.cors_tauri_origin,
+        ]
 
     def repo_root_path(self) -> Path:
         """Return :attr:`repo_root` as a :class:`pathlib.Path`."""

@@ -16,7 +16,7 @@ from oms.db import fetch_order_row
 from oms.reconciliation import ReconciliationLoop
 from oms.settings import Settings
 from oms.state import OrderManager
-from oms.submission_gate import SubmissionGate
+from oms.submission_gate import PauseSource, SubmissionGate
 
 log = structlog.get_logger()
 
@@ -34,7 +34,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     cfg = settings or Settings()
     manager = OrderManager(cfg.pg_dsn())
     gate = SubmissionGate(cfg.redis_url or None)
-    consumer = OmsEventConsumer(cfg.nats_url, manager)
+    consumer = OmsEventConsumer(cfg.nats_url, manager, gate)
     reconciliation = ReconciliationLoop(
         cfg.pg_dsn(),
         cfg.broker_adapter_url,
@@ -57,6 +57,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         yield
         await reconciliation.stop()
         await consumer.stop()
+        await gate.aclose()
         log.info("oms_stopped")
 
     app = FastAPI(title="oms", version="0.1.0", lifespan=lifespan)
@@ -73,7 +74,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/oms/reconciliation/resolve")
     async def resolve_reconciliation() -> dict[str, str]:
         """Manually clear reconciliation pause after drift is fixed."""
-        await gate.resume()
+        await gate.resume(source=PauseSource.RECONCILIATION)
         return {"status": "resumed"}
 
     @app.post("/oms/orders/{order_id}/approve")

@@ -1,0 +1,18 @@
+# journalctl -u theeye-intraday-ingest.service -n 50 --no-pager
+# Captured 2026-06-12 (launch morning)
+
+Jun 12 15:51:15 the-eye-beta-server uv[1635289]:   File ".../workers/massive_providers.py", line 206, in aggs_range_15m
+Jun 12 15:51:15 the-eye-beta-server uv[1635289]:     response = await self._client.get(
+...
+Jun 12 15:51:15 the-eye-beta-server uv[1635289]: httpx.ReadTimeout
+Jun 12 15:51:15 the-eye-beta-server systemd[1]: theeye-intraday-ingest.service: Main process exited, code=exited, status=1/FAILURE
+Jun 12 15:51:15 the-eye-beta-server systemd[1]: Failed to start theeye-intraday-ingest.service - TheEyeBeta canonical 15m intraday ingestion.
+
+Jun 12 16:05:20 the-eye-beta-server systemd[1]: Starting theeye-intraday-ingest.service ...
+Jun 12 16:05:22 the-eye-beta-server uv[1640245]: usage: intraday_ingestion_worker.py [-h] [--once] [--dry-run] [--date DATE]
+Jun 12 16:05:22 the-eye-beta-server uv[1640245]: intraday_ingestion_worker.py: error: unrecognized arguments: --run-type scheduled
+Jun 12 16:05:22 the-eye-beta-server systemd[1]: status=2/INVALIDARGUMENT
+
+Jun 12 16:20:17 ... same --run-type scheduled error (status=2)
+
+Jun 12 16:35:46 ... same --run-type scheduled error (status=2)

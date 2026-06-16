@@ -16,7 +16,7 @@ if str(_SRC) not in sys.path:
 
 from oms.app import create_app  # noqa: E402
 from oms.settings import Settings  # noqa: E402
-from oms.submission_gate import SubmissionGate  # noqa: E402
+from oms.submission_gate import PauseSource, SubmissionGate  # noqa: E402
 
 ORDER_ID = uuid4()
 
@@ -30,7 +30,7 @@ async def test_approve_returns_423_when_submissions_paused() -> None:
         nats_url="nats://127.0.0.1:4222",
     )
     gate = SubmissionGate(redis_url=None)
-    await gate.pause(reason="test drift")
+    await gate.pause(source=PauseSource.RECONCILIATION, reason="test drift")
 
     with (
         patch("oms.app.SubmissionGate", return_value=gate),

@@ -67,6 +67,7 @@ async def _init_test_resources(settings: object) -> None:
     )
     deps._nats = _RecordingNats()  # noqa: SLF001
     deps._redis = None  # noqa: SLF001
+    deps._redis_ops = None  # noqa: SLF001
 
 
 async def _close_test_resources() -> None:
@@ -77,6 +78,7 @@ async def _close_test_resources() -> None:
         deps._pool = None
     deps._nats = None
     deps._redis = None
+    deps._redis_ops = None
 
 
 @pytest.fixture(scope="session")

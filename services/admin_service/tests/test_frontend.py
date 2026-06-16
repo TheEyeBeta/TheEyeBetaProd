@@ -110,6 +110,7 @@ async def _init_frontend_resources(settings: object) -> None:
     )
     deps._nats = _RecordingNats()  # noqa: SLF001
     deps._redis = _InMemoryRedisStub()  # noqa: SLF001
+    deps._redis_ops = _InMemoryRedisStub()  # noqa: SLF001
 
 
 async def _close_frontend_resources() -> None:
@@ -121,6 +122,9 @@ async def _close_frontend_resources() -> None:
     if deps._redis is not None:
         await deps._redis.aclose()
         deps._redis = None
+    if deps._redis_ops is not None:
+        await deps._redis_ops.aclose()
+        deps._redis_ops = None
     deps._nats = None
 
 

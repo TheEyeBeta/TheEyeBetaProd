@@ -173,7 +173,7 @@ In the CI workflow, the decrypt script automatically uses `$SOPS_AGE_KEY` when t
 | Key | Used by | Notes |
 |-----|---------|-------|
 | `POSTGRES_PASSWORD` | All services | DB superuser password |
-| `REDIS_PASSWORD` | All services | Redis AUTH password |
+| `REDIS_PASSWORD` | Reserved (not wired) | Future Redis AUTH password — dev/compose runs without AUTH today |
 | `MINIO_ROOT_USER` | Storage service | MinIO access key |
 | `MINIO_ROOT_PASSWORD` | Storage service | MinIO secret key |
 | `ANTHROPIC_API_KEY` | AI services | Claude API |

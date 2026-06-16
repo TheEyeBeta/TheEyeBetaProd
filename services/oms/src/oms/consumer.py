@@ -1,4 +1,4 @@
-"""NATS consumers for proposed orders and broker fills."""
+"""NATS consumers for proposed orders, broker fills, and emergency halt."""
 
 from __future__ import annotations
 
@@ -10,20 +10,28 @@ import nats
 import structlog
 
 from oms.state import OrderManager
+from oms.submission_gate import PauseSource, SubmissionGate
 
 log = structlog.get_logger()
 
 PROPOSED_SUBJECT = "orders.proposed.>"
 APPROVED_SUBJECT_PREFIX = "orders.approved."
 FILLS_SUBJECT = "broker.fills.>"
+EMERGENCY_HALT_SUBJECT = "trading.emergency.halt"
 
 
 class OmsEventConsumer:
-    """Subscribe to order lifecycle and fill events."""
+    """Subscribe to order lifecycle, fill, and emergency-halt events."""
 
-    def __init__(self, nats_url: str, manager: OrderManager) -> None:
+    def __init__(
+        self,
+        nats_url: str,
+        manager: OrderManager,
+        gate: SubmissionGate | None = None,
+    ) -> None:
         self._nats_url = nats_url
         self._manager = manager
+        self._gate = gate
         self._nc: nats.NATS | None = None
         self._tasks: set[asyncio.Task[Any]] = set()
 
@@ -32,10 +40,12 @@ class OmsEventConsumer:
         self._nc = await nats.connect(self._nats_url)
         await self._nc.subscribe(PROPOSED_SUBJECT, cb=self._on_proposed)
         await self._nc.subscribe(FILLS_SUBJECT, cb=self._on_fill)
+        await self._nc.subscribe(EMERGENCY_HALT_SUBJECT, cb=self._on_emergency_halt)
         log.info(
             "oms_nats_consumer_started",
             proposed=PROPOSED_SUBJECT,
             fills=FILLS_SUBJECT,
+            emergency_halt=EMERGENCY_HALT_SUBJECT,
         )
 
     async def stop(self) -> None:
@@ -68,6 +78,11 @@ class OmsEventConsumer:
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
+    async def _on_emergency_halt(self, msg: nats.aio.msg.Msg) -> None:
+        task = asyncio.create_task(self._handle_emergency_halt(msg))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+
     async def _handle_proposed(self, msg: nats.aio.msg.Msg) -> None:
         try:
             payload = json.loads(msg.data.decode())
@@ -89,3 +104,13 @@ class OmsEventConsumer:
             )
         except Exception as exc:  # noqa: BLE001
             log.warning("oms_fill_event_failed", error=str(exc))
+
+    async def _handle_emergency_halt(self, msg: nats.aio.msg.Msg) -> None:
+        try:
+            payload = json.loads(msg.data.decode())
+            reason = str(payload.get("reason", "emergency halt"))
+            if self._gate is not None:
+                await self._gate.pause(source=PauseSource.EMERGENCY, reason=reason)
+                log.warning("oms_emergency_halt_applied", reason=reason)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("oms_emergency_halt_event_failed", error=str(exc))

@@ -494,6 +494,7 @@ services:
         postgresql://${POSTGRES_USER:-theeyebeta}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-theeyebeta}
       NATS_URL: nats://nats:4222
       REDIS_URL: redis://redis:6379/1
+      REDIS_OPS_URL: redis://redis:6379/0
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD_BCRYPT: ${ADMIN_PASSWORD_BCRYPT:-}
       JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:-}

@@ -89,7 +89,23 @@ def page_context(
 
 
 def register_web_routes() -> APIRouter:
-    """Attach layout-check and other shell-only routes to ``router``."""
+    """Attach layout-check, login, and other shell-only routes to ``router``."""
+
+    @router.get(
+        "/login",
+        response_class=HTMLResponse,
+        include_in_schema=False,
+    )
+    async def login_page(request: Request) -> HTMLResponse:
+        """Render the operator login page (unauthenticated)."""
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {
+                "request": request,
+                "static_url": STATIC_URL_PREFIX,
+            },
+        )
 
     @router.get(
         "/_layout-check",

@@ -599,3 +599,416 @@ class RejectProposalResponse(BaseModel):
     reviewed_by: str
     reviewed_at: datetime
     review_notes: str
+
+
+# --- Control-plane APIs (Tauri desktop client) --------------------------------
+
+
+class OpenBreakerSummary(BaseModel):
+    """Open circuit breaker row for ops pulse."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    component: str
+    opened_at: str | None = None
+    reason: str
+
+
+class CriticalAlertSummary(BaseModel):
+    """Critical alert row for ops pulse."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    severity: str
+    source: str
+    message: str
+    created_at: str
+
+
+class WorkerRunSummary(BaseModel):
+    """Worker run row for ops pulse."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    worker: str
+    status: str
+    started_at: str
+    ended_at: str | None = None
+    records_written: int = 0
+
+
+class StaleHeartbeatSummary(BaseModel):
+    """Stale heartbeat row for ops pulse."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    worker: str
+    last_heartbeat: str | None = None
+    expected_interval_seconds: int
+
+
+class PipelineFreshness(BaseModel):
+    """Pipeline freshness timestamps."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    last_eod_ingest: str | None = None
+    last_intraday_ingest: str | None = None
+    last_indicators: str | None = None
+
+
+class PreliveLastResult(BaseModel):
+    """Last prelive check summary embedded in ops pulse."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    passed: bool
+    run_at: str | None = None
+    checks_passed: int = 0
+    checks_failed: int = 0
+
+
+class TimersSummary(BaseModel):
+    """Active/inactive systemd timer counts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    active: int = 0
+    inactive: int = 0
+
+
+class ServicesSummary(BaseModel):
+    """Healthy/degraded/down service counts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    healthy: int = 0
+    degraded: int = 0
+    down: int = 0
+
+
+class OpsPulseResponse(BaseModel):
+    """``GET /admin/ops/pulse`` payload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    health: str
+    open_breakers: list[OpenBreakerSummary]
+    critical_alerts: list[CriticalAlertSummary]
+    last_worker_runs: list[WorkerRunSummary]
+    stale_heartbeats: list[StaleHeartbeatSummary]
+    pipeline_freshness: PipelineFreshness
+    pending_orders_count: int
+    llm_cost_mtd_usd: float
+    prelive_last_result: PreliveLastResult
+    timers_summary: TimersSummary
+    services_summary: ServicesSummary
+
+
+class WorkerRegistryEntry(BaseModel):
+    """One worker in the registry."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    alias: str | None = None
+    worker_class: str
+    state: str
+    last_heartbeat: datetime | None = None
+    last_run_status: str | None = None
+    last_run_at: datetime | None = None
+    next_scheduled_fire: datetime | None = None
+    circuit_breaker_state: str | None = None
+
+
+class WorkersListResponse(BaseModel):
+    """``GET /admin/workers`` payload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    workers: list[WorkerRegistryEntry]
+    total: int
+
+
+class WorkerRunHistoryEntry(BaseModel):
+    """Paginated worker run history row."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: int
+    worker_name: str
+    trade_date: date
+    run_type: str
+    status: str
+    started_at: datetime
+    ended_at: datetime | None = None
+    records_written: int | None = None
+    error_message: str | None = None
+
+
+class WorkerRunsResponse(BaseModel):
+    """``GET /admin/workers/runs`` payload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    runs: list[WorkerRunHistoryEntry]
+    limit: int
+    offset: int
+    total: int
+
+
+class WorkerRunRequest(BaseModel):
+    """``POST /admin/workers/{name}/run`` body."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    dry_run: bool = False
+    force: bool = False
+    args: dict[str, Any] = Field(default_factory=dict)
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class WorkerRunResponse(BaseModel):
+    """Worker manual run trigger result."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    worker_name: str
+    triggered_at: datetime
+    run_id: int | None = None
+    exit_code: int | None = None
+    status: str
+
+
+class TraskFailureSummary(BaseModel):
+    """Recent failure for a Trask component."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    component_id: str
+    worker_name: str | None = None
+    status: str
+    started_at: datetime
+    error_message: str | None = None
+
+
+class TraskBreakerDetail(BaseModel):
+    """Open breaker with reset eligibility."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    component_id: str
+    state: str
+    failure_count: int
+    opened_at: datetime | None = None
+    reset_eligible: bool
+    recovery_timeout_seconds: int
+
+
+class TraskDashboardResponse(BaseModel):
+    """``GET /admin/trask/dashboard`` payload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    components_total: int
+    components_healthy: int
+    components_degraded: int
+    components_failed: int
+    open_breakers: list[TraskBreakerDetail]
+    degraded_components: list[str]
+    recent_failures: list[TraskFailureSummary]
+
+
+class BreakerResetRequest(BaseModel):
+    """``POST /admin/trask/breakers/{id}/reset`` body."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=2000)
+    consequences_acknowledged: bool = False
+    override: bool = True
+
+
+class BreakerResetResponse(BaseModel):
+    """Breaker after reset."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    component_id: str
+    state: str
+    reset_at: datetime
+    reset_by: str
+
+
+class AlertEntry(BaseModel):
+    """One audit alert."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    severity: str
+    source: str
+    message: str
+    title: str
+    created_at: datetime
+    ack_state: str
+    acked_by: str | None = None
+    acked_at: datetime | None = None
+    gap_id: int | None = None
+    run_id: int | None = None
+
+
+class AlertsListResponse(BaseModel):
+    """``GET /admin/alerts`` payload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    alerts: list[AlertEntry]
+    limit: int
+    offset: int
+    total: int
+
+
+class AlertAckRequest(BaseModel):
+    """``POST /admin/alerts/{id}/ack`` body."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class AlertAckResponse(BaseModel):
+    """Alert after acknowledgement."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    ack_state: str
+    acked_by: str
+    acked_at: datetime
+
+
+class PreliveCheckItem(BaseModel):
+    """One prelive check result."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    status: str
+    detail: str
+    value: Any | None = None
+
+
+class PreliveResponse(BaseModel):
+    """``GET /admin/prelive`` payload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    overall: str
+    run_at: datetime | None = None
+    is_stale: bool = False
+    checks: list[PreliveCheckItem]
+
+
+class LiveApprovalRequest(BaseModel):
+    """``POST /admin/trading/live-approval`` body."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enable: bool
+    reason: str = Field(min_length=1, max_length=2000)
+    consequences_acknowledged: bool
+    confirmation_token: str = Field(min_length=1, max_length=128)
+
+
+class LiveApprovalResponse(BaseModel):
+    """Live trading approval state after update."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    live_approval: bool
+    updated_at: datetime
+    updated_by: str
+    accounts_updated: int
+
+
+class EmergencyHaltRequest(BaseModel):
+    """``POST /admin/trading/emergency-halt`` body."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=2000)
+    consequences_acknowledged: bool
+
+
+class EmergencyHaltResponse(BaseModel):
+    """Emergency halt acknowledgement."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    halted: bool
+    halted_at: datetime
+    halted_by: str
+    nats_published: bool
+    redis_paused: bool
+
+
+class TimerEntry(BaseModel):
+    """One systemd timer unit."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    unit: str
+    schedule: str | None = None
+    last_trigger: datetime | None = None
+    next_trigger: datetime | None = None
+    status: str
+
+
+class TimersListResponse(BaseModel):
+    """``GET /admin/timers`` payload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    timers: list[TimerEntry]
+    total: int
+
+
+class TimerTriggerRequest(BaseModel):
+    """``POST /admin/timers/{name}/trigger`` body."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class TimerTriggerResponse(BaseModel):
+    """Timer manual trigger result."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    unit: str
+    triggered_at: datetime
+    triggered_by: str
+    exit_code: int
+
+
+class AdminEventEnvelope(BaseModel):
+    """Normalized WebSocket event."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    event_id: str
+    type: str
+    ts: str
+    severity: str
+    source: str
+    actor: str
+    correlation_id: str
+    payload: dict[str, Any] = Field(default_factory=dict)

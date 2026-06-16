@@ -12,9 +12,9 @@ import asyncpg
 import sqlparse
 import structlog
 from audit_log import write_audit_log
-from auth import CurrentUser
 from deps import DbConn
 from fastapi import APIRouter, Header, HTTPException, Request, status
+from rbac import Role, require_role
 from slowapi import Limiter
 from sqlparse.sql import Statement
 from sqlparse.tokens import DDL, DML, Keyword
@@ -299,10 +299,10 @@ def register_sql_routes(limiter: Limiter) -> APIRouter:
     async def run_query(
         request: Request,  # noqa: ARG001 — required by slowapi
         body: SqlQueryRequest,
-        user: CurrentUser,
         conn: DbConn,
+        user: dict[str, str] = require_role(Role.ANALYST),
     ) -> SqlQueryResponse:
-        """Execute a read-only SELECT and return rows + columns."""
+        """Execute a read-only SELECT and return rows + columns (ANALYST minimum)."""
         response = await run_select_statement(conn, body.statement, body.parameters)
         log.info(
             "admin_sql_query",
@@ -318,12 +318,12 @@ def register_sql_routes(limiter: Limiter) -> APIRouter:
     async def run_execute(
         request: Request,  # noqa: ARG001 — required by slowapi
         body: SqlExecuteRequest,
-        user: CurrentUser,
         conn: DbConn,
+        user: dict[str, str] = require_role(Role.MASTER_ADMIN),
         x_confirm: str | None = Header(default=None, alias="X-Confirm"),
         x_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
     ) -> SqlExecuteResponse:
-        """Execute a write SQL statement after explicit confirmation."""
+        """Execute a write SQL statement after explicit confirmation (MASTER_ADMIN)."""
         if (x_confirm or "").lower() != "true":
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

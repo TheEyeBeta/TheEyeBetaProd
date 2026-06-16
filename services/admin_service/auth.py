@@ -6,12 +6,14 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
+import asyncpg
 import bcrypt
 import jwt
 import structlog
-from deps import RedisDep, SettingsDep
+from deps import DbConn, RedisDep, SettingsDep
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
+from rbac import DEFAULT_ROLE, ENV_BOOTSTRAP_ROLE, highest_role
 from redis.asyncio import Redis
 from settings import Settings
 from slowapi import Limiter
@@ -22,7 +24,7 @@ router = APIRouter(tags=["auth"])
 
 
 async def get_current_user(request: Request) -> dict[str, str]:
-    """Validate Bearer access JWT and return ``{sub: username}``."""
+    """Validate Bearer access JWT and return ``{sub, role}``."""
     authorization = request.headers.get("Authorization")
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(
@@ -39,7 +41,10 @@ async def get_current_user(request: Request) -> dict[str, str]:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token subject",
         )
-    return {"sub": sub}
+    role = payload.get("role", DEFAULT_ROLE)
+    if not isinstance(role, str):
+        role = DEFAULT_ROLE
+    return {"sub": sub, "role": role}
 
 
 CurrentUser = Annotated[dict[str, str], Depends(get_current_user)]
@@ -66,6 +71,7 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+    role: str = DEFAULT_ROLE
 
 
 class RefreshResponse(BaseModel):
@@ -76,6 +82,56 @@ class RefreshResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+    role: str = DEFAULT_ROLE
+
+
+class CurrentUserResponse(BaseModel):
+    """``GET /admin/auth/me`` payload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    username: str
+    role: str
+
+
+async def fetch_user_roles(conn: asyncpg.Connection, username: str) -> list[str]:
+    """Return role names assigned to a DB user."""
+    rows = await conn.fetch(
+        """
+        SELECT r.name
+          FROM theeyebeta.admin_users u
+          JOIN theeyebeta.admin_user_roles ur ON ur.user_id = u.id
+          JOIN theeyebeta.admin_roles r ON r.id = ur.role_id
+         WHERE u.username = $1 AND u.is_active
+        """,
+        username,
+    )
+    return [str(row["name"]) for row in rows]
+
+
+async def verify_db_credentials(
+    conn: asyncpg.Connection,
+    username: str,
+    password: str,
+) -> list[str] | None:
+    """Verify username/password against admin_users; return roles or None."""
+    row = await conn.fetchrow(
+        """
+        SELECT password_bcrypt
+          FROM theeyebeta.admin_users
+         WHERE username = $1 AND is_active
+        """,
+        username,
+    )
+    if row is None:
+        return None
+    try:
+        ok = bcrypt.checkpw(password.encode(), row["password_bcrypt"].encode())
+    except ValueError:
+        return None
+    if not ok:
+        return None
+    return await fetch_user_roles(conn, username)
 
 
 def register_auth_routes(limiter: Limiter) -> APIRouter:
@@ -89,19 +145,20 @@ def register_auth_routes(limiter: Limiter) -> APIRouter:
         response: Response,
         settings: SettingsDep,
         redis: RedisDep,
+        conn: DbConn,
     ) -> TokenResponse:
         """Verify operator credentials and issue access + refresh tokens."""
         _require_auth_config(settings)
-        _verify_password(
-            body.password,
-            settings.admin_password_bcrypt,
+        role = await _authenticate(body.username, body.password, settings, conn)
+        access, refresh, expires_in = await _issue_tokens(
+            settings,
             body.username,
-            settings.admin_username,
+            redis,
+            role=role,
         )
-        access, refresh, expires_in = await _issue_tokens(settings, settings.admin_username, redis)
         _set_refresh_cookie(response, refresh, settings)
-        log.info("admin_login_ok", sub=settings.admin_username)
-        return TokenResponse(access_token=access, expires_in=expires_in)
+        log.info("admin_login_ok", sub=body.username, role=role)
+        return TokenResponse(access_token=access, expires_in=expires_in, role=role)
 
     @router.post("/refresh", response_model=RefreshResponse)
     @limiter.limit("20/minute")
@@ -122,16 +179,22 @@ def register_auth_routes(limiter: Limiter) -> APIRouter:
         payload = _decode_refresh_token(raw_refresh, settings)
         jti = str(payload["jti"])
         subject = str(payload["sub"])
+        role = str(payload.get("role", DEFAULT_ROLE))
         if not await _refresh_active(redis, jti, subject):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Refresh token revoked or expired",
             )
         await _revoke_refresh(redis, jti)
-        access, new_refresh, expires_in = await _issue_tokens(settings, subject, redis)
+        access, new_refresh, expires_in = await _issue_tokens(
+            settings,
+            subject,
+            redis,
+            role=role,
+        )
         _set_refresh_cookie(response, new_refresh, settings)
-        log.info("admin_token_refreshed", sub=subject)
-        return RefreshResponse(access_token=access, expires_in=expires_in)
+        log.info("admin_token_refreshed", sub=subject, role=role)
+        return RefreshResponse(access_token=access, expires_in=expires_in, role=role)
 
     @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
     @limiter.limit("20/minute")
@@ -153,7 +216,40 @@ def register_auth_routes(limiter: Limiter) -> APIRouter:
         _clear_refresh_cookie(response, settings)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    @router.get("/me", response_model=CurrentUserResponse)
+    async def current_user(user: CurrentUser) -> CurrentUserResponse:
+        """Return the authenticated operator identity and role."""
+        return CurrentUserResponse(username=user["sub"], role=user.get("role", DEFAULT_ROLE))
+
     return router
+
+
+async def _authenticate(
+    username: str,
+    password: str,
+    settings: Settings,
+    conn: asyncpg.Connection,
+) -> str:
+    """Authenticate against DB users, falling back to env bootstrap admin."""
+    try:
+        db_roles = await verify_db_credentials(conn, username, password)
+        if db_roles is not None:
+            return highest_role(db_roles)
+    except asyncpg.UndefinedTableError:
+        log.warning("admin_rbac_tables_missing", hint="run db migration 0026_admin_rbac")
+
+    _verify_env_password(
+        password,
+        username,
+        settings.admin_username,
+        settings.admin_password_bcrypt,
+    )
+    if username == settings.admin_username:
+        return ENV_BOOTSTRAP_ROLE
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid credentials",
+    )
 
 
 def _require_auth_config(settings: Settings) -> None:
@@ -165,8 +261,13 @@ def _require_auth_config(settings: Settings) -> None:
         )
 
 
-def _verify_password(password: str, password_hash: str, username: str, expected: str) -> None:
-    """Check bcrypt password; respond with generic 401 on failure."""
+def _verify_env_password(
+    password: str,
+    username: str,
+    expected: str,
+    password_hash: str,
+) -> None:
+    """Check bcrypt password for env bootstrap user."""
     if username != expected:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -193,6 +294,7 @@ def _encode_token(
     subject: str,
     token_type: str,
     ttl: timedelta,
+    role: str = DEFAULT_ROLE,
     jti: str | None = None,
 ) -> str:
     """Sign an RS256 JWT."""
@@ -203,6 +305,7 @@ def _encode_token(
         "iat": now,
         "exp": now + ttl,
         "typ": token_type,
+        "role": role,
     }
     if jti is not None:
         payload["jti"] = jti
@@ -214,11 +317,7 @@ def _encode_token(
 
 
 def decode_access_token(token: str, settings: Settings) -> dict[str, Any]:
-    """Verify an access JWT and return its claims.
-
-    Raises:
-        HTTPException: 401 when verification fails.
-    """
+    """Verify an access JWT and return its claims."""
     if not settings.jwt_public_pem():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -321,6 +420,8 @@ async def _issue_tokens(
     settings: Settings,
     subject: str,
     redis: Redis,
+    *,
+    role: str = DEFAULT_ROLE,
 ) -> tuple[str, str, int]:
     """Sign tokens and store refresh jti."""
     access_ttl = timedelta(minutes=settings.access_token_minutes)
@@ -331,12 +432,14 @@ async def _issue_tokens(
         subject=subject,
         token_type=_TOKEN_TYPE_ACCESS,
         ttl=access_ttl,
+        role=role,
     )
     refresh = _encode_token(
         settings=settings,
         subject=subject,
         token_type=_TOKEN_TYPE_REFRESH,
         ttl=refresh_ttl,
+        role=role,
         jti=jti,
     )
     await _store_refresh(redis, jti, subject, int(refresh_ttl.total_seconds()))

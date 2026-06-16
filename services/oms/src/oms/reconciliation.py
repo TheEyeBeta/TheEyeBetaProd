@@ -11,7 +11,7 @@ import nats
 import structlog
 
 from oms.broker_client import BrokerAdapterClient
-from oms.submission_gate import SubmissionGate
+from oms.submission_gate import PauseSource, SubmissionGate
 
 log = structlog.get_logger()
 
@@ -104,12 +104,15 @@ class ReconciliationLoop:
                 "drift_count": len(drifts),
             }
             await self._publish_breach(payload)
-            await self._gate.pause(reason="reconciliation drift detected")
+            await self._gate.pause(
+                source=PauseSource.RECONCILIATION,
+                reason="reconciliation drift detected",
+            )
             log.warning("oms_reconciliation_drift", drift_count=len(drifts))
             return {"ok": False, "drifts": drifts}
 
-        if await self._gate.is_paused():
-            await self._gate.resume()
+        if await self._gate.is_source_paused(PauseSource.RECONCILIATION):
+            await self._gate.resume(source=PauseSource.RECONCILIATION)
         log.info("oms_reconciliation_ok")
         return {"ok": True, "drifts": []}
 

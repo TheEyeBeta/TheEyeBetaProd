@@ -96,10 +96,11 @@ journalctl -u docker -n 100          # Docker daemon errors
 | Service in restart loop | `tb logs <svc>` — missing env var? | `tb secrets decrypt dev` + `tb restart <svc>` |
 | Postgres connection refused | `docker compose ps postgres` — healthy? | `docker compose restart postgres` |
 | NATS not accepting connections | `curl -s http://localhost:8222/healthz` | `docker compose restart nats` |
-| Redis NOAUTH / WRONGPASS | `.env` REDIS_PASSWORD mismatch | re-decrypt secrets, restart redis |
+| Redis connection refused | `docker compose ps redis` — healthy? | `docker compose restart redis` |
 | LLM calls failing 429 | [Anthropic console](#-consoles--contacts) — check quota | reduce agent concurrency or wait |
 | Alpaca orders rejected | [Alpaca dashboard](#-consoles--contacts) — check account status | pause broker-adapter-alpaca |
-| OMS submission paused | Redis key `oms:submissions:paused` set | `POST /oms/reconciliation/resolve` |
+| OMS reconciliation pause | Redis DB 0 key `oms:submissions_paused:reconciliation` set | `POST /oms/reconciliation/resolve` |
+| OMS emergency halt active | Redis DB 0 key `oms:submissions_paused:emergency` set | requires admin resume (not yet implemented) |
 | Disk full | `df -h` | clear old Docker images: `docker image prune -f` |
 
 ### Step 4 — Rollback if needed

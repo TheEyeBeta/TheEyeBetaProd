@@ -13,7 +13,7 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from oms.reconciliation import BREACH_SUBJECT, ReconciliationLoop  # noqa: E402
-from oms.submission_gate import SubmissionGate  # noqa: E402
+from oms.submission_gate import PauseSource, SubmissionGate  # noqa: E402
 
 
 @pytest.mark.unit
@@ -62,7 +62,7 @@ async def test_reconciliation_pauses_on_intentional_position_drift() -> None:
 async def test_reconciliation_resumes_when_drift_cleared() -> None:
     """Matching broker state clears an existing reconciliation pause."""
     gate = SubmissionGate(redis_url=None)
-    await gate.pause(reason="prior drift")
+    await gate.pause(source=PauseSource.RECONCILIATION, reason="prior drift")
     loop = ReconciliationLoop(
         "postgresql://test:test@localhost/db",
         "http://broker:7090",
@@ -81,3 +81,31 @@ async def test_reconciliation_resumes_when_drift_cleared() -> None:
 
     assert result["ok"] is True
     assert not await gate.is_paused()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_reconciliation_does_not_clear_emergency_pause() -> None:
+    """A clean reconciliation cycle must not resume an emergency halt."""
+    gate = SubmissionGate(redis_url=None)
+    await gate.pause(source=PauseSource.EMERGENCY, reason="admin halt")
+    loop = ReconciliationLoop(
+        "postgresql://test:test@localhost/db",
+        "http://broker:7090",
+        "nats://127.0.0.1:4222",
+        gate,
+    )
+    loop._nc = MagicMock()
+
+    with (
+        patch.object(loop._broker, "list_positions", AsyncMock(return_value=[])),
+        patch.object(loop._broker, "list_orders", AsyncMock(return_value=[])),
+        patch.object(loop, "_load_local_positions", AsyncMock(return_value=[])),
+        patch.object(loop, "_load_local_orders", AsyncMock(return_value=[])),
+    ):
+        result = await loop.run_once()
+
+    assert result["ok"] is True
+    assert await gate.is_paused()
+    assert await gate.is_source_paused(PauseSource.EMERGENCY)
+    assert not await gate.is_source_paused(PauseSource.RECONCILIATION)
