@@ -1,4 +1,4 @@
-# STATUS: scaffolded, not deployed. Pending: deploy unit + NATS/LLM wiring.
+# STATUS: deployed via theeye-agent-runtime.service.
 """FastAPI entrypoint for agent-runtime (port 8004)."""
 
 from __future__ import annotations

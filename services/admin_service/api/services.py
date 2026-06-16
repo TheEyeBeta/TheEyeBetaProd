@@ -34,6 +34,7 @@ RESTARTABLE_SERVICES: dict[str, str] = {
 # Full set reported by /status — superset of RESTARTABLE_SERVICES.
 ALL_UNITS: dict[str, str] = {
     **RESTARTABLE_SERVICES,
+    "agent-runtime": "theeye-agent-runtime",
     "nats": "nats",
     "redis": "redis-server",
     "risk-service": "theeye-risk-service",
@@ -130,8 +131,8 @@ def register_services_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         name: str,
         body: RestartServiceRequest,
-        user: dict[str, str] = require_role(Role.OPERATOR),
         conn: DbConn,
+        user: dict[str, str] = require_role(Role.OPERATOR),
     ) -> RestartServiceResponse:
         """Restart a whitelisted systemd unit and audit-log the action."""
         if name not in RESTARTABLE_SERVICES:
