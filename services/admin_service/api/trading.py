@@ -81,6 +81,7 @@ def register_trading_routes(limiter: Limiter) -> APIRouter:
         body: LiveApprovalRequest,
         conn: DbConn,
         redis: RedisDep,
+        redis_ops: RedisOpsDep,
         user: dict[str, str] = require_role(Role.MASTER_ADMIN),
     ) -> LiveApprovalResponse:
         """Update accounts.metadata.live_approval with dual-confirm and audit."""
@@ -118,6 +119,16 @@ def register_trading_routes(limiter: Limiter) -> APIRouter:
         )
         count = int(result.split()[-1]) if result else 0
 
+        redis_live_ok = False
+        try:
+            if body.enable:
+                await redis_ops.set("trading:live_enabled", "true")
+            else:
+                await redis_ops.delete("trading:live_enabled")
+            redis_live_ok = True
+        except Exception as exc:  # noqa: BLE001
+            log.warning("admin_live_approval_redis_failed", error=str(exc))
+
         await write_audit_log(
             conn,
             actor=actor,
@@ -133,6 +144,7 @@ def register_trading_routes(limiter: Limiter) -> APIRouter:
                 "actor": user["sub"],
                 "updated_at": updated_at.isoformat(),
                 "accounts_updated": count,
+                "redis_live_enabled": body.enable if redis_live_ok else None,
             },
         )
 

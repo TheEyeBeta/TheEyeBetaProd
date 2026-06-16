@@ -14,6 +14,7 @@ from audit_log import write_audit_log
 from auth import CurrentUser
 from deps import DbConn, NatsClient
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from rbac import Role, require_role
 from slowapi import Limiter
 
 from zinc_schemas.admin_dto import (
@@ -524,7 +525,7 @@ def register_proposals_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         proposal_id: UUID,
         body: ApproveProposalRequest,
-        user: CurrentUser,
+        user: dict[str, str] = require_role(Role.OPERATOR),
         conn: DbConn,
         nats: NatsClient,
     ) -> ApproveProposalResponse:
@@ -553,7 +554,7 @@ def register_proposals_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         proposal_id: UUID,
         body: RejectProposalRequest,
-        user: CurrentUser,
+        user: dict[str, str] = require_role(Role.OPERATOR),
         conn: DbConn,
     ) -> RejectProposalResponse:
         """Transition a proposal to ``rejected`` with a required ``review_notes``."""

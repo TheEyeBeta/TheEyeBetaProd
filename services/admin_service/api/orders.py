@@ -14,6 +14,7 @@ from audit_log import write_audit_log
 from auth import CurrentUser
 from deps import DbConn, NatsClient
 from fastapi import APIRouter, HTTPException, Request, status
+from rbac import Role, require_role
 from slowapi import Limiter
 
 from zinc_schemas.admin_dto import (
@@ -286,7 +287,7 @@ def register_orders_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         order_id: UUID,
         body: ApproveOrderRequest,
-        user: CurrentUser,
+        user: dict[str, str] = require_role(Role.OPERATOR),
         conn: DbConn,
         nats: NatsClient,
     ) -> ApproveOrderResponse:
@@ -305,7 +306,7 @@ def register_orders_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         order_id: UUID,
         body: RejectOrderRequest,
-        user: CurrentUser,
+        user: dict[str, str] = require_role(Role.OPERATOR),
         conn: DbConn,
     ) -> RejectOrderResponse:
         """Transition ``pending_approval`` → ``rejected`` with reason in metadata."""

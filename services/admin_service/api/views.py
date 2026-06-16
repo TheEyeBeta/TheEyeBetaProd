@@ -69,6 +69,7 @@ from auth import CurrentUser
 from deps import DbConn, NatsClient, SettingsDep
 from fastapi import APIRouter, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
+from rbac import Role, require_role
 from slowapi import Limiter
 from web import page_context, templates
 
@@ -1155,7 +1156,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
     @limiter.limit("20/minute")
     async def fragment_sql_execute(
         request: Request,
-        user: CurrentUser,
+        user: dict[str, str] = require_role(Role.MASTER_ADMIN),
         conn: DbConn,
         statement: Annotated[str, Form(min_length=1, max_length=20_000)],
         idempotency_key: Annotated[str, Form(min_length=1, max_length=64)],

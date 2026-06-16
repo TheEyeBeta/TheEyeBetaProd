@@ -10,6 +10,7 @@ from audit_log import write_audit_log
 from auth import CurrentUser
 from deps import DbConn
 from fastapi import APIRouter, HTTPException, Request, status
+from rbac import Role, require_role
 from slowapi import Limiter
 
 from zinc_schemas.admin_dto import (
@@ -35,6 +36,12 @@ ALL_UNITS: dict[str, str] = {
     **RESTARTABLE_SERVICES,
     "nats": "nats",
     "redis": "redis-server",
+    "risk-service": "theeye-risk-service",
+    "compliance-service": "theeye-compliance-service",
+    "oms": "theeye-oms",
+    "broker-adapter": "theeye-broker-adapter-alpaca",
+    "master-orchestrator": "theeye-master-orchestrator",
+    "audit-service": "theeye-audit-service",
 }
 
 
@@ -123,7 +130,7 @@ def register_services_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         name: str,
         body: RestartServiceRequest,
-        user: CurrentUser,
+        user: dict[str, str] = require_role(Role.OPERATOR),
         conn: DbConn,
     ) -> RestartServiceResponse:
         """Restart a whitelisted systemd unit and audit-log the action."""

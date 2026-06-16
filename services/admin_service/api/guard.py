@@ -11,6 +11,7 @@ from audit_log import write_audit_log
 from auth import CurrentUser
 from deps import DbConn
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from rbac import Role, require_role
 from slowapi import Limiter
 
 from zinc_schemas.admin_dto import (
@@ -249,7 +250,7 @@ def register_guard_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         violation_id: int,
         body: ResolveGuardViolationRequest,
-        user: CurrentUser,
+        user: dict[str, str] = require_role(Role.OPERATOR),
         conn: DbConn,
     ) -> ResolveGuardViolationResponse:
         """Mark a guard violation as resolved by the current operator."""

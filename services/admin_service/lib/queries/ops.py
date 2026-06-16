@@ -179,7 +179,7 @@ async def fetch_pending_orders_count(conn: asyncpg.Connection) -> int:
     """Count orders awaiting human approval."""
     count = await conn.fetchval(
         """
-        SELECT COUNT(*)::int FROM theeyebeta.orders WHERE status = 'pending'
+        SELECT COUNT(*)::int FROM theeyebeta.orders WHERE status = 'pending_approval'
         """,
     )
     return int(count or 0)
@@ -279,10 +279,14 @@ def compute_health(
     open_breakers: list[dict[str, Any]],
     critical_alerts: list[dict[str, Any]],
     stale_heartbeats: list[dict[str, Any]],
+    prelive_passed: bool | None = None,
+    audit_chain_valid: bool | None = None,
 ) -> str:
     """Derive aggregate health from ops signals."""
     if open_breakers or critical_alerts:
         return "critical"
+    if prelive_passed is False or audit_chain_valid is False:
+        return "degraded"
     if stale_heartbeats:
         return "degraded"
     return "ok"

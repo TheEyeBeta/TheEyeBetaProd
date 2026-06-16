@@ -128,6 +128,10 @@ def register_ops_routes() -> APIRouter:
             open_breakers=open_breakers,
             critical_alerts=critical_alerts,
             stale_heartbeats=stale,
+            prelive_passed=prelive.get("passed") if isinstance(prelive, dict) else None,
+            audit_chain_valid=audit_chain.get("valid")
+            if isinstance(audit_chain, dict)
+            else None,
         )
 
         log.info("admin_ops_pulse", health=health, sub=user["sub"])

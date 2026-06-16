@@ -48,7 +48,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """Build broker-adapter FastAPI app."""
     cfg = settings or Settings()
     adapter = AlpacaAdapter(cfg)
-    consumer = ApprovedOrderConsumer(cfg.nats_url, adapter)
+    consumer = ApprovedOrderConsumer(cfg, adapter)
     streamer = TradeUpdateStreamer(adapter, cfg.nats_url)
 
     @asynccontextmanager

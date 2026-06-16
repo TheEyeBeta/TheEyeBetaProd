@@ -10,6 +10,13 @@ import nats
 import structlog
 
 from broker_adapter_alpaca.adapter import AlpacaAdapter
+from broker_adapter_alpaca.live_gate import (
+    DataGapBlockError,
+    LiveTradingNotApprovedError,
+    TradingDisabledError,
+    assert_order_submission_allowed,
+)
+from broker_adapter_alpaca.settings import Settings
 from zinc_schemas.broker_base import SubmitOrderRequest
 
 log = structlog.get_logger()
@@ -22,12 +29,12 @@ class ApprovedOrderConsumer:
 
     def __init__(
         self,
-        nats_url: str,
+        settings: Settings,
         adapter: AlpacaAdapter,
         *,
         symbol_resolver: dict[int, str] | None = None,
     ) -> None:
-        self._nats_url = nats_url
+        self._settings = settings
         self._adapter = adapter
         self._symbols = symbol_resolver or {}
         self._nc: nats.NATS | None = None
@@ -35,7 +42,7 @@ class ApprovedOrderConsumer:
 
     async def start(self) -> None:
         """Subscribe to approved orders."""
-        self._nc = await nats.connect(self._nats_url)
+        self._nc = await nats.connect(self._settings.nats_url)
         await self._nc.subscribe(APPROVED_SUBJECT, cb=self._on_approved)
         log.info("broker_adapter_consumer_started", subject=APPROVED_SUBJECT)
 
@@ -59,10 +66,31 @@ class ApprovedOrderConsumer:
             payload = json.loads(msg.data.decode())
             order_id = str(payload["order_id"])
             instrument_id = int(payload["instrument_id"])
-            symbol = self._symbols.get(instrument_id) or str(payload.get("symbol") or "AAPL")
+            symbol = self._symbols.get(instrument_id) or payload.get("symbol")
+            if not symbol:
+                log.error(
+                    "broker_adapter_missing_symbol",
+                    order_id=order_id,
+                    instrument_id=instrument_id,
+                )
+                return
+            live_mode = self._settings.mode == "live"
+            try:
+                await assert_order_submission_allowed(
+                    self._settings.pg_dsn(),
+                    live_mode=live_mode,
+                    redis_url=self._settings.redis_url or None,
+                )
+            except (DataGapBlockError, LiveTradingNotApprovedError, TradingDisabledError) as exc:
+                log.error(
+                    "broker_adapter_gate_blocked",
+                    order_id=order_id,
+                    error=str(exc),
+                )
+                return
             request = SubmitOrderRequest(
                 order_id=order_id,
-                symbol=symbol,
+                symbol=str(symbol),
                 side=str(payload["side"]),
                 qty=float(payload["qty"]),
                 order_type="market",
