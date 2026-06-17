@@ -12,9 +12,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ── Gate ──────────────────────────────────────────────────────────────────
+  # Manual approval required before any code lands on the production host.
+  # Only MASTER_ADMIN GitHub users (CODEOWNERS) can approve.
+  approve:
+    name: Await deployment approval
+    runs-on: ubuntu-latest
+    environment: production          # protection rules live in repo Settings → Environments
+    steps:
+      - name: Approval granted
+        run: echo "Deployment approved."
+
+  # ── Deploy ────────────────────────────────────────────────────────────────
   deploy:
     name: Deploy to Mac Mini (bare metal)
+    needs: approve
     runs-on: ubuntu-latest
+
+    # Services that make up the full trading stack.
+    # Data-pipeline services are NOT restarted here — they are long-running
+    # and restart themselves on the nightly schedules defined in their timers.
+    env:
+      TRADING_SVCS: >-
+        theeye-audit-service
+        theeye-oms
+        theeye-broker-adapter-alpaca
+        theeye-master-orchestrator
+        theeye-risk-service
+        theeye-compliance-service
+        theeye-agent-runtime
+      ADMIN_SVCS: >-
+        theeyebeta-admin
+        theeyebeta-litellm
 
     steps:
       # ── 1. Tailscale ────────────────────────────────────────────────────────
@@ -35,30 +64,45 @@ jobs:
           host:     ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key:      ${{ secrets.SSH_PRIVATE_KEY }}
-          timeout:  120s
+          timeout:  300s
+          envs:     TRADING_SVCS,ADMIN_SVCS
           script: |
             set -euo pipefail
             REPO="$HOME/TheEyeBeta2025/TheEyeBetaProd"
+            export PATH="$HOME/.local/bin:$PATH"
+
+            echo "━━━ Snapshot rollback reference ━━━━━━━━━━━━━━"
+            cd "$REPO"
+            PREV_SHA=$(git rev-parse HEAD)
+            echo "Previous HEAD: $PREV_SHA"
 
             echo "━━━ Pull latest ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            cd "$REPO"
             git fetch --all
             git reset --hard origin/main
             echo "HEAD: $(git log --oneline -1)"
 
             echo "━━━ Sync dependencies ━━━━━━━━━━━━━━━━━━━━━━━━"
             # --frozen: fail if uv.lock is out of date rather than silently updating it.
-            # Update the lock file locally and commit before merging to main.
-            export PATH="$HOME/.local/bin:$PATH"
             uv sync --frozen --all-packages
 
-            echo "━━━ Restart services ━━━━━━━━━━━━━━━━━━━━━━━━━"
-            sudo systemctl restart theeyebeta-admin theeyebeta-litellm
+            echo "━━━ Restart trading stack ━━━━━━━━━━━━━━━━━━━━"
+            # Trading services first (order matters: audit before oms before broker)
+            for svc in $TRADING_SVCS; do
+              echo "  → restarting $svc"
+              sudo systemctl restart "$svc"
+            done
+
+            echo "━━━ Restart admin + gateway ━━━━━━━━━━━━━━━━━━"
+            for svc in $ADMIN_SVCS; do
+              echo "  → restarting $svc"
+              sudo systemctl restart "$svc"
+            done
 
             echo "━━━ Health check ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            sleep 3
+            sleep 5
             FAILED=0
-            for svc in theeyebeta-admin theeyebeta-litellm; do
+            ALL_SVCS="$TRADING_SVCS $ADMIN_SVCS"
+            for svc in $ALL_SVCS; do
               if systemctl is-active --quiet "$svc"; then
                 echo "  ✓  $svc"
               else
@@ -67,8 +111,37 @@ jobs:
                 FAILED=1
               fi
             done
-            [ "$FAILED" -eq 0 ] || exit 1
+
+            if [ "$FAILED" -ne 0 ]; then
+              echo "━━━ ROLLBACK — service failed to start ━━━━━━"
+              git reset --hard "$PREV_SHA"
+              uv sync --frozen --all-packages
+              for svc in $ALL_SVCS; do sudo systemctl restart "$svc" || true; done
+              echo "Rolled back to $PREV_SHA"
+              exit 1
+            fi
+
+            echo "━━━ Prelive check ━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            # Give services a few extra seconds to fully initialise
+            sleep 10
+            if ! uv run python scripts/prelive_check.py; then
+              echo "━━━ ROLLBACK — prelive check failed ━━━━━━━━━"
+              git reset --hard "$PREV_SHA"
+              uv sync --frozen --all-packages
+              for svc in $ALL_SVCS; do sudo systemctl restart "$svc" || true; done
+              echo "Rolled back to $PREV_SHA"
+              exit 1
+            fi
 
             echo "━━━ Deploy complete ━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "Deployed at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
             echo "Commit:      $(git log --oneline -1)"
+
+  # ── Smoke tests ───────────────────────────────────────────────────────────
+  # Reuse the smoke-test workflow logic by triggering it as a post-deploy
+  # verification step.  Smoke tests connect to the live host via Tailscale.
+  smoke:
+    name: Post-deploy smoke tests
+    needs: deploy
+    uses: ./.github/workflows/paper-smoke.yml
+    secrets: inherit
