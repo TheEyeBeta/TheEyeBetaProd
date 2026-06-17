@@ -3,15 +3,14 @@
  * @brief  Unit tests for zinc::ta::bollinger.
  */
 
+#include "ta_test_reference.hpp"
 #include "zinc/ta/bollinger.hpp"
 
 #include <cmath>
-#include <random>
 #include <vector>
 
 #include <gtest/gtest.h>
-
-#include "ta_test_reference.hpp"
+#include <random>
 
 namespace {
 
@@ -21,7 +20,7 @@ bool IsNan(double value) {
 
 constexpr int kPeriod = 3;
 
-}  // namespace
+} // namespace
 
 TEST(TaBollingerTest, HappyPathPandasTaReferenceLiteral) {
     const auto closes = zinc::ta_test::reference_closes();

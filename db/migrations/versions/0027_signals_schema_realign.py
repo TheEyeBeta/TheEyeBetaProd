@@ -31,6 +31,20 @@ revision = "0027_signals_schema_realign"
 down_revision = "0026_admin_rbac"
 
 SQL_UP = """
+CREATE TABLE IF NOT EXISTS public.tickers (
+    ticker_id     BIGSERIAL PRIMARY KEY,
+    ticker        VARCHAR(20) NOT NULL UNIQUE,
+    company_name  TEXT NOT NULL,
+    asset_type    VARCHAR(12) NOT NULL,
+    country_code  CHAR(2),
+    timezone      VARCHAR(64) NOT NULL,
+    exchange_id   BIGINT,
+    currency_code CHAR(3),
+    is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Preserve incompatible early-test data (2026-01-16..2026-02-09).
 ALTER TABLE theeyebeta.signals RENAME TO signals_v1_archive;
 

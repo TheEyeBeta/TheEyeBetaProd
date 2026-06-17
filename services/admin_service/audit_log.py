@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
+
 from audit_service.chain import append_chained_row
 
 log = structlog.get_logger()

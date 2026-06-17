@@ -42,7 +42,7 @@ def _parse_month(value: str) -> tuple[date, date]:
     """Validate ``YYYY-MM`` and return the half-open ``[start, end)`` window."""
     if not _MONTH_PATTERN.match(value):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="month must match YYYY-MM",
         )
     year = int(value[:4])
@@ -79,7 +79,7 @@ async def fetch_daily_costs(
     """Return :class:`DailyCostsResponse` for the trailing ``days`` window."""
     if days < 1 or days > _MAX_DAYS:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"days must be between 1 and {_MAX_DAYS}",
         )
     end_date = date.today()  # noqa: DTZ011 — calendar boundary

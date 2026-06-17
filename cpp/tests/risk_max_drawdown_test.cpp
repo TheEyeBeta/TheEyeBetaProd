@@ -7,11 +7,11 @@
 
 #include <cmath>
 #include <limits>
-#include <random>
 #include <span>
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <random>
 
 namespace {
 
@@ -19,7 +19,7 @@ bool IsNan(double value) {
     return std::isnan(value);
 }
 
-}  // namespace
+} // namespace
 
 TEST(MaxDrawdownTest, HappyPathHandComputed) {
     const double wealth[] = {100.0, 120.0, 90.0, 110.0};

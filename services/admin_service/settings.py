@@ -20,7 +20,12 @@ def _normalize_pem(value: str) -> str:
 class Settings(BaseSettings):
     """Admin-service configuration (env / sops-decrypted)."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     service_name: str = "admin-service"
     host: str = Field(default="0.0.0.0", validation_alias="ADMIN_SERVICE_HOST")

@@ -154,7 +154,7 @@ def register_trask_routes(limiter: Limiter) -> APIRouter:
         """Reset an open circuit breaker with audit trail."""
         if not body.consequences_acknowledged:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="consequences_acknowledged must be true",
             )
 

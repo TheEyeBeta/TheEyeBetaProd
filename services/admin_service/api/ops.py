@@ -129,9 +129,7 @@ def register_ops_routes() -> APIRouter:
             critical_alerts=critical_alerts,
             stale_heartbeats=stale,
             prelive_passed=prelive.get("passed") if isinstance(prelive, dict) else None,
-            audit_chain_valid=audit_chain.get("valid")
-            if isinstance(audit_chain, dict)
-            else None,
+            audit_chain_valid=audit_chain.get("valid") if isinstance(audit_chain, dict) else None,
         )
 
         log.info("admin_ops_pulse", health=health, sub=user["sub"])
@@ -146,9 +144,9 @@ def register_ops_routes() -> APIRouter:
             llm_cost_mtd_usd=float(llm_cost),
             prelive_last_result=PreliveLastResult(**prelive),
             timers_summary=TimersSummary(**timers),
-            services_summary=services
-            if isinstance(services, ServicesSummary)
-            else ServicesSummary(**services),
+            services_summary=(
+                services if isinstance(services, ServicesSummary) else ServicesSummary(**services)
+            ),
             audit_chain_status=AuditChainStatusSummary(**audit_chain),
         )
 

@@ -34,10 +34,12 @@ def canonical_status(json_output: bool = typer.Option(False, "--json")) -> None:
         f"({summary['price_coverage_pct']}%)",
     )
     typer.echo(
-        f"  Indicator rows:        {summary['indicator_rows']} "
-        f"({summary['indicator_coverage_pct']}% )"
-        if summary["indicator_coverage_pct"] is not None
-        else "  Indicator rows:        (no SELECT grant on ind_technical_daily)",
+        (
+            f"  Indicator rows:        {summary['indicator_rows']} "
+            f"({summary['indicator_coverage_pct']}% )"
+            if summary["indicator_coverage_pct"] is not None
+            else "  Indicator rows:        (no SELECT grant on ind_technical_daily)"
+        ),
     )
 
 

@@ -32,10 +32,11 @@ inline std::vector<double> project_simplex(std::vector<double> vector) {
         }
     }
 
-    const double theta = (std::accumulate(sorted.begin(), sorted.begin() + static_cast<std::ptrdiff_t>(rho + 1),
-                                          0.0) -
-                          1.0) /
-                         static_cast<double>(rho + 1);
+    const double theta =
+        (std::accumulate(sorted.begin(), sorted.begin() + static_cast<std::ptrdiff_t>(rho + 1),
+                         0.0) -
+         1.0) /
+        static_cast<double>(rho + 1);
 
     for (double& value : vector) {
         value = std::max(0.0, value - theta);
@@ -77,4 +78,4 @@ inline bool weights_sum_to_one(const std::vector<double>& weights, double tolera
     return std::abs(sum - 1.0) <= tolerance;
 }
 
-}  // namespace zinc::opt::detail
+} // namespace zinc::opt::detail

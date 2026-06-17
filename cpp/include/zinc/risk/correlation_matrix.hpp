@@ -35,4 +35,4 @@ namespace zinc::risk {
  */
 [[nodiscard]] Eigen::MatrixXd correlation_matrix(const Eigen::Ref<const Eigen::MatrixXd>& data);
 
-}  // namespace zinc::risk
+} // namespace zinc::risk

@@ -114,8 +114,7 @@ def run_diagnostics(conn: psycopg.Connection[Any]) -> dict[str, Any]:
     _p(f"  theeyebeta.alembic_version.version_num:  {findings['av_theeyebeta']}")
 
     # Any other theeyebeta-named tables in public (outside the allowed set)
-    rows = conn.execute(
-        """
+    rows = conn.execute("""
         SELECT table_name
         FROM information_schema.tables
         WHERE table_schema = 'public'
@@ -125,8 +124,7 @@ def run_diagnostics(conn: psycopg.Connection[Any]) -> dict[str, Any]:
             WHERE table_schema = 'theeyebeta' AND table_type = 'BASE TABLE'
           )
         ORDER BY table_name
-        """
-    ).fetchall()
+        """).fetchall()
     all_public_leaks = {r[0] for r in rows}
     findings["extra_leaks"] = sorted(all_public_leaks - _ALLOWED_ORPHANS)
     if findings["extra_leaks"]:
@@ -135,14 +133,12 @@ def run_diagnostics(conn: psycopg.Connection[Any]) -> dict[str, Any]:
         _p("  No unexpected public leaks beyond the known set.")
 
     # Hypertables in schema public
-    ht_rows = conn.execute(
-        """
+    ht_rows = conn.execute("""
         SELECT hypertable_name
         FROM timescaledb_information.hypertables
         WHERE hypertable_schema = 'public'
         ORDER BY hypertable_name
-        """
-    ).fetchall()
+        """).fetchall()
     findings["public_hypertables"] = [r[0] for r in ht_rows]
     if findings["public_hypertables"]:
         _p(f"  !! Hypertables in public: {findings['public_hypertables']}")
@@ -228,22 +224,18 @@ def run_cleanup(findings: dict[str, Any]) -> dict[str, Any]:
         try:
             # Step 1: migrate alembic_version metadata (if public table exists)
             if "alembic_version" in findings["public_orphans"]:
-                cur = conn.execute(
-                    """
+                cur = conn.execute("""
                     INSERT INTO theeyebeta.alembic_version (version_num)
                       SELECT version_num FROM public.alembic_version
                       ON CONFLICT (version_num) DO NOTHING
-                    """
-                )
+                    """)
                 summary["av_rows_moved"] = cur.rowcount
 
             # Step 2: sanity check — exactly 1 row for 0009_audit
-            row = conn.execute(
-                """
+            row = conn.execute("""
                 SELECT count(*) FROM theeyebeta.alembic_version
                 WHERE version_num = '0009_audit'
-                """
-            ).fetchone()
+                """).fetchone()
             if row is None or int(row[0]) != 1:
                 conn.rollback()
                 _p(

@@ -5,15 +5,15 @@
 
 #pragma once
 
-#include <filesystem>
-#include <functional>
-#include <string>
-#include <vector>
-
 #include "zinc/bt/decision.hpp"
 #include "zinc/bt/result.hpp"
 #include "zinc/bt/slippage_model.hpp"
 #include "zinc/bt/snapshot.hpp"
+
+#include <filesystem>
+#include <functional>
+#include <string>
+#include <vector>
 
 namespace zinc::bt {
 
@@ -89,4 +89,4 @@ class Engine {
     Strategy strategy_;
 };
 
-}  // namespace zinc::bt
+} // namespace zinc::bt

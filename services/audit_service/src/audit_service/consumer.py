@@ -11,6 +11,7 @@ import structlog
 from nats.js.api import ConsumerConfig, RetentionPolicy, StreamConfig
 
 from audit_service.chain import append_chained_row
+from audit_service.metrics import AuditMetrics
 from audit_service.models import AuditEventMessage
 from audit_service.settings import Settings
 
@@ -22,8 +23,9 @@ FILTER_SUBJECT = "audit.events.>"
 class AuditEventConsumer:
     """Pull-based durable subscriber that appends hash-chained audit rows."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, metrics: AuditMetrics | None = None) -> None:
         self._settings = settings
+        self._metrics = metrics
         self._nc: nats.NATS | None = None
         self._pull_sub: Any = None
 
@@ -95,6 +97,8 @@ class AuditEventConsumer:
             payload=event.payload,
             ts=event.ts,
         )
+        if self._metrics is not None:
+            self._metrics.events_consumed_total.inc()
         log.info(
             "audit_event_appended",
             subject=msg.subject,

@@ -3,13 +3,13 @@
  * @brief  Google Benchmark suite for zinc::opt kernels.
  */
 
-#include <random>
-
-#include <benchmark/benchmark.h>
-#include <Eigen/Dense>
-
 #include "zinc/opt/hrp.hpp"
 #include "zinc/opt/mvo.hpp"
+
+#include <Eigen/Dense>
+
+#include <benchmark/benchmark.h>
+#include <random>
 
 namespace {
 
@@ -29,7 +29,7 @@ const Eigen::MatrixXd kCovariance50 = make_covariance(50, 0x0B7050ULL);
 const Eigen::MatrixXd kCovariance100 = make_covariance(100, 0x0B7100ULL);
 const Eigen::VectorXd kExpectedReturns50 = Eigen::VectorXd::Zero(50);
 
-}  // namespace
+} // namespace
 
 static void BM_mvo_50_assets(benchmark::State& state) {
     for (auto _ : state) {

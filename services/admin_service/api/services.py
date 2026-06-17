@@ -137,7 +137,7 @@ def register_services_routes(limiter: Limiter) -> APIRouter:
         """Restart a whitelisted systemd unit and audit-log the action."""
         if name not in RESTARTABLE_SERVICES:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Service '{name}' is not in the restart whitelist",
             )
 

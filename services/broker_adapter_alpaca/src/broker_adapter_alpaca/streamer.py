@@ -67,7 +67,7 @@ class TradeUpdateStreamer:
             log.warning(
                 "trade_update_missing_order_id",
                 client_order_id=event.get("client_order_id"),
-                event=event_type,
+                trade_event=event_type,
             )
             return
 

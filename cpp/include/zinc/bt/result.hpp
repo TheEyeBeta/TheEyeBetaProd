@@ -63,4 +63,4 @@ struct Result {
     Metrics metrics;
 };
 
-}  // namespace zinc::bt
+} // namespace zinc::bt

@@ -87,14 +87,20 @@ class AgentRunner:
         *,
         kind: str = "run",
         agent_messages: list[dict[str, Any]] | None = None,
+        parent_run_id: UUID | None = None,
+        operator_context: dict[str, Any] | None = None,
+        subordinate_reports: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Run one agent against a packaged snapshot.
 
         Args:
             agent_id: Agent PK in ``theeyebeta.agents``.
             snapshot_id: Packaged snapshot UUID.
-            kind: ``run`` (default) or ``rebuttal`` for debate rounds.
+            kind: ``run`` (default), ``rebuttal``, or ``rollup`` (department synthesis).
             agent_messages: Peer rationales when ``kind`` is ``rebuttal``.
+            parent_run_id: Optional parent run for chain-of-command tracking.
+            operator_context: Operator constraints forwarded to the constitution.
+            subordinate_reports: Child agent briefings when ``kind`` is ``rollup``.
 
         Returns:
             Summary with run_id, decision ids, cost, tokens, stance, regime.
@@ -113,6 +119,9 @@ class AgentRunner:
                 loader,
                 kind=kind,
                 agent_messages=agent_messages or [],
+                parent_run_id=parent_run_id,
+                operator_context=operator_context or {},
+                subordinate_reports=subordinate_reports or [],
             )
         finally:
             await loader.aclose()
@@ -126,6 +135,9 @@ class AgentRunner:
         *,
         kind: str = "run",
         agent_messages: list[dict[str, Any]] | None = None,
+        parent_run_id: UUID | None = None,
+        operator_context: dict[str, Any] | None = None,
+        subordinate_reports: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         started = time.perf_counter()
         async with await psycopg.AsyncConnection.connect(self.database_url) as conn:
@@ -145,10 +157,10 @@ class AgentRunner:
             await conn.execute(
                 """
                 INSERT INTO theeyebeta.agent_runs
-                    (id, agent_id, triggered_by, snapshot_id, status)
-                VALUES (%s, %s, %s, %s, 'running')
+                    (id, agent_id, triggered_by, parent_run_id, snapshot_id, status)
+                VALUES (%s, %s, %s, %s, %s, 'running')
                 """,
-                (run_id, agent_id, f"api:{agent_id}", snapshot_id),
+                (run_id, agent_id, f"api:{agent_id}", parent_run_id, snapshot_id),
             )
             await conn.commit()
 
@@ -178,6 +190,8 @@ class AgentRunner:
                     model=constitution_model,
                     kind=kind,
                     agent_messages=agent_messages or [],
+                    operator_context=operator_context or {},
+                    subordinate_reports=subordinate_reports or [],
                 )
 
                 # Step 6: guard-service ValidateAgentOutput before persisting decisions.
@@ -279,13 +293,16 @@ class AgentRunner:
         model: str,
         kind: str = "run",
         agent_messages: list[dict[str, Any]] | None = None,
+        operator_context: dict[str, Any] | None = None,
+        subordinate_reports: list[dict[str, Any]] | None = None,
     ) -> tuple[AgentOutput, _TokenTotals, str, list[dict[str, str]]]:
         """Chat with optional tool calls, then return validated output."""
         is_rebuttal = kind == "rebuttal"
+        is_rollup = kind == "rollup"
         allowed = set(constitution.tools)
         tools = (
             None
-            if is_rebuttal
+            if is_rebuttal or is_rollup
             else ([openai_tool_definition()] if "compute_stat" in allowed else None)
         )
         tool_calls_log: list[dict[str, str]] = []
@@ -293,14 +310,24 @@ class AgentRunner:
             "snapshot_id": str(snapshot_id),
             "snapshot": snapshot_data,
         }
+        if operator_context:
+            user_payload["operator_context"] = operator_context
         if is_rebuttal and agent_messages:
             user_payload["agent_messages"] = agent_messages
-        user_intro = (
-            "Rebut or affirm your prior stance using peer agent_messages below. "
-            "Return ONLY valid JSON matching the output schema.\n\n"
-            if is_rebuttal
-            else "Analyze the snapshot JSON below and return your decision object.\n\n"
-        )
+        if is_rollup and subordinate_reports:
+            user_payload["subordinate_reports"] = subordinate_reports
+        if is_rollup:
+            user_intro = (
+                "Synthesize the subordinate_reports below into your department briefing. "
+                "Return ONLY valid JSON matching the output schema.\n\n"
+            )
+        elif is_rebuttal:
+            user_intro = (
+                "Rebut or affirm your prior stance using peer agent_messages below. "
+                "Return ONLY valid JSON matching the output schema.\n\n"
+            )
+        else:
+            user_intro = "Analyze the snapshot JSON below and return your decision object.\n\n"
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": constitution.system_prompt},
             {
@@ -310,7 +337,7 @@ class AgentRunner:
         ]
         totals = _TokenTotals()
         raw_text = ""
-        max_turns = 1 if is_rebuttal else max(1, constitution.max_turns)
+        max_turns = 1 if is_rebuttal or is_rollup else max(1, constitution.max_turns)
 
         for turn in range(max_turns):
             is_final = turn >= max_turns - 1

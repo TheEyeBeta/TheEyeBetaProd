@@ -98,8 +98,7 @@ def main() -> None:
         rpt.line("---")
         rpt.h(2, "1. Schemas present")
         rpt.line()
-        rows = conn.execute(
-            """
+        rows = conn.execute("""
             SELECT
                 n.nspname,
                 pg_size_pretty(coalesce(sum(pg_relation_size(c.oid)), 0)) AS size,
@@ -111,8 +110,7 @@ def main() -> None:
             WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
             GROUP BY n.nspname
             ORDER BY n.nspname
-            """
-        ).fetchall()
+            """).fetchall()
         rpt.table(
             ["schema", "size", "tables", "views", "partitioned_tables"],
             [[r[0], r[1], r[2], r[3], r[4]] for r in rows],
@@ -123,8 +121,7 @@ def main() -> None:
         rpt.line("---")
         rpt.h(2, "2. All tables in public schema")
         rpt.line()
-        rows = conn.execute(
-            """
+        rows = conn.execute("""
             SELECT
                 c.relname,
                 c.reltuples::bigint             AS estimated_rows,
@@ -135,8 +132,7 @@ def main() -> None:
             WHERE n.nspname = 'public'
               AND c.relkind IN ('r', 'p')
             ORDER BY c.reltuples DESC
-            """
-        ).fetchall()
+            """).fetchall()
         if rows:
             rpt.table(
                 ["table", "est_rows", "size", "comment"],
@@ -152,16 +148,14 @@ def main() -> None:
         rpt.line()
 
         # Content
-        rows = conn.execute(
-            """
+        rows = conn.execute("""
             SELECT 'public.alembic_version'     AS source, version_num::text AS version_num
               FROM public.alembic_version
             UNION ALL
             SELECT 'theeyebeta.alembic_version', version_num::text
               FROM theeyebeta.alembic_version
             ORDER BY source
-            """
-        ).fetchall()
+            """).fetchall()
         rpt.table(["source", "version_num"], [[r[0], r[1]] for r in rows])
         rpt.line()
 
@@ -195,8 +189,7 @@ def main() -> None:
         rpt.line()
 
         # Discover all name collisions
-        collision_rows = conn.execute(
-            """
+        collision_rows = conn.execute("""
             SELECT p.table_name
             FROM information_schema.tables p
             JOIN information_schema.tables t
@@ -206,8 +199,7 @@ def main() -> None:
               AND p.table_type IN ('BASE TABLE', 'VIEW')
               AND t.table_type IN ('BASE TABLE', 'VIEW')
             ORDER BY p.table_name
-            """
-        ).fetchall()
+            """).fetchall()
         collision_names = [r[0] for r in collision_rows]
         rpt.line(
             f"**Colliding names ({len(collision_names)}):** "
@@ -290,8 +282,7 @@ def main() -> None:
         rpt.line("---")
         rpt.h(2, "5. Hypertables across all schemas")
         rpt.line()
-        rows = conn.execute(
-            """
+        rows = conn.execute("""
             SELECT
                 h.hypertable_schema,
                 h.hypertable_name,
@@ -304,8 +295,7 @@ def main() -> None:
                 ) AS total_size
             FROM timescaledb_information.hypertables h
             ORDER BY h.hypertable_schema, h.hypertable_name
-            """
-        ).fetchall()
+            """).fetchall()
         if rows:
             rpt.table(
                 ["schema", "hypertable", "chunks", "dims", "total_size"],
@@ -319,8 +309,7 @@ def main() -> None:
         rpt.line("---")
         rpt.h(2, "6. Foreign keys crossing schemas (public ↔ theeyebeta)")
         rpt.line()
-        rows = conn.execute(
-            """
+        rows = conn.execute("""
             SELECT
                 tc.table_schema  || '.' || tc.table_name  AS from_table,
                 kcu.column_name                           AS from_col,
@@ -337,8 +326,7 @@ def main() -> None:
               AND tc.table_schema  IN ('public', 'theeyebeta')
               AND ccu.table_schema IN ('public', 'theeyebeta')
             ORDER BY from_table, from_col
-            """
-        ).fetchall()
+            """).fetchall()
         if rows:
             rpt.table(
                 ["from_table", "from_col", "to_table", "to_col", "constraint"],
@@ -352,8 +340,7 @@ def main() -> None:
         rpt.line("---")
         rpt.h(2, "7. Active connections (non-idle) right now")
         rpt.line()
-        rows = conn.execute(
-            """
+        rows = conn.execute("""
             SELECT
                 pid,
                 usename,
@@ -368,8 +355,7 @@ def main() -> None:
               AND state != 'idle'
               AND pid != pg_backend_pid()
             ORDER BY backend_start
-            """
-        ).fetchall()
+            """).fetchall()
         if rows:
             rpt.table(
                 [
@@ -391,8 +377,7 @@ def main() -> None:
         # Also show all connections (idle too) for app_name breakdown
         rpt.line("**All connections by user/app (including idle):**")
         rpt.line()
-        rows = conn.execute(
-            """
+        rows = conn.execute("""
             SELECT usename, application_name,
                    coalesce(client_addr::text,'local') AS client_addr,
                    count(*) AS conn_count,
@@ -402,8 +387,7 @@ def main() -> None:
               AND pid != pg_backend_pid()
             GROUP BY usename, application_name, client_addr
             ORDER BY conn_count DESC
-            """
-        ).fetchall()
+            """).fetchall()
         if rows:
             rpt.table(
                 ["user", "app", "client", "total_conns", "active"],
@@ -415,8 +399,7 @@ def main() -> None:
         rpt.line("---")
         rpt.h(2, "8. Recent write activity per table (top 30 by inserts)")
         rpt.line()
-        rows = conn.execute(
-            """
+        rows = conn.execute("""
             SELECT
                 schemaname,
                 relname,
@@ -429,8 +412,7 @@ def main() -> None:
             WHERE schemaname IN ('public', 'theeyebeta')
             ORDER BY n_tup_ins DESC
             LIMIT 30
-            """
-        ).fetchall()
+            """).fetchall()
         if rows:
             rpt.table(
                 ["schema", "table", "inserts", "updates", "deletes", "live_rows", "last_analyzed"],

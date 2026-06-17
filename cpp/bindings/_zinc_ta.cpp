@@ -3,15 +3,6 @@
  * @brief  nanobind bindings for zinc::ta kernels.
  */
 
-#include <nanobind/nanobind.h>
-#include <nanobind/ndarray.h>
-#include <nanobind/stl/vector.h>
-
-#include <cstddef>
-#include <span>
-#include <stdexcept>
-#include <vector>
-
 #include "zinc/ta/adx.hpp"
 #include "zinc/ta/atr.hpp"
 #include "zinc/ta/bar.hpp"
@@ -20,6 +11,15 @@
 #include "zinc/ta/rsi.hpp"
 #include "zinc/ta/snapshot_technicals.hpp"
 #include "zinc/ta/zscore.hpp"
+
+#include <cstddef>
+#include <span>
+#include <stdexcept>
+#include <vector>
+
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/vector.h>
 
 namespace nb = nanobind;
 
@@ -56,7 +56,7 @@ std::vector<zinc::ta::Bar> bars_from_ohlc(const ContiguousOhlc& ohlc) {
     return bars;
 }
 
-}  // namespace
+} // namespace
 
 NB_MODULE(_zinc_ta, module) {
     module.doc() = "zinc::ta — ATR, ADX, z-score, Bollinger Bands, and HMM regimes";
@@ -71,20 +71,17 @@ NB_MODULE(_zinc_ta, module) {
     nb::class_<zinc::ta::BollingerBands>(module, "BollingerBands",
                                          "Bollinger Bands (SMA middle, population-std envelopes).")
         .def_prop_ro(
-            "lower",
-            [](const zinc::ta::BollingerBands& bands) { return nb::cast(bands.lower); },
+            "lower", [](const zinc::ta::BollingerBands& bands) { return nb::cast(bands.lower); },
             "Lower band series.")
         .def_prop_ro(
-            "middle",
-            [](const zinc::ta::BollingerBands& bands) { return nb::cast(bands.middle); },
+            "middle", [](const zinc::ta::BollingerBands& bands) { return nb::cast(bands.middle); },
             "Middle band (SMA) series.")
         .def_prop_ro(
-            "upper",
-            [](const zinc::ta::BollingerBands& bands) { return nb::cast(bands.upper); },
+            "upper", [](const zinc::ta::BollingerBands& bands) { return nb::cast(bands.upper); },
             "Upper band series.");
 
     nb::class_<zinc::ta::HmmRegimeResult>(module, "HmmRegimeResult",
-                                            "Decoded hidden states from a Gaussian HMM.")
+                                          "Decoded hidden states from a Gaussian HMM.")
         .def_prop_ro(
             "states",
             [](const zinc::ta::HmmRegimeResult& result) { return nb::cast(result.states); },
@@ -166,7 +163,7 @@ Wilder Relative Strength Index (RSI) using close-to-close deltas.
 )doc");
 
     nb::class_<zinc::ta::TechnicalsLast>(module, "TechnicalsLast",
-                                          "Last-bar technical indicators for one symbol.")
+                                         "Last-bar technical indicators for one symbol.")
         .def_ro("atr14", &zinc::ta::TechnicalsLast::atr14)
         .def_ro("adx14", &zinc::ta::TechnicalsLast::adx14)
         .def_ro("rsi14", &zinc::ta::TechnicalsLast::rsi14)

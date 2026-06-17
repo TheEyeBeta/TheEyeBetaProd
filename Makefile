@@ -235,7 +235,7 @@ build-cpp: ## CMake configure + build (preset: linux-release)
 	@printf "$(BOLD)▶ cmake --preset $(PRESET)$(RESET)\n"
 	cmake --preset $(PRESET) -S cpp
 	@printf "$(BOLD)▶ cmake --build --preset $(PRESET)$(RESET)\n"
-	cmake --build --preset $(PRESET) --parallel $$(nproc 2>/dev/null || echo 4)
+	cd cpp && cmake --build --preset $(PRESET) --parallel $$(nproc 2>/dev/null || echo 4)
 	@printf "$(GREEN)✔ C++ build complete — artefacts in $(BUILD_DIR)$(RESET)\n"
 
 # ─────────────────────────────────────────────────────────────────────────────

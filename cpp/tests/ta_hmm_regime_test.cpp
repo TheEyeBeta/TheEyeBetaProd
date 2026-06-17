@@ -7,10 +7,10 @@
 
 #include <cmath>
 #include <cstdint>
-#include <random>
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <random>
 
 namespace {
 
@@ -64,7 +64,7 @@ double regime_accuracy(const std::vector<int>& predicted, const std::vector<int>
     return std::max(direct_rate, flipped_rate);
 }
 
-}  // namespace
+} // namespace
 
 TEST(TaHmmRegimeTest, HappyPathRecoversSyntheticRegimesAboveEightyFivePercent) {
     const SyntheticHmm data = make_synthetic_two_regime(500, 42U);

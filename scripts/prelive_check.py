@@ -28,7 +28,6 @@ import asyncpg
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from audit_service.chain import verify_chain as _verify_chain  # noqa: E402
-
 from workers.base_worker import worker_database_url
 from workers.gap_sentinel_worker import (
     check_canonical_freshness,

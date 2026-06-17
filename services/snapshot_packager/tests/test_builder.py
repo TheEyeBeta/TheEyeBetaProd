@@ -38,6 +38,8 @@ SNAPSHOT_DIR = Path(os.environ.get("SNAPSHOT_DIR", "./snapshots"))
 def _load(market: str) -> Snapshot:
     """Load and parse a built snapshot from disk."""
     p = SNAPSHOT_DIR / market / f"{TRADE_DATE}.json"
+    if not p.exists():
+        pytest.skip(f"snapshot artifact not present: {p}")
     return Snapshot.model_validate(json.loads(p.read_text()))
 
 

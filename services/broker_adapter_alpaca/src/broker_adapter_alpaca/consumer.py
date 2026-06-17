@@ -105,7 +105,16 @@ class ApprovedOrderConsumer:
                 qty=float(payload["qty"]),
                 order_type="market",
             )
-            result = await asyncio.to_thread(self._adapter.submit_order, request)
+            try:
+                result = await asyncio.to_thread(self._adapter.submit_order, request)
+            except Exception as exc:  # noqa: BLE001
+                log.warning(
+                    "broker_adapter_submit_rejected",
+                    order_id=order_id,
+                    error=str(exc),
+                )
+                await self._mark_rejected(order_id)
+                return
             await self._persist_submission(
                 result.order_id,
                 result.client_order_id,
@@ -119,6 +128,25 @@ class ApprovedOrderConsumer:
             )
         except Exception as exc:  # noqa: BLE001
             log.warning("broker_adapter_approved_failed", error=str(exc))
+
+    async def _mark_rejected(self, order_id: str) -> None:
+        """Mark an order rejected when Alpaca refuses submission.
+
+        Without this, a broker-side rejection (e.g. insufficient buying power)
+        leaves the order stuck at ``submitted`` with no ``broker_order_id``
+        forever, which reconciliation then reports as drift indefinitely.
+        """
+        async with await psycopg.AsyncConnection.connect(self._settings.pg_dsn()) as conn:
+            await conn.execute(
+                """
+                UPDATE theeyebeta.orders
+                   SET status = 'rejected',
+                       updated_at = now()
+                 WHERE id = %s
+                """,
+                (order_id,),
+            )
+            await conn.commit()
 
     async def _persist_submission(
         self,

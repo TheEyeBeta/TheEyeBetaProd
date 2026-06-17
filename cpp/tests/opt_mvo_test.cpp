@@ -6,11 +6,12 @@
 #include "zinc/opt/mvo.hpp"
 
 #include <cmath>
-#include <random>
 #include <vector>
 
 #include <Eigen/Dense>
+
 #include <gtest/gtest.h>
+#include <random>
 
 namespace {
 
@@ -28,7 +29,7 @@ bool WeightsValid(const std::vector<double>& weights) {
     return std::abs(sum - 1.0) < 1e-8;
 }
 
-}  // namespace
+} // namespace
 
 TEST(OptMvoTest, HappyPathMinimumVarianceHandComputed) {
     Eigen::Vector2d expected_returns = Eigen::Vector2d::Zero();
@@ -74,8 +75,8 @@ TEST(OptMvoTest, RandomCovarianceProducesValidLongOnlyWeights) {
             factor(row, column) = normal(rng);
         }
     }
-    const Eigen::MatrixXd covariance = factor * factor.transpose() +
-                                       Eigen::MatrixXd::Identity(assets, assets) * 1e-3;
+    const Eigen::MatrixXd covariance =
+        factor * factor.transpose() + Eigen::MatrixXd::Identity(assets, assets) * 1e-3;
     Eigen::VectorXd expected_returns(assets);
     for (int index = 0; index < assets; ++index) {
         expected_returns(index) = normal(rng) * 0.01;

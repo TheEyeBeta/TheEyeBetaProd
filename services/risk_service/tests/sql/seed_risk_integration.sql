@@ -10,7 +10,7 @@ ON CONFLICT (external_id) DO NOTHING;
 
 INSERT INTO theeyebeta.portfolios (id, account_id, name, mandate)
 VALUES (
-    'a660e8400-e29b-41d4-a716-446655440099',
+    'a660e840-e29b-41d4-a716-446655440099',
     '880e8400-e29b-41d4-a716-446655440003',
     'rs-var-integration',
     '{
@@ -45,7 +45,7 @@ INSERT INTO theeyebeta.positions (
     opened_at
 )
 SELECT
-    'a660e8400-e29b-41d4-a716-446655440099'::uuid,
+    'a660e840-e29b-41d4-a716-446655440099'::uuid,
     i.id,
     v.qty,
     v.avg_entry_price,
@@ -74,7 +74,7 @@ INSERT INTO theeyebeta.risk_metrics (
     raw
 )
 VALUES (
-    'a660e8400-e29b-41d4-a716-446655440099'::uuid,
+    'a660e840-e29b-41d4-a716-446655440099'::uuid,
     now() - interval '1 hour',
     0.12,
     0.14,

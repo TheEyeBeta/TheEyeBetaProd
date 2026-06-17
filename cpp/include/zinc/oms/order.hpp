@@ -84,4 +84,4 @@ struct Order {
  */
 [[nodiscard]] bool is_terminal(OrderStatus status) noexcept;
 
-}  // namespace zinc::oms
+} // namespace zinc::oms

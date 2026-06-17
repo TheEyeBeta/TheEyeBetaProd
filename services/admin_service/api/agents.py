@@ -82,6 +82,7 @@ async def fetch_agents_summary(conn: asyncpg.Connection) -> list[AgentSummary]:
             a.model_fallback,
             a.constitution_path,
             a.active,
+            a.reports_to,
             r.last_run_at,
             COALESCE(r.runs_7d, 0)::int AS runs_7d,
             CASE
@@ -102,6 +103,7 @@ async def fetch_agents_summary(conn: asyncpg.Connection) -> list[AgentSummary]:
             model_fallback=row["model_fallback"],
             constitution_path=row["constitution_path"],
             active=bool(row["active"]),
+            reports_to=row["reports_to"],
             last_run_at=row["last_run_at"],
             runs_7d=int(row["runs_7d"]),
             success_rate_7d=(
@@ -239,9 +241,9 @@ async def trigger_agent_run_impl(
             status_code=status.HTTP_409_CONFLICT,
             detail=response.text,
         )
-    if response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY:
+    if response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=response.text,
         )
     if response.status_code >= 500:
@@ -296,7 +298,7 @@ def _resolve_constitution_path(repo_root: Path, raw: str) -> Path:
         target.relative_to(repo_resolved)
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="constitution_path escapes repository root",
         ) from exc
     if not target.is_file():

@@ -59,6 +59,31 @@ class AlpacaAdapter:
         """Resolve internal order id from Alpaca client_order_id."""
         return self._order_by_client.get(client_order_id)
 
+    async def resolve_order_id_durable(self, client_order_id: str) -> str | None:
+        """Resolve internal order id, falling back to Postgres on a cache miss.
+
+        ``_order_by_client`` is in-memory and lost on every restart; the OMS
+        persists ``client_order_id`` on submission (see
+        ``ApprovedOrderConsumer._persist_submission``), so a DB lookup recovers
+        the mapping for trade updates that arrive after a restart.
+        """
+        cached = self._order_by_client.get(client_order_id)
+        if cached is not None:
+            return cached
+        import psycopg  # noqa: PLC0415
+
+        async with await psycopg.AsyncConnection.connect(self._settings.pg_dsn()) as conn:
+            cur = await conn.execute(
+                "SELECT id FROM theeyebeta.orders WHERE client_order_id = %s",
+                (client_order_id,),
+            )
+            row = await cur.fetchone()
+        if row is None:
+            return None
+        order_id = str(row[0])
+        self._order_by_client[client_order_id] = order_id
+        return order_id
+
     def _client(self, account: str = "zinc") -> object:
         if account not in _KNOWN_ACCOUNTS:
             msg = f"unknown account '{account}'; must be one of {sorted(_KNOWN_ACCOUNTS)}"
@@ -195,7 +220,7 @@ class AlpacaAdapter:
         stream = self._trading_stream()
 
         async def _on_update(data: dict[str, Any]) -> None:
-            normalized = normalize_trade_update(data, self)
+            normalized = await normalize_trade_update(data, self)
             await handler(normalized)
 
         stream.subscribe_trade_updates(_on_update)
@@ -226,7 +251,10 @@ def _order_to_dict(order: object) -> dict[str, Any]:
     }
 
 
-def normalize_trade_update(data: dict[str, Any] | object, adapter: AlpacaAdapter) -> dict[str, Any]:
+async def normalize_trade_update(
+    data: dict[str, Any] | object,
+    adapter: AlpacaAdapter,
+) -> dict[str, Any]:
     """Map Alpaca trade_update payload to NATS fill envelope."""
     if not isinstance(data, dict):
         if hasattr(data, "model_dump"):
@@ -240,7 +268,7 @@ def normalize_trade_update(data: dict[str, Any] | object, adapter: AlpacaAdapter
     else:
         order = _order_to_dict(order_raw)
     client_order_id = str(order.get("client_order_id") or "")
-    order_id = adapter.resolve_order_id(client_order_id) or ""
+    order_id = await adapter.resolve_order_id_durable(client_order_id) or ""
 
     fill_qty = float(order.get("filled_qty") or 0)
     price = float(order.get("filled_avg_price") or 0)

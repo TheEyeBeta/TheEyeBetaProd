@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 import psycopg
+from psycopg import sql
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]  # libs/zinc_test/src/zinc_test/_infra.py → root
 _BOOTSTRAP_SQL = _REPO_ROOT / "services" / "data_ingestion" / "tests" / "sql" / "bootstrap.sql"
@@ -33,6 +34,11 @@ class IntegrationInfra:
     minio_secret_key: str
     minio_bucket: str
 
+    @property
+    def ingest_database_url(self) -> str:
+        """Legacy name kept for service-local integration tests."""
+        return self.database_url
+
 
 def _normalize_psycopg_dsn(dsn: str) -> str:
     """Strip SQLAlchemy driver suffixes so psycopg.connect accepts the URL."""
@@ -49,6 +55,19 @@ def _to_asyncpg(dsn: str) -> str:
     return clean.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 
+def _to_sqlalchemy_psycopg(dsn: str) -> str:
+    """Convert a plain postgresql:// URL to SQLAlchemy's psycopg driver URL."""
+    clean = _normalize_psycopg_dsn(dsn)
+    return clean.replace("postgresql://", "postgresql+psycopg://", 1)
+
+
+def dsn_with_database(dsn: str, database: str) -> str:
+    """Return ``dsn`` with its URL path set to ``database``."""
+    clean = _normalize_psycopg_dsn(dsn)
+    parsed = urlparse(clean)
+    return urlunparse(parsed._replace(path=f"/{database}"))
+
+
 def _run_sql_file(dsn: str, path: Path) -> None:
     """Execute a SQL file against the given connection URL."""
     sql = path.read_text(encoding="utf-8")
@@ -56,10 +75,36 @@ def _run_sql_file(dsn: str, path: Path) -> None:
         conn.execute(sql)
 
 
+def _ensure_database_exists(dsn: str) -> None:
+    """Create the target database when a container did not pre-create it."""
+    clean = _normalize_psycopg_dsn(dsn)
+    parsed = urlparse(clean)
+    database = parsed.path.lstrip("/")
+    if not database:
+        return
+
+    maintenance = urlunparse(parsed._replace(path="/postgres"))
+    try:
+        with psycopg.connect(clean, autocommit=True):
+            return
+    except (psycopg.OperationalError, psycopg.errors.InvalidCatalogName) as exc:
+        if "database" not in str(exc) or "does not exist" not in str(exc):
+            raise
+
+    with psycopg.connect(maintenance, autocommit=True) as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM pg_database WHERE datname = %s",
+            (database,),
+        ).fetchone()
+        if exists is None:
+            conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database)))
+
+
 def app_dsn_from_admin(admin_dsn: str) -> str:
     """Build the tb_app application URL from the admin connection URL."""
-    parsed = urlparse(admin_dsn)
-    tb_app = parsed._replace(username="tb_app", password="tb_app_test")  # noqa: S106
+    parsed = urlparse(_normalize_psycopg_dsn(admin_dsn))
+    host = parsed.netloc.rsplit("@", 1)[-1]
+    tb_app = parsed._replace(netloc=f"tb_app:tb_app_test@{host}")  # noqa: S106
     plain = urlunparse(tb_app)
     return _normalize_psycopg_dsn(plain)
 
@@ -71,17 +116,23 @@ ingest_dsn_from_admin = app_dsn_from_admin
 def bootstrap_database(admin_dsn: str) -> None:
     """Create extensions/schema/roles, run Alembic migrations, seed one US instrument."""
     clean = _normalize_psycopg_dsn(admin_dsn)
+    _ensure_database_exists(clean)
     _run_sql_file(clean, _BOOTSTRAP_SQL)
 
     if _DB_ALEMBIC_INI.exists():
         env = os.environ.copy()
-        env["DATABASE_URL"] = _to_asyncpg(clean)
+        env["DATABASE_URL"] = _to_sqlalchemy_psycopg(clean)
+        env.setdefault("LITELLM_DB_PASSWORD", "integration_test_litellm")
         subprocess.run(
             [sys.executable, "-m", "alembic", "upgrade", "head"],
             cwd=_DB_ALEMBIC_INI.parent,
             check=True,
             env=env,
         )
+
+    with psycopg.connect(clean, autocommit=True) as conn:
+        conn.execute("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA theeyebeta TO tb_app")
+        conn.execute("GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA theeyebeta TO tb_app")
 
     _run_sql_file(clean, _SEED_INSTRUMENT_SQL)
 

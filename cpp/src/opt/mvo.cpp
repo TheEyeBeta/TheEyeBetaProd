@@ -5,11 +5,11 @@
 
 #include "zinc/opt/mvo.hpp"
 
+#include "zinc/opt/detail/simplex.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <vector>
-
-#include "zinc/opt/detail/simplex.hpp"
 
 namespace zinc::opt {
 
@@ -19,11 +19,11 @@ constexpr int kMaxIterations = 2000;
 constexpr double kTolerance = 1e-10;
 constexpr double kInitialStep = 0.1;
 
-}  // namespace
+} // namespace
 
 PortfolioWeights mvo(const Eigen::Ref<const Eigen::VectorXd>& expected_returns,
-                       const Eigen::Ref<const Eigen::MatrixXd>& covariance,
-                       const double risk_aversion, const bool long_only) {
+                     const Eigen::Ref<const Eigen::MatrixXd>& covariance,
+                     const double risk_aversion, const bool long_only) {
     PortfolioWeights result;
     const Eigen::Index assets = expected_returns.size();
     if (assets == 0 || covariance.rows() != assets || covariance.cols() != assets ||
@@ -36,18 +36,17 @@ PortfolioWeights mvo(const Eigen::Ref<const Eigen::VectorXd>& expected_returns,
         return result;
     }
 
-    std::vector<double> weights(static_cast<std::size_t>(assets), 1.0 / static_cast<double>(assets));
+    std::vector<double> weights(static_cast<std::size_t>(assets),
+                                1.0 / static_cast<double>(assets));
     double step = kInitialStep;
 
     for (int iteration = 0; iteration < kMaxIterations; ++iteration) {
         Eigen::Map<Eigen::VectorXd> weight_map(weights.data(), assets);
-        const Eigen::VectorXd gradient =
-            expected_returns - risk_aversion * covariance * weight_map;
+        const Eigen::VectorXd gradient = expected_returns - risk_aversion * covariance * weight_map;
 
         std::vector<double> candidate = weights;
         for (Eigen::Index index = 0; index < assets; ++index) {
-            candidate[static_cast<std::size_t>(index)] +=
-                step * gradient(index);
+            candidate[static_cast<std::size_t>(index)] += step * gradient(index);
         }
 
         if (long_only) {
@@ -81,4 +80,4 @@ PortfolioWeights mvo(const Eigen::Ref<const Eigen::VectorXd>& expected_returns,
     return result;
 }
 
-}  // namespace zinc::opt
+} // namespace zinc::opt

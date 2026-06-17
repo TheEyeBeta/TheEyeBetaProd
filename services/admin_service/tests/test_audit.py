@@ -156,7 +156,7 @@ async def test_audit_auth_required(audit_integration_dsn: str) -> None:
     from main import create_app  # noqa: PLC0415
     from settings import Settings, get_settings  # noqa: PLC0415
 
-    from tests.conftest import (  # noqa: E402
+    from services.admin_service.tests.conftest import (  # noqa: E402
         _close_test_resources,
         _init_test_resources,
     )
@@ -168,7 +168,7 @@ async def test_audit_auth_required(audit_integration_dsn: str) -> None:
         patch("deps.init_resources", _init_test_resources),
         patch("deps.close_resources", _close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         transport = ASGITransport(app=app, lifespan="on")
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             assert (await client.get("/admin/audit/log")).status_code == 401

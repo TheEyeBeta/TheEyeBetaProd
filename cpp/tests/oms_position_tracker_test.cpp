@@ -15,9 +15,9 @@ namespace {
 
 constexpr int64_t kConcurrentFillCount = 1000;
 constexpr int kConcurrentThreads = 10;
-constexpr int64_t kReferenceNetPosition = 10000;  // 10 * 1000 * +1
+constexpr int64_t kReferenceNetPosition = 10000; // 10 * 1000 * +1
 
-}  // namespace
+} // namespace
 
 TEST(OmsPositionTrackerTest, HappyPathHandComputedNetPosition) {
     zinc::oms::PositionTracker tracker;

@@ -33,4 +33,4 @@ double max_drawdown(std::span<const double> wealth) noexcept {
     return worst_drawdown;
 }
 
-}  // namespace zinc::risk
+} // namespace zinc::risk

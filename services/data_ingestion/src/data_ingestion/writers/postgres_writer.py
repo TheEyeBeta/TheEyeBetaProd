@@ -110,8 +110,7 @@ class PostgresWriter:
         if not bars:
             return 0
         async with span("writer.write_prices_daily", rows=len(bars)):
-            await self._conn.execute(
-                """
+            await self._conn.execute("""
                 CREATE TEMP TABLE _ingest_prices (
                     instrument_id bigint NOT NULL,
                     ts timestamptz NOT NULL,
@@ -123,8 +122,7 @@ class PostgresWriter:
                     volume bigint NOT NULL,
                     source text NOT NULL
                 ) ON COMMIT DROP
-                """
-            )
+                """)
             await self._conn.copy_records_to_table(
                 "_ingest_prices",
                 records=[
@@ -168,8 +166,7 @@ class PostgresWriter:
                 if self._upsert
                 else "ON CONFLICT (instrument_id, ts) DO NOTHING"
             )
-            result = await self._conn.execute(
-                f"""
+            result = await self._conn.execute(f"""
                 INSERT INTO theeyebeta.prices_daily
                     (instrument_id, ts, open, high, low, close,
                      adj_close, volume, source, ingested_at)
@@ -177,16 +174,14 @@ class PostgresWriter:
                        adj_close, volume, source, NOW()
                 FROM _ingest_prices
                 {conflict}
-                """
-            )
+                """)
         return _parse_insert_count(result)
 
     async def write_prices_intraday(self, bars: list[IntradayBarRecord]) -> int:
         if not bars:
             return 0
         async with span("writer.write_prices_intraday", rows=len(bars)):
-            await self._conn.execute(
-                """
+            await self._conn.execute("""
                 CREATE TEMP TABLE _ingest_intraday (
                     instrument_id bigint NOT NULL,
                     ts timestamptz NOT NULL,
@@ -198,8 +193,7 @@ class PostgresWriter:
                     volume bigint NOT NULL,
                     source text NOT NULL
                 ) ON COMMIT DROP
-                """
-            )
+                """)
             await self._conn.copy_records_to_table(
                 "_ingest_intraday",
                 records=[
@@ -241,31 +235,27 @@ class PostgresWriter:
                 if self._upsert
                 else "ON CONFLICT (instrument_id, bar_seconds, ts) DO NOTHING"
             )
-            result = await self._conn.execute(
-                f"""
+            result = await self._conn.execute(f"""
                 INSERT INTO theeyebeta.prices_intraday
                     (instrument_id, ts, bar_seconds, open, high, low, close, volume, source)
                 SELECT instrument_id, ts, bar_seconds, open, high, low, close, volume, source
                 FROM _ingest_intraday
                 {conflict}
-                """
-            )
+                """)
         return _parse_insert_count(result)
 
     async def write_macro(self, points: list[MacroRecord]) -> int:
         if not points:
             return 0
         async with span("writer.write_macro", rows=len(points)):
-            await self._conn.execute(
-                """
+            await self._conn.execute("""
                 CREATE TEMP TABLE _ingest_macro (
                     series_code text NOT NULL,
                     ts timestamptz NOT NULL,
                     value numeric(20,6) NOT NULL,
                     source text NOT NULL
                 ) ON COMMIT DROP
-                """
-            )
+                """)
             await self._conn.copy_records_to_table(
                 "_ingest_macro",
                 records=[(p.series_code, p.observed_at, p.value, p.source) for p in points],
@@ -280,21 +270,18 @@ class PostgresWriter:
                 if self._upsert
                 else "ON CONFLICT (series_code, ts) DO NOTHING"
             )
-            result = await self._conn.execute(
-                f"""
+            result = await self._conn.execute(f"""
                 INSERT INTO theeyebeta.macro_indicators (series_code, ts, value, source)
                 SELECT series_code, ts, value, source FROM _ingest_macro
                 {conflict}
-                """
-            )
+                """)
         return _parse_insert_count(result)
 
     async def write_news(self, articles: list[NewsRecord]) -> int:
         if not articles:
             return 0
         async with span("writer.write_news", rows=len(articles)):
-            await self._conn.execute(
-                """
+            await self._conn.execute("""
                 CREATE TEMP TABLE _ingest_news (
                     published_at timestamptz NOT NULL,
                     source text NOT NULL,
@@ -304,8 +291,7 @@ class PostgresWriter:
                     language char(2) NOT NULL,
                     tickers text[] NOT NULL
                 ) ON COMMIT DROP
-                """
-            )
+                """)
             await self._conn.copy_records_to_table(
                 "_ingest_news",
                 records=[
@@ -330,8 +316,7 @@ class PostgresWriter:
                     "tickers",
                 ],
             )
-            result = await self._conn.execute(
-                """
+            result = await self._conn.execute("""
                 INSERT INTO theeyebeta.news_articles
                     (published_at, source, headline, body, url, language, tickers)
                 SELECT n.published_at, n.source, n.headline, n.body, n.url, n.language, n.tickers
@@ -340,8 +325,7 @@ class PostgresWriter:
                     SELECT 1 FROM theeyebeta.news_articles e
                     WHERE e.url IS NOT NULL AND e.url = n.url
                 )
-                """
-            )
+                """)
         return _parse_insert_count(result)
 
     async def write_news_embeddings(self, rows: list[NewsEmbeddingRecord]) -> int:
@@ -383,8 +367,7 @@ class PostgresWriter:
         if not rows:
             return 0
         async with span("writer.write_fundamentals", rows=len(rows)):
-            await self._conn.execute(
-                """
+            await self._conn.execute("""
                 CREATE TEMP TABLE _ingest_fundamentals (
                     instrument_id bigint NOT NULL,
                     period_end date NOT NULL,
@@ -401,8 +384,7 @@ class PostgresWriter:
                     raw jsonb NOT NULL,
                     source text NOT NULL
                 ) ON COMMIT DROP
-                """
-            )
+                """)
             await self._conn.copy_records_to_table(
                 "_ingest_fundamentals",
                 records=[
@@ -459,8 +441,7 @@ class PostgresWriter:
                 if self._upsert
                 else "ON CONFLICT (instrument_id, period_end, period_type, source) DO NOTHING"
             )
-            result = await self._conn.execute(
-                f"""
+            result = await self._conn.execute(f"""
                 INSERT INTO theeyebeta.fundamentals (
                     instrument_id, period_end, period_type, revenue, net_income, eps,
                     pe_ratio, pb_ratio, debt_to_equity, roe, gross_margin,
@@ -471,8 +452,7 @@ class PostgresWriter:
                        free_cash_flow, raw, source
                 FROM _ingest_fundamentals
                 {conflict}
-                """
-            )
+                """)
         return _parse_insert_count(result)
 
     async def fetch_market_daily_frame(

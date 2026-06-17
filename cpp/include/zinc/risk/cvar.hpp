@@ -32,4 +32,4 @@ namespace zinc::risk {
  */
 [[nodiscard]] double cvar(std::span<const double> samples, double alpha) noexcept;
 
-}  // namespace zinc::risk
+} // namespace zinc::risk

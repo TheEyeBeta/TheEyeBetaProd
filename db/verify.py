@@ -58,29 +58,23 @@ def run_checks() -> None:
         check("b. migrations at head (0009_audit)", ok, f"got {row[0] if row else None}")
 
         # ── c. Table counts ─────────────────────────────────────────────────
-        total = conn.execute(
-            """SELECT count(*) FROM information_schema.tables
-               WHERE table_schema='theeyebeta' AND table_type='BASE TABLE'"""
-        ).fetchone()[0]
+        total = conn.execute("""SELECT count(*) FROM information_schema.tables
+               WHERE table_schema='theeyebeta' AND table_type='BASE TABLE'""").fetchone()[0]
         check("c. total BASE TABLE count ≥ 40", total >= 40, f"got {total}")
 
         # Count partition parents separately (excludes partitions themselves)
-        parents = conn.execute(
-            """SELECT count(*) FROM pg_class c
+        parents = conn.execute("""SELECT count(*) FROM pg_class c
                JOIN pg_namespace n ON n.oid=c.relnamespace
                WHERE n.nspname='theeyebeta'
                  AND c.relkind IN ('r','p')
                  AND NOT EXISTS (
                    SELECT 1 FROM pg_inherits WHERE inhrelid=c.oid
-                 )"""
-        ).fetchone()[0]
+                 )""").fetchone()[0]
         check("c. distinct parent tables ≥ 30", parents >= 30, f"got {parents}")
 
         # ── d. Hypertables ───────────────────────────────────────────────────
-        ht = conn.execute(
-            """SELECT count(*) FROM timescaledb_information.hypertables
-               WHERE hypertable_schema='theeyebeta'"""
-        ).fetchone()[0]
+        ht = conn.execute("""SELECT count(*) FROM timescaledb_information.hypertables
+               WHERE hypertable_schema='theeyebeta'""").fetchone()[0]
         check("d. hypertables = 5", ht == 5, f"got {ht}")
 
         # ── e. Roles exist ───────────────────────────────────────────────────
@@ -89,18 +83,14 @@ def run_checks() -> None:
             check(f"e. role {role} exists", row is not None)
 
         # ── j. audit_log partitions ──────────────────────────────────────────
-        parts = conn.execute(
-            """SELECT count(*) FROM pg_inherits
-               WHERE inhparent='theeyebeta.audit_log'::regclass"""
-        ).fetchone()[0]
+        parts = conn.execute("""SELECT count(*) FROM pg_inherits
+               WHERE inhparent='theeyebeta.audit_log'::regclass""").fetchone()[0]
         # ensure_audit_partitions(6) loops FOR m IN 0..6 — 7 partitions inclusive
         check("j. audit_log partitions = 7", parts == 7, f"got {parts}")
 
         # ── k. HNSW vector indexes ────────────────────────────────────────────
-        hnsw = conn.execute(
-            """SELECT count(*) FROM pg_indexes
-               WHERE schemaname='theeyebeta' AND indexname LIKE '%hnsw%'"""
-        ).fetchone()[0]
+        hnsw = conn.execute("""SELECT count(*) FROM pg_indexes
+               WHERE schemaname='theeyebeta' AND indexname LIKE '%hnsw%'""").fetchone()[0]
         check("k. HNSW indexes = 2", hnsw == 2, f"got {hnsw}")
 
         # ── l. Seeds ─────────────────────────────────────────────────────────
@@ -111,12 +101,10 @@ def run_checks() -> None:
         check("l. strategies seed ≥ 1", st >= 1, f"got {st}")
 
         # ── m. search_path db setting ────────────────────────────────────────
-        rows = conn.execute(
-            """SELECT s.setconfig
+        rows = conn.execute("""SELECT s.setconfig
                FROM pg_db_role_setting s
                JOIN pg_database d ON d.oid = s.setdatabase
-               WHERE d.datname = current_database()"""
-        ).fetchall()
+               WHERE d.datname = current_database()""").fetchall()
         cfg_vals = [v for row in rows for v in (row[0] or [])]
         has_sp = any("search_path" in v for v in cfg_vals)
         check("m. search_path set on database", has_sp, f"configs: {cfg_vals or 'none'}")

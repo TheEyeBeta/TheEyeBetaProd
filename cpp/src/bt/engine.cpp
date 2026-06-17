@@ -5,14 +5,14 @@
 
 #include "zinc/bt/engine.hpp"
 
+#include "detail/parquet_dataset.hpp"
+#include "zinc/risk/max_drawdown.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <numeric>
 #include <unordered_map>
 #include <utility>
-
-#include "detail/parquet_dataset.hpp"
-#include "zinc/risk/max_drawdown.hpp"
 
 namespace zinc::bt {
 
@@ -47,9 +47,8 @@ Metrics compute_metrics(const std::vector<double>& daily_pnl,
     metrics.total_return = equity_curve.back() / kInitialEquity - 1.0;
 
     if (daily_pnl.size() >= 2) {
-        const double mean_pnl =
-            std::accumulate(daily_pnl.begin(), daily_pnl.end(), 0.0) /
-            static_cast<double>(daily_pnl.size());
+        const double mean_pnl = std::accumulate(daily_pnl.begin(), daily_pnl.end(), 0.0) /
+                                static_cast<double>(daily_pnl.size());
         double variance = 0.0;
         for (const double pnl : daily_pnl) {
             const double delta = pnl - mean_pnl;
@@ -64,9 +63,8 @@ Metrics compute_metrics(const std::vector<double>& daily_pnl,
 
     metrics.max_drawdown = zinc::risk::max_drawdown(equity_curve);
 
-    const double average_equity =
-        std::accumulate(equity_curve.begin(), equity_curve.end(), 0.0) /
-        static_cast<double>(equity_curve.size());
+    const double average_equity = std::accumulate(equity_curve.begin(), equity_curve.end(), 0.0) /
+                                  static_cast<double>(equity_curve.size());
     double traded_notional = 0.0;
     for (const Execution& execution : executions) {
         traded_notional += std::abs(execution.notional);
@@ -78,14 +76,12 @@ Metrics compute_metrics(const std::vector<double>& daily_pnl,
     return metrics;
 }
 
-}  // namespace
+} // namespace
 
 Engine::Engine(std::string strategy_id, std::string start_date, std::string end_date,
                std::vector<std::string> universe, SlippageModel slippage_model)
-    : strategy_id_(std::move(strategy_id)),
-      start_date_(std::move(start_date)),
-      end_date_(std::move(end_date)),
-      universe_(std::move(universe)),
+    : strategy_id_(std::move(strategy_id)), start_date_(std::move(start_date)),
+      end_date_(std::move(end_date)), universe_(std::move(universe)),
       slippage_model_(std::move(slippage_model)) {}
 
 void Engine::set_parquet_path(const std::filesystem::path& parquet_path) {
@@ -152,11 +148,9 @@ Result Engine::run() {
 
         if (std::abs(trade_value) > 1e-12) {
             const double trade_shares = trade_value / close;
-            const double slippage =
-                slippage_model_.slippage_fraction(atr, trade_shares, adv);
+            const double slippage = slippage_model_.slippage_fraction(atr, trade_shares, adv);
             const bool is_buy = trade_shares > 0.0;
-            const double execution_price =
-                close * (is_buy ? (1.0 + slippage) : (1.0 - slippage));
+            const double execution_price = close * (is_buy ? (1.0 + slippage) : (1.0 - slippage));
 
             cash -= trade_shares * execution_price;
             shares += trade_shares;
@@ -179,8 +173,7 @@ Result Engine::run() {
         previous_equity = equity;
 
         peak_equity = std::max(peak_equity, equity);
-        const double drawdown =
-            peak_equity > 0.0 ? (peak_equity - equity) / peak_equity : 0.0;
+        const double drawdown = peak_equity > 0.0 ? (peak_equity - equity) / peak_equity : 0.0;
         result.drawdown_series.push_back(drawdown);
     }
 
@@ -188,4 +181,4 @@ Result Engine::run() {
     return result;
 }
 
-}  // namespace zinc::bt
+} // namespace zinc::bt

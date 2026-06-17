@@ -31,4 +31,4 @@ namespace zinc::risk {
  */
 [[nodiscard]] double max_drawdown(std::span<const double> wealth) noexcept;
 
-}  // namespace zinc::risk
+} // namespace zinc::risk

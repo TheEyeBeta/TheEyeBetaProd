@@ -103,7 +103,7 @@ async def trading_halt_client() -> AsyncIterator[tuple[AsyncClient, _InMemoryRed
         patch("deps.close_resources", _close_trading_test_resources),
         patch("api.trading.write_audit_log", AsyncMock()),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         await _init_trading_test_resources(settings)
         bind_app_state(app, settings)
 

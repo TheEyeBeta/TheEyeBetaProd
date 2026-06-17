@@ -1,5 +1,5 @@
 [Unit]
-Description=TheEyeBeta Supabase sync v2 (shadow mode default)
+Description=TheEyeBeta Supabase stock_snapshots sync (shadow mode default)
 Wants=network-online.target
 After=network-online.target postgresql.service
 

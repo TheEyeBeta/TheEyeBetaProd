@@ -21,13 +21,19 @@ CREATE TABLE theeyebeta.trading_calendar (
 CREATE INDEX idx_trading_calendar_trading_day
   ON theeyebeta.trading_calendar (is_trading_day, calendar_date);
 
-INSERT INTO theeyebeta.trading_calendar (
-  calendar_date, is_trading_day, market_name, holiday_name, notes
-)
-SELECT calendar_date, is_trading_day,
-       COALESCE(market_name, 'US'), holiday_name, notes
-  FROM public.trading_calendar
-ON CONFLICT (calendar_date) DO NOTHING;
+DO $$
+BEGIN
+  IF to_regclass('public.trading_calendar') IS NOT NULL THEN
+    INSERT INTO theeyebeta.trading_calendar (
+      calendar_date, is_trading_day, market_name, holiday_name, notes
+    )
+    SELECT calendar_date, is_trading_day,
+           COALESCE(market_name, 'US'), holiday_name, notes
+      FROM public.trading_calendar
+    ON CONFLICT (calendar_date) DO NOTHING;
+  END IF;
+END
+$$;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON theeyebeta.trading_calendar TO tb_app;
 GRANT SELECT ON theeyebeta.trading_calendar TO tb_rnd_readonly;

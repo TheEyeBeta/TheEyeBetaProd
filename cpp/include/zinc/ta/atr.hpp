@@ -5,11 +5,11 @@
 
 #pragma once
 
+#include "zinc/ta/bar.hpp"
+
 #include <cstddef>
 #include <span>
 #include <vector>
-
-#include "zinc/ta/bar.hpp"
 
 namespace zinc::ta {
 
@@ -34,4 +34,4 @@ namespace zinc::ta {
  */
 [[nodiscard]] std::vector<double> atr(std::span<const Bar> bars, int period);
 
-}  // namespace zinc::ta
+} // namespace zinc::ta

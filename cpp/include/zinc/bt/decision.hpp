@@ -22,4 +22,4 @@ struct Decision {
     double target_weight = 0.0;
 };
 
-}  // namespace zinc::bt
+} // namespace zinc::bt

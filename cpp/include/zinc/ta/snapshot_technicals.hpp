@@ -5,12 +5,12 @@
 
 #pragma once
 
+#include "zinc/ta/bar.hpp"
+
 #include <cstddef>
 #include <limits>
 #include <span>
 #include <vector>
-
-#include "zinc/ta/bar.hpp"
 
 namespace zinc::ta {
 
@@ -29,7 +29,7 @@ struct TechnicalsLast {
  *
  * @param ohlc_by_instrument Each span is chronological OHLC bars for one symbol.
  */
-[[nodiscard]] std::vector<TechnicalsLast> snapshot_technicals_last(
-    std::span<const std::span<const Bar>> ohlc_by_instrument);
+[[nodiscard]] std::vector<TechnicalsLast>
+snapshot_technicals_last(std::span<const std::span<const Bar>> ohlc_by_instrument);
 
-}  // namespace zinc::ta
+} // namespace zinc::ta

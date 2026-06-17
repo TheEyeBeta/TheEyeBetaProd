@@ -59,15 +59,13 @@ async def load_active_instruments(
                 list(exchange_codes),
             )
         else:
-            rows = await conn.fetch(
-                """
+            rows = await conn.fetch("""
                 SELECT i.id, i.symbol, e.code AS exchange_code
                 FROM theeyebeta.instruments i
                 JOIN theeyebeta.exchanges e ON e.id = i.exchange_id
                 WHERE i.active = true
                 ORDER BY i.symbol
-                """
-            )
+                """)
 
     return [
         {"instrument_id": r["id"], "symbol": r["symbol"], "exchange_code": r["exchange_code"]}

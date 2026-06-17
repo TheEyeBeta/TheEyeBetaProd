@@ -3,15 +3,15 @@
  * @brief  nanobind bindings for zinc::oms kernels.
  */
 
-#include <nanobind/nanobind.h>
-#include <nanobind/ndarray.h>
-#include <nanobind/stl/string.h>
-
-#include <cstdint>
-
 #include "zinc/oms/order.hpp"
 #include "zinc/oms/position_tracker.hpp"
 #include "zinc/oms/state_machine.hpp"
+
+#include <cstdint>
+
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/string.h>
 
 namespace nb = nanobind;
 
@@ -50,12 +50,13 @@ void apply_fills_ndarray(zinc::oms::PositionTracker& tracker, const std::string&
     }
 }
 
-}  // namespace
+} // namespace
 
 NB_MODULE(_zinc_oms, module) {
     module.doc() = "zinc::oms — order state machine and thread-safe position tracking";
 
-    nb::enum_<zinc::oms::OrderStatus>(module, "OrderStatus", "Lifecycle status of an order in the OMS.")
+    nb::enum_<zinc::oms::OrderStatus>(module, "OrderStatus",
+                                      "Lifecycle status of an order in the OMS.")
         .value("PendingApproval", zinc::oms::OrderStatus::PendingApproval)
         .value("Approved", zinc::oms::OrderStatus::Approved)
         .value("Submitted", zinc::oms::OrderStatus::Submitted)
@@ -66,7 +67,8 @@ NB_MODULE(_zinc_oms, module) {
         .value("Rejected", zinc::oms::OrderStatus::Rejected)
         .value("Expired", zinc::oms::OrderStatus::Expired);
 
-    nb::enum_<zinc::oms::Event>(module, "Event", "Domain events that drive order state transitions.")
+    nb::enum_<zinc::oms::Event>(module, "Event",
+                                "Domain events that drive order state transitions.")
         .value("Approve", zinc::oms::Event::Approve)
         .value("Reject", zinc::oms::Event::Reject)
         .value("Submit", zinc::oms::Event::Submit)
@@ -76,8 +78,8 @@ NB_MODULE(_zinc_oms, module) {
         .value("Cancel", zinc::oms::Event::Cancel)
         .value("Expire", zinc::oms::Event::Expire);
 
-    nb::enum_<zinc::oms::TransitionErrorCode>(module, "TransitionErrorCode",
-                                              "Error code returned when a transition is not permitted.")
+    nb::enum_<zinc::oms::TransitionErrorCode>(
+        module, "TransitionErrorCode", "Error code returned when a transition is not permitted.")
         .value("IllegalTransition", zinc::oms::TransitionErrorCode::IllegalTransition)
         .value("TerminalState", zinc::oms::TransitionErrorCode::TerminalState)
         .value("InvalidFillQuantity", zinc::oms::TransitionErrorCode::InvalidFillQuantity);
@@ -105,10 +107,9 @@ NB_MODULE(_zinc_oms, module) {
 
     nb::class_<zinc::oms::StateMachine>(module, "StateMachine",
                                         "Finite-state machine for order lifecycle transitions.")
-        .def_static(
-            "transition", &transition_order, nb::arg("order"), nb::arg("event"),
-            nb::arg("fill_quantity") = 0,
-            "Apply an event to an order and return a TransitionResult.");
+        .def_static("transition", &transition_order, nb::arg("order"), nb::arg("event"),
+                    nb::arg("fill_quantity") = 0,
+                    "Apply an event to an order and return a TransitionResult.");
 
     nb::class_<zinc::oms::PositionTracker>(
         module, "PositionTracker",

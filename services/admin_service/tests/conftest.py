@@ -5,11 +5,13 @@ from __future__ import annotations
 import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import asyncpg
+import httpx
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 
 # ``zinc_test`` registers itself via the ``pytest11`` entry-point in
 # ``libs/zinc_test/pyproject.toml`` (auto-loaded once ``uv sync`` installs the
@@ -33,6 +35,50 @@ from zinc_test._infra import (  # noqa: E402
 # ``test_sql.py``, ``test_proposals.py``) can pick the helper up off the
 # admin conftest module without depending on ``zinc_test`` internals directly.
 __all__ = ["_normalize_psycopg_dsn", "_run_sql_file", "app_dsn_from_admin"]
+
+_BaseASGITransport = httpx.ASGITransport
+
+
+class ASGITransport(_BaseASGITransport):
+    """httpx 0.28-compatible transport with the old ``lifespan='on'`` hook."""
+
+    def __init__(
+        self,
+        *args: Any,
+        lifespan: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        self._lifespan_mode = lifespan
+        self._lifespan_context: Any | None = None
+        self._lifespan_started = False
+        self._lifespan_app = args[0] if args else kwargs.get("app")
+        super().__init__(*args, **kwargs)
+
+    async def _ensure_lifespan_started(self) -> None:
+        if self._lifespan_mode != "on" or self._lifespan_started:
+            return
+        if self._lifespan_app is None:
+            return
+        self._lifespan_context = self._lifespan_app.router.lifespan_context(
+            self._lifespan_app,
+        )
+        await self._lifespan_context.__aenter__()
+        self._lifespan_started = True
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        await self._ensure_lifespan_started()
+        return await super().handle_async_request(request)
+
+    async def aclose(self) -> None:
+        try:
+            await super().aclose()
+        finally:
+            if self._lifespan_started and self._lifespan_context is not None:
+                await self._lifespan_context.__aexit__(None, None, None)
+                self._lifespan_started = False
+
+
+httpx.ASGITransport = ASGITransport
 
 PENDING_ORDER_ID = "cc0e8400-e29b-41d4-a716-446655440001"
 APPROVED_ORDER_ID = "cc0e8400-e29b-41d4-a716-446655440002"
@@ -153,10 +199,10 @@ def orders_integration_dsn(admin_integration_dsn: str) -> str:
 
 
 @pytest.fixture(scope="session")
-def audit_integration_dsn(admin_integration_dsn: str) -> str:
+def audit_integration_dsn(alembic_upgraded: str) -> str:
     """Postgres with audit log + checkpoint seed data."""
-    _run_sql_file(admin_integration_dsn, _SQL_DIR / "seed_audit.sql")
-    return admin_integration_dsn
+    _run_sql_file(alembic_upgraded, _SQL_DIR / "seed_audit.sql")
+    return app_dsn_from_admin(alembic_upgraded)
 
 
 @pytest.fixture(scope="session")
@@ -202,10 +248,10 @@ def proposals_integration_dsn(admin_integration_dsn: str) -> str:
 
 
 @pytest.fixture(scope="session")
-def dashboard_integration_dsn(admin_integration_dsn: str) -> str:
+def dashboard_integration_dsn(alembic_upgraded: str) -> str:
     """Postgres seeded for the dashboard's four stat-card queries."""
-    _run_sql_file(admin_integration_dsn, _SQL_DIR / "seed_dashboard.sql")
-    return admin_integration_dsn
+    _run_sql_file(alembic_upgraded, _SQL_DIR / "seed_dashboard.sql")
+    return app_dsn_from_admin(alembic_upgraded)
 
 
 @pytest.fixture(scope="session")
@@ -245,20 +291,25 @@ async def _admin_client_for_dsn(
         patch("deps.init_resources", _init_test_resources),
         patch("deps.close_resources", _close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
+        await _init_test_resources(settings)
+        import deps  # noqa: PLC0415
+
+        deps.bind_app_state(app, settings)
 
         async def _fake_user() -> dict[str, str]:
             return {"sub": "test-operator"}
 
         app.dependency_overrides[get_current_user] = _fake_user
-        transport = ASGITransport(app=app, lifespan="on")
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            import deps  # noqa: PLC0415
-
-            nats_stub = deps._nats
-            assert isinstance(nats_stub, _RecordingNats)
-            yield client, nats_stub
-        app.dependency_overrides.clear()
+        transport = ASGITransport(app=app)
+        try:
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                nats_stub = deps._nats
+                assert isinstance(nats_stub, _RecordingNats)
+                yield client, nats_stub
+        finally:
+            app.dependency_overrides.clear()
+            await _close_test_resources()
 
 
 @pytest.fixture

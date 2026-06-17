@@ -5,12 +5,12 @@
 
 #include "zinc/ta/rsi.hpp"
 
+#include "zinc/ta/detail/wilder.hpp"
+
 #include <cmath>
 #include <cstddef>
 #include <limits>
 #include <vector>
-
-#include "zinc/ta/detail/wilder.hpp"
 
 namespace zinc::ta {
 
@@ -52,4 +52,4 @@ std::vector<double> rsi(std::span<const Bar> bars, int period) {
     return output;
 }
 
-}  // namespace zinc::ta
+} // namespace zinc::ta

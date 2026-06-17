@@ -67,11 +67,11 @@ Redis 7, and NATS 2 JetStream. Performance-critical paths use C++20 via nanobind
 | `llm-gateway` | 8003 | 127.0.0.1 | |
 | `agent-runtime` | 8004 | 127.0.0.1 | |
 | `guard-service` | 8005 | 127.0.0.1 | |
-| `master-orchestrator` | 8006 | 127.0.0.1 | |
+| `master-orchestrator` | 7050 | 127.0.0.1 | systemd unit: `theeye-master-orchestrator` |
 | `risk-service` | 8007 | 127.0.0.1 | |
 | `compliance-service` | 8008 | 127.0.0.1 | |
-| `oms` | 8009 | 127.0.0.1 | |
-| `broker-adapter-alpaca` | 7090 | 127.0.0.1 | |
+| `theeye-oms` | 7080 | 127.0.0.1 | OMS service |
+| `theeye-broker-adapter-alpaca` | 7090 | 127.0.0.1 | Alpaca paper/live broker adapter |
 | `backtest-engine` | 7100 | 127.0.0.1 | |
 | `audit-service` | 7110 | 127.0.0.1 | Hash-chained audit log + WORM checkpoints |
 | `rnd-agent` | 7120 | 127.0.0.1 | Nightly R&D proposals (`tb_rnd_readonly`) |
@@ -113,7 +113,7 @@ _See the [README service map](../README.md#service-map) for a condensed view._
 _Diagram is embedded in the [README](../README.md#the-two-loop-architecture)._
 
 **Fast loop** (execution): `data-ingestion` → `agent-runtime` → `guard-service` →
-`master-orchestrator` → `risk-service` → `oms` → `broker-adapter-alpaca` → fills back to `oms`.
+`master-orchestrator` → `risk-service` → `theeye-oms` → `theeye-broker-adapter-alpaca` → fills back to `theeye-oms`.
 
 **Slow loop** (research): `snapshot-packager` → `backtest-engine` → `rnd-agent` →
 `llm-gateway` → proposals → `master-orchestrator`.
@@ -130,7 +130,7 @@ _See [docs/data-model.md](data-model.md) for the full schema._
 |--------|---------------|----------|
 | `public` | shared | users, audit_log, instruments |
 | `market` | data-ingestion | ticks (hypertable), ohlcv (hypertable) |
-| `orders` | oms | orders, fills, positions |
+| `orders` | theeye-oms | orders, fills, positions |
 | `risk` | risk-service | limits, var_snapshots |
 | `research` | rnd-agent | proposals, backtest_runs |
 | `compliance` | compliance-service | rule_checks, alerts |

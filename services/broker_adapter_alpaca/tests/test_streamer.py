@@ -44,3 +44,24 @@ async def test_streamer_publishes_fill_event_to_nats() -> None:
     published = json.loads(payload_bytes.decode())
     assert published["event"] == "fill"
     assert published["order"]["id"] == "alpaca-1"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_streamer_logs_cleanly_when_order_id_unresolved() -> None:
+    """A fill with no resolvable order_id is skipped, not crashed (regression for
+    the structlog `event=` kwarg collision)."""
+    adapter = AlpacaAdapter(Settings(mode="paper", database_url="postgresql://x/x"))
+    streamer = TradeUpdateStreamer(adapter, "nats://127.0.0.1:4222")
+    streamer._nc = MagicMock()
+    streamer._nc.publish = AsyncMock()
+
+    event = {
+        "order_id": "",
+        "client_order_id": "client-unknown",
+        "event": "fill",
+        "order": {"id": "alpaca-1"},
+    }
+    await streamer._on_trade_update(event)
+
+    streamer._nc.publish.assert_not_awaited()

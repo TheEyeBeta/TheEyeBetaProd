@@ -9,6 +9,8 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+pytestmark = pytest.mark.integration
+
 _SERVICE_ROOT = Path(__file__).resolve().parents[1]
 _SQL_DIR = Path(__file__).resolve().parent / "sql"
 
@@ -59,16 +61,23 @@ async def _client_with_role(
         patch("deps.init_resources", admin_conftest._init_test_resources),
         patch("deps.close_resources", admin_conftest._close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
+        await admin_conftest._init_test_resources(settings)
+        import deps  # noqa: PLC0415
+
+        deps.bind_app_state(app, settings)
 
         async def _fake_user() -> dict[str, str]:
             return {"sub": "test-operator", "role": role}
 
         app.dependency_overrides[get_current_user] = _fake_user
-        transport = ASGITransport(app=app, lifespan="on")
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            yield client
-        app.dependency_overrides.clear()
+        transport = ASGITransport(app=app)
+        try:
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                yield client
+        finally:
+            app.dependency_overrides.clear()
+            await admin_conftest._close_test_resources()
 
 
 @pytest.fixture
@@ -205,20 +214,17 @@ async def test_read_only_can_access_pulse(read_only_client: AsyncClient) -> None
 @pytest.mark.asyncio
 async def test_login_page_renders() -> None:
     """GET /admin/login returns HTML without auth."""
-    import importlib.util
     from unittest.mock import patch
 
     from fastapi.testclient import TestClient
     from main import create_app  # noqa: PLC0415
     from settings import Settings, get_settings  # noqa: PLC0415
 
-    spec = importlib.util.spec_from_file_location(
-        "admin_conftest",
-        _SERVICE_ROOT / "tests" / "conftest.py",
-    )
-    admin_conftest = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(admin_conftest)
+    async def _init_noop(settings: object) -> None:  # noqa: ARG001
+        return None
+
+    async def _close_noop() -> None:
+        return None
 
     get_settings.cache_clear()
     settings = Settings(
@@ -228,10 +234,10 @@ async def test_login_page_renders() -> None:
         jwt_public_key="x",
     )
     with (
-        patch("deps.init_resources", admin_conftest._init_test_resources),
-        patch("deps.close_resources", admin_conftest._close_test_resources),
+        patch("deps.init_resources", _init_noop),
+        patch("deps.close_resources", _close_noop),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         with TestClient(app) as client:
             resp = client.get("/admin/login")
     assert resp.status_code == 200

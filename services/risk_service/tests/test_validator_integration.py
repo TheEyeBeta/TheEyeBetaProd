@@ -18,7 +18,7 @@ _SRC = Path(__file__).resolve().parents[1] / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-PORTFOLIO_ID = "a660e8400-e29b-41d4-a716-446655440099"
+PORTFOLIO_ID = "a660e840-e29b-41d4-a716-446655440099"
 
 
 @pytest.fixture(scope="session")
@@ -51,11 +51,9 @@ async def test_validate_order_blocks_var_and_writes_risk_metrics(
             (UUID(PORTFOLIO_ID),),
         )
         rows_before = int(cur.fetchone()[0])
-        cur = conn.execute(
-            """
+        cur = conn.execute("""
             SELECT id FROM theeyebeta.instruments WHERE symbol = 'AAPL'
-            """
-        )
+            """)
         instrument_id = int(cur.fetchone()[0])
 
     request = risk_pb2.RiskCheckRequest(

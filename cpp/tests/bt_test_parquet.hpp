@@ -56,7 +56,8 @@ inline bool write_daily_parquet(const std::filesystem::path& path,
         }
     }
 
-    const arrow::Result<std::shared_ptr<arrow::Array>> trade_date_result = trade_date_builder.Finish();
+    const arrow::Result<std::shared_ptr<arrow::Array>> trade_date_result =
+        trade_date_builder.Finish();
     const arrow::Result<std::shared_ptr<arrow::Array>> symbol_result = symbol_builder.Finish();
     const arrow::Result<std::shared_ptr<arrow::Array>> open_result = open_builder.Finish();
     const arrow::Result<std::shared_ptr<arrow::Array>> high_result = high_builder.Finish();
@@ -88,10 +89,9 @@ inline bool write_daily_parquet(const std::filesystem::path& path,
          arrow::field("volume", arrow::int64()), arrow::field("atr14", arrow::float64()),
          arrow::field("adv", arrow::float64())});
 
-    const std::shared_ptr<arrow::Table> table = arrow::Table::Make(
-        schema,
-        {trade_date_array, symbol_array, open_array, high_array, low_array, close_array,
-         volume_array, atr14_array, adv_array});
+    const std::shared_ptr<arrow::Table> table =
+        arrow::Table::Make(schema, {trade_date_array, symbol_array, open_array, high_array,
+                                    low_array, close_array, volume_array, atr14_array, adv_array});
 
     const arrow::Result<std::shared_ptr<arrow::io::FileOutputStream>> output_result =
         arrow::io::FileOutputStream::Open(path.string());
@@ -104,4 +104,4 @@ inline bool write_daily_parquet(const std::filesystem::path& path,
         .ok();
 }
 
-}  // namespace zinc::bt::test
+} // namespace zinc::bt::test

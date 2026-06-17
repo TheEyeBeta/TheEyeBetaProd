@@ -17,4 +17,4 @@ struct Bar {
     double close = 0.0;
 };
 
-}  // namespace zinc::ta
+} // namespace zinc::ta

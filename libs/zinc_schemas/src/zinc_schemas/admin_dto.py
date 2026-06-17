@@ -168,6 +168,7 @@ class AgentSummary(BaseModel):
     model_fallback: str | None = None
     constitution_path: str
     active: bool
+    reports_to: str | None = None
     last_run_at: datetime | None = None
     runs_7d: int = 0
     success_rate_7d: float | None = Field(
@@ -213,6 +214,33 @@ class AgentRunsResponse(BaseModel):
     agent_id: str
     runs: list[AgentRunRow]
     limit: int
+
+
+class AgentReportSummary(BaseModel):
+    """Operator-facing briefing from one agent."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    agent_id: str
+    audience: str
+    run_id: UUID | None = None
+    report_type: str
+    summary: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    status: str
+    created_at: datetime
+    period_start: datetime | None = None
+    period_end: datetime | None = None
+
+
+class BriefingsListResponse(BaseModel):
+    """``GET /admin/briefings`` payload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    briefings: list[AgentReportSummary]
+    total: int
 
 
 class AgentMessageDTO(BaseModel):

@@ -258,12 +258,13 @@ async def test_costs_page_requires_auth(
     costs_integration_dsn: str,
 ) -> None:
     """All costs page routes are JWT-gated."""
-    from conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
+    from main import create_app  # noqa: PLC0415
+    from settings import Settings, get_settings  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
         _close_test_resources,
         _init_test_resources,
     )
-    from main import create_app  # noqa: PLC0415
-    from settings import Settings, get_settings  # noqa: PLC0415
 
     get_settings.cache_clear()
     settings = Settings(database_url=costs_integration_dsn)
@@ -271,7 +272,7 @@ async def test_costs_page_requires_auth(
         patch("deps.init_resources", _init_test_resources),
         patch("deps.close_resources", _close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         transport = ASGITransport(app=app, lifespan="on")
         async with AsyncClient(transport=transport, base_url="http://test") as anon:
             page = await anon.get("/admin/costs")

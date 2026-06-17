@@ -1,0 +1,3 @@
+# Already-applied historical migrations — not rewritten retroactively (mirrors
+# the `*/migrations/versions/*.py` exclude in [tool.ruff]).
+db/migrations/

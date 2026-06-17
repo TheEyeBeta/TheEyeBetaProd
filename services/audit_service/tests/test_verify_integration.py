@@ -6,6 +6,7 @@ import json
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import psycopg
 import pytest
@@ -15,13 +16,13 @@ _TESTS = Path(__file__).resolve().parent
 for _p in (_SRC, _TESTS):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
-
-from conftest import PostgresInfra  # noqa: E402
-
 from audit_service.chain import (  # noqa: E402
     append_chained_row,
     verify_range,
 )
+
+if TYPE_CHECKING:
+    from services.audit_service.tests.conftest import PostgresInfra
 
 
 def _normalize_dsn(dsn: str) -> str:

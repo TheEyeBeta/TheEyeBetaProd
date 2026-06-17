@@ -66,7 +66,11 @@ async def _build_loaded_client(
         patch("deps.init_resources", _admin_conf._init_test_resources),
         patch("deps.close_resources", _admin_conf._close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
+        await _admin_conf._init_test_resources(settings)
+        import deps  # noqa: PLC0415
+
+        deps.bind_app_state(app, settings)
 
         async def _fake_user() -> dict[str, str]:
             return {"sub": "load-test"}
@@ -80,10 +84,13 @@ async def _build_loaded_client(
         limiter: Limiter = app.state.limiter
         limiter.enabled = False
 
-        transport = ASGITransport(app=app, lifespan="on")
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            yield client
-        app.dependency_overrides.clear()
+        transport = ASGITransport(app=app)
+        try:
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                yield client
+        finally:
+            app.dependency_overrides.clear()
+            await _admin_conf._close_test_resources()
 
 
 async def _virtual_user(

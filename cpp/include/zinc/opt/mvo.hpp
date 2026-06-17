@@ -5,9 +5,9 @@
 
 #pragma once
 
-#include <Eigen/Dense>
-
 #include "zinc/opt/portfolio_weights.hpp"
+
+#include <Eigen/Dense>
 
 namespace zinc::opt {
 
@@ -39,4 +39,4 @@ namespace zinc::opt {
                                    const Eigen::Ref<const Eigen::MatrixXd>& covariance,
                                    double risk_aversion = 1.0, bool long_only = true);
 
-}  // namespace zinc::opt
+} // namespace zinc::opt

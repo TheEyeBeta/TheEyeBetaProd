@@ -63,4 +63,4 @@ inline double tail_mean(std::span<const double> samples, double threshold) noexc
     return sum / static_cast<double>(count);
 }
 
-}  // namespace zinc::risk::detail
+} // namespace zinc::risk::detail

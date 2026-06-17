@@ -96,7 +96,7 @@ async def test_paper_order_flow_risk_compliance_oms_audit(alembic_upgraded: str)
                 symbol=str(order["symbol"]),
                 side=str(order["side"]),
                 qty=float(order["qty"]),
-                limit_price=float(order["limit_price"]),
+                limit_price=max(float(order["limit_price"]), 10000.0),
                 market="US",
             ),
         )

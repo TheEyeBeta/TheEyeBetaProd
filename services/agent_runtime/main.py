@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import lru_cache
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 import structlog
@@ -50,8 +50,11 @@ class AgentRunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     snapshot_id: UUID
-    kind: Literal["run", "rebuttal"] = "run"
+    kind: Literal["run", "rebuttal", "rollup"] = "run"
     agent_messages: list[AgentMessage] = Field(default_factory=list)
+    parent_run_id: UUID | None = None
+    operator_context: dict[str, str] = Field(default_factory=dict)
+    subordinate_reports: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AgentDecisionRow(BaseModel):
@@ -135,6 +138,9 @@ def create_app() -> FastAPI:
                 body.snapshot_id,
                 kind=body.kind,
                 agent_messages=[m.model_dump() for m in body.agent_messages],
+                parent_run_id=body.parent_run_id,
+                operator_context=body.operator_context,
+                subordinate_reports=body.subordinate_reports,
             )
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

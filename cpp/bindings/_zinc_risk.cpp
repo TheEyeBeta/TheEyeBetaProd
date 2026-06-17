@@ -3,18 +3,18 @@
  * @brief  nanobind bindings for zinc::risk kernels.
  */
 
-#include <nanobind/eigen/dense.h>
-#include <nanobind/nanobind.h>
-#include <nanobind/ndarray.h>
-
-#include <Eigen/Dense>
-#include <span>
-#include <stdexcept>
-
 #include "zinc/risk/correlation_matrix.hpp"
 #include "zinc/risk/cvar.hpp"
 #include "zinc/risk/historical_var.hpp"
 #include "zinc/risk/max_drawdown.hpp"
+
+#include <span>
+#include <stdexcept>
+
+#include <Eigen/Dense>
+#include <nanobind/eigen/dense.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 
 namespace nb = nanobind;
 
@@ -30,7 +30,7 @@ std::span<const double> as_span(const ContiguousVector& array) {
     return {array.data(), static_cast<std::size_t>(array.shape(0))};
 }
 
-}  // namespace
+} // namespace
 
 /**
  * @brief Pearson correlation matrix returned to Python (zero-copy view via nanobind/eigen).
@@ -45,13 +45,14 @@ NB_MODULE(_zinc_risk, module) {
     nb::class_<CorrelationMatrix>(module, "CorrelationMatrix",
                                   "Pearson correlation matrix of column variables.")
         .def_prop_ro(
-            "values",
-            [](const CorrelationMatrix& self) { return nb::cast(self.values); },
+            "values", [](const CorrelationMatrix& self) { return nb::cast(self.values); },
             "Correlation coefficients as a C-contiguous float64 matrix (variables × variables).")
-        .def_prop_ro("rows", [](const CorrelationMatrix& self) { return self.values.rows(); },
-                     "Number of variables (rows).")
-        .def_prop_ro("cols", [](const CorrelationMatrix& self) { return self.values.cols(); },
-                     "Number of variables (columns).");
+        .def_prop_ro(
+            "rows", [](const CorrelationMatrix& self) { return self.values.rows(); },
+            "Number of variables (rows).")
+        .def_prop_ro(
+            "cols", [](const CorrelationMatrix& self) { return self.values.cols(); },
+            "Number of variables (columns).");
 
     module.def(
         "historical_var",
@@ -82,9 +83,7 @@ historical alpha-quantile (inclusive).
 
     module.def(
         "max_drawdown",
-        [](const ContiguousVector& wealth) {
-            return zinc::risk::max_drawdown(as_span(wealth));
-        },
+        [](const ContiguousVector& wealth) { return zinc::risk::max_drawdown(as_span(wealth)); },
         nb::arg("wealth"),
         R"doc(
 Maximum relative drawdown of a wealth (equity) series.

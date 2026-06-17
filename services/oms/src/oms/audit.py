@@ -6,6 +6,7 @@ from typing import Any
 
 import psycopg
 import structlog
+
 from audit_service.chain import append_chained_row
 
 log = structlog.get_logger()

@@ -204,9 +204,10 @@ async def test_paper_trade_full_stack(
 
         # ── Step 7: assert position row updated ───────────────────────────────
         order = await _fetch_order(pool, order_id)
-        assert str(order["status"]) in {"filled", "partial_fill"}, (
-            f"Unexpected final status: {order['status']!r}"
-        )
+        assert str(order["status"]) in {
+            "filled",
+            "partial_fill",
+        }, f"Unexpected final status: {order['status']!r}"
         qty = await _fetch_position_qty(
             pool,
             str(order["portfolio_id"]),

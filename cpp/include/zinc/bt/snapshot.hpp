@@ -41,4 +41,4 @@ struct Snapshot {
     std::span<const int64_t> volume;
 };
 
-}  // namespace zinc::bt
+} // namespace zinc::bt

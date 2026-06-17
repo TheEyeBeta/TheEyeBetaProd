@@ -10,7 +10,6 @@ from typing import Any
 import asyncpg
 import httpx
 import structlog
-from auth import CurrentUser
 from deps import DbConn, SettingsDep
 from fastapi import APIRouter, HTTPException, Query, status
 from rbac import Role, require_role
@@ -107,7 +106,7 @@ async def call_audit_service_verify(
     """
     if to_ts < from_ts:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="'to' must be >= 'from'",
         )
     base = settings.audit_service_url.rstrip("/")
@@ -127,7 +126,7 @@ async def call_audit_service_verify(
 
     if response.status_code == status.HTTP_400_BAD_REQUEST:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=response.text,
         )
     if response.status_code >= 500:

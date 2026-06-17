@@ -129,6 +129,7 @@ from zinc_schemas.admin_dto import (
     RejectProposalRequest,
     RunAgentRequest,
 )
+from zinc_schemas.agent_reports import fetch_operator_briefings
 
 log = structlog.get_logger()
 
@@ -160,7 +161,7 @@ def _proposals_category_or_none(value: str) -> str | None:
         return None
     if value not in VALID_PROPOSAL_CATEGORIES:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"category must be one of {VALID_PROPOSAL_CATEGORIES}",
         )
     return value
@@ -227,17 +228,17 @@ def _decode_sql_parameters(raw: str) -> list[object]:
         decoded = json.loads(text)
     except json.JSONDecodeError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"parameters: invalid JSON — {exc.msg}",
         ) from exc
     if not isinstance(decoded, list):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="parameters must be a JSON array",
         )
     if len(decoded) > _SQL_MAX_PARAMS:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"parameters: at most {_SQL_MAX_PARAMS} values are allowed",
         )
     return list(decoded)
@@ -1170,7 +1171,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
                 "components/_sql_error.html",
                 {
                     "request": request,
-                    "status_code": status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    "status_code": status.HTTP_422_UNPROCESSABLE_CONTENT,
                     "detail": (f"Confirmation phrase mismatch — expected '{_SQL_CONFIRM_PHRASE}'."),
                     "statement": statement,
                 },
@@ -1282,7 +1283,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
         """Cards-list fragment for one of the three tabs."""
         if proposal_status not in _PROPOSAL_TAB_KEYS:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"status must be one of {_PROPOSAL_TAB_KEYS}",
             )
         active_category = _proposals_category_or_none(category)
@@ -1375,7 +1376,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
                 body_kwargs["start_date"] = date.fromisoformat(start_date.strip())
             except ValueError as exc:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=f"start_date: {exc}",
                 ) from exc
         if end_date.strip():
@@ -1383,7 +1384,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
                 body_kwargs["end_date"] = date.fromisoformat(end_date.strip())
             except ValueError as exc:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=f"end_date: {exc}",
                 ) from exc
 
@@ -1760,6 +1761,28 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
             },
         )
 
+    # ------------------------------------------------------------ Briefings page
+
+    @router.get("/briefings", response_class=HTMLResponse)
+    async def view_briefings(
+        request: Request,
+        user: CurrentUser,
+        conn: DbConn,
+    ) -> HTMLResponse:
+        """Render operator briefings from the agent chain of command."""
+        rows = await fetch_operator_briefings(conn, limit=50)
+        log.info("admin_briefings_page_rendered", count=len(rows), sub=user["sub"])
+        return templates.TemplateResponse(
+            request,
+            "briefings.html",
+            page_context(
+                request,
+                active="briefings",
+                title="Briefings",
+                extra={"briefings": rows},
+            ),
+        )
+
     return router
 
 
@@ -1776,9 +1799,9 @@ def _flash_response(request: Request, *, kind: str, message: str) -> HTMLRespons
         "components/_flash.html",
         {"request": request, "kind": kind, "message": message},
     )
-    response.headers["HX-Trigger"] = (
-        '{"flash": {"kind": "%s", "message": %r}}'  # noqa: UP031 — header format
-        % (kind, message)
+    response.headers["HX-Trigger"] = '{"flash": {"kind": "%s", "message": %r}}' % (  # noqa: UP031
+        kind,
+        message,
     )
     return response
 

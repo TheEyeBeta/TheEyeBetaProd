@@ -78,7 +78,9 @@ async def test_orders_empty_state(
 ) -> None:
     """When there are no pending orders the table renders the empty-state row."""
     # Use the *admin* DSN (migrations only — no seed) so the table is empty.
-    from conftest import _admin_client_for_dsn  # type: ignore[import-not-found]  # noqa: PLC0415
+    from services.admin_service.tests.conftest import (
+        _admin_client_for_dsn,  # type: ignore[import-not-found]  # noqa: PLC0415
+    )
 
     async for tup in _admin_client_for_dsn(admin_integration_dsn, auth_headers):
         client, _ = tup
@@ -298,12 +300,13 @@ async def test_orders_page_requires_auth(
     orders_page_integration_dsn: str,
 ) -> None:
     """Every orders route is JWT-gated."""
-    from conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
+    from main import create_app  # noqa: PLC0415
+    from settings import Settings, get_settings  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
         _close_test_resources,
         _init_test_resources,
     )
-    from main import create_app  # noqa: PLC0415
-    from settings import Settings, get_settings  # noqa: PLC0415
 
     get_settings.cache_clear()
     settings = Settings(
@@ -314,7 +317,7 @@ async def test_orders_page_requires_auth(
         patch("deps.init_resources", _init_test_resources),
         patch("deps.close_resources", _close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         transport = ASGITransport(app=app, lifespan="on")
         async with AsyncClient(transport=transport, base_url="http://test") as anon:
             page = await anon.get("/admin/orders")

@@ -5,12 +5,12 @@
 
 #include "zinc/ta/atr.hpp"
 
+#include "zinc/ta/detail/wilder.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <span>
-
-#include "zinc/ta/detail/wilder.hpp"
 
 namespace zinc::ta {
 
@@ -26,7 +26,7 @@ double true_range(const Bar& current, const Bar& previous, bool has_previous) {
     return std::max({high_low, high_close, low_close});
 }
 
-}  // namespace
+} // namespace
 
 std::vector<double> atr(std::span<const Bar> bars, int period) {
     const std::size_t length = bars.size();
@@ -42,4 +42,4 @@ std::vector<double> atr(std::span<const Bar> bars, int period) {
     return detail::wilder_rma(true_ranges, period);
 }
 
-}  // namespace zinc::ta
+} // namespace zinc::ta

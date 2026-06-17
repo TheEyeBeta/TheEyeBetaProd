@@ -39,8 +39,8 @@ inline std::vector<double> wilder_rma(std::span<const double> values, int period
     output[static_cast<std::size_t>(period - 1)] = seed;
 
     for (std::size_t index = static_cast<std::size_t>(period); index < length; ++index) {
-        seed = (seed * static_cast<double>(period - 1) + values[index]) /
-               static_cast<double>(period);
+        seed =
+            (seed * static_cast<double>(period - 1) + values[index]) / static_cast<double>(period);
         output[index] = seed;
     }
 
@@ -64,4 +64,4 @@ inline double rolling_std_population(std::span<const double> window, double mean
     return std::sqrt(sum_sq / static_cast<double>(window.size()));
 }
 
-}  // namespace zinc::ta::detail
+} // namespace zinc::ta::detail

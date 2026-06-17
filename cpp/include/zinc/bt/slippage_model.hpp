@@ -35,10 +35,11 @@ class SlippageModel {
      *
      * @return Non-negative slippage fraction applied against the close.
      */
-    [[nodiscard]] double slippage_fraction(double atr, double trade_size, double adv) const noexcept;
+    [[nodiscard]] double slippage_fraction(double atr, double trade_size,
+                                           double adv) const noexcept;
 
   private:
     Formula formula_;
 };
 
-}  // namespace zinc::bt
+} // namespace zinc::bt

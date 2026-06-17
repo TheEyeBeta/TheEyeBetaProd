@@ -5,9 +5,9 @@
 
 #pragma once
 
-#include <Eigen/Dense>
-
 #include "zinc/opt/portfolio_weights.hpp"
+
+#include <Eigen/Dense>
 
 namespace zinc::opt {
 
@@ -33,4 +33,4 @@ namespace zinc::opt {
  */
 [[nodiscard]] PortfolioWeights hrp(const Eigen::Ref<const Eigen::MatrixXd>& covariance);
 
-}  // namespace zinc::opt
+} // namespace zinc::opt

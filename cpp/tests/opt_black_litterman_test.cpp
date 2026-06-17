@@ -6,11 +6,12 @@
 #include "zinc/opt/black_litterman.hpp"
 
 #include <cmath>
-#include <random>
 #include <vector>
 
 #include <Eigen/Dense>
+
 #include <gtest/gtest.h>
+#include <random>
 
 namespace {
 
@@ -25,7 +26,7 @@ bool WeightsValid(const std::vector<double>& weights) {
     return std::abs(sum - 1.0) < 1e-8;
 }
 
-}  // namespace
+} // namespace
 
 TEST(OptBlackLittermanTest, HappyPathHandComputedPosteriorWeights) {
     Eigen::Matrix2d covariance;
@@ -38,9 +39,8 @@ TEST(OptBlackLittermanTest, HappyPathHandComputedPosteriorWeights) {
     Eigen::VectorXd view_uncertainty(1);
     view_uncertainty << 0.001;
 
-    const auto result =
-        zinc::opt::black_litterman(covariance, market_weights, picking_matrix, view_returns,
-                                   view_uncertainty, 2.5, 0.05);
+    const auto result = zinc::opt::black_litterman(covariance, market_weights, picking_matrix,
+                                                   view_returns, view_uncertainty, 2.5, 0.05);
     ASSERT_EQ(result.weights.size(), 2U);
     EXPECT_NEAR(result.weights[0], 0.69090909, 1e-5);
     EXPECT_NEAR(result.weights[1], 0.30909091, 1e-5);
@@ -63,8 +63,8 @@ TEST(OptBlackLittermanTest, EmptyAndInvalidInputReturnsEmpty) {
                     .weights.empty());
 
     Eigen::Vector2d bad_uncertainty(0.0, 0.001);
-    EXPECT_TRUE(zinc::opt::black_litterman(covariance, market_weights, picking_matrix,
-                                           view_returns, bad_uncertainty)
+    EXPECT_TRUE(zinc::opt::black_litterman(covariance, market_weights, picking_matrix, view_returns,
+                                           bad_uncertainty)
                     .weights.empty());
 }
 
@@ -130,8 +130,8 @@ TEST(OptBlackLittermanTest, NumericalStabilityScaledCovariance) {
 
     const auto base = zinc::opt::black_litterman(covariance, market_weights, picking_matrix,
                                                  view_returns, view_uncertainty);
-    const auto scaled = zinc::opt::black_litterman(
-        covariance * 1.0e6, market_weights, picking_matrix, view_returns, view_uncertainty);
+    const auto scaled = zinc::opt::black_litterman(covariance * 1.0e6, market_weights,
+                                                   picking_matrix, view_returns, view_uncertainty);
 
     ASSERT_EQ(base.weights.size(), scaled.weights.size());
     EXPECT_NEAR(base.weights[0], scaled.weights[0], 1e-5);

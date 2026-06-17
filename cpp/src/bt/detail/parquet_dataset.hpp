@@ -7,8 +7,9 @@
 
 #include <filesystem>
 #include <string>
-#include <unordered_set>
 #include <vector>
+
+#include <unordered_set>
 
 namespace zinc::bt::detail {
 
@@ -41,4 +42,4 @@ struct LoadedDataset {
                                                  const std::string& start_date,
                                                  const std::string& end_date);
 
-}  // namespace zinc::bt::detail
+} // namespace zinc::bt::detail

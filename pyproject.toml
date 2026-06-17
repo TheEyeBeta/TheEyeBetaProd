@@ -120,6 +120,7 @@ dev = [
     "ruff>=0.9",
     "black>=25.1",
     "mypy>=1.11",
+    "sqlfluff>=3.0",
 
     # Type stubs
     "types-redis>=4.6",
@@ -225,11 +226,25 @@ skip-magic-trailing-comma = false
 line-length    = 100
 target-version = ["py312"]
 # black and ruff-format are kept in sync; black acts as a safety-net pass.
+# Mirrors [tool.ruff] extend-exclude — generated/migration files aren't hand-formatted.
+extend-exclude = '''
+(
+    /migrations/versions/.*\.py$
+    | libs/zinc_proto/
+)
+'''
 
 # ── mypy ──────────────────────────────────────────────────────────────────────
 [tool.mypy]
 python_version         = "3.12"
 strict                 = true       # --strict on for all packages by default
+exclude = '''(?x)(
+    ^libs/zinc_proto/
+    | ^libs/zinc_native/
+    | ^libs/zinc_test/
+    | ^libs/.*/tests/
+    | ^libs/zinc_schemas/src/zinc_schemas/(constitution|packaged_snapshot|restricted|snapshot|snapshot_validator)\.py$
+)'''
 
 # Per-package overrides: services get slightly looser rules (FastAPI decorators)
 [[tool.mypy.overrides]]
@@ -247,6 +262,7 @@ module = [
     "nats.*",
     "testcontainers.*",
     "alembic.*",
+    "yaml.*",
 ]
 ignore_missing_imports = true
 

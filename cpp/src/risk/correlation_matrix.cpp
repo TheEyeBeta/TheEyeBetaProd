@@ -14,7 +14,7 @@ namespace {
 
 constexpr double kZeroVarianceEpsilon = 1e-15;
 
-}  // namespace
+} // namespace
 
 Eigen::MatrixXd correlation_matrix(const Eigen::Ref<const Eigen::MatrixXd>& data) {
     const Eigen::Index observations = data.rows();
@@ -53,8 +53,9 @@ Eigen::MatrixXd correlation_matrix(const Eigen::Ref<const Eigen::MatrixXd>& data
     for (Eigen::Index row = 0; row < variables; ++row) {
         for (Eigen::Index column = row; column < variables; ++column) {
             if (row == column) {
-                correlation(row, column) =
-                    stddev(row) > kZeroVarianceEpsilon ? 1.0 : std::numeric_limits<double>::quiet_NaN();
+                correlation(row, column) = stddev(row) > kZeroVarianceEpsilon
+                                               ? 1.0
+                                               : std::numeric_limits<double>::quiet_NaN();
                 continue;
             }
 
@@ -74,4 +75,4 @@ Eigen::MatrixXd correlation_matrix(const Eigen::Ref<const Eigen::MatrixXd>& data
     return correlation;
 }
 
-}  // namespace zinc::risk
+} // namespace zinc::risk

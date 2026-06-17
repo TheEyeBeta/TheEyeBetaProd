@@ -101,14 +101,14 @@ async def test_dashboard_requires_auth(
 ) -> None:
     """No auth override → 401 on every dashboard route."""
     from auth import get_current_user  # noqa: PLC0415
+    from main import create_app  # noqa: PLC0415
+    from settings import Settings, get_settings  # noqa: PLC0415
 
     # Re-use the conftest helper without the dep override.
-    from conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
+    from services.admin_service.tests.conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
         _close_test_resources,
         _init_test_resources,
     )
-    from main import create_app  # noqa: PLC0415
-    from settings import Settings, get_settings  # noqa: PLC0415
 
     get_settings.cache_clear()
     settings = Settings(
@@ -121,7 +121,7 @@ async def test_dashboard_requires_auth(
         patch("deps.init_resources", _init_test_resources),
         patch("deps.close_resources", _close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         # Sanity: confirm the dep is wired but NOT overridden.
         assert get_current_user not in app.dependency_overrides
         transport = ASGITransport(app=app, lifespan="on")

@@ -87,7 +87,11 @@ class Settings(BaseSettings):
         if self.mode == "live":
             return self.api_secret()
         _secret_vars: dict[str, list[str]] = {
-            "zinc": ["ALPACA_API_SECRET_PAPER_ZINC", "ALPACA_API_SECRET_PAPER", "ALPACA_SECRET_KEY"],
+            "zinc": [
+                "ALPACA_API_SECRET_PAPER_ZINC",
+                "ALPACA_API_SECRET_PAPER",
+                "ALPACA_SECRET_KEY",
+            ],
             "nyse": ["ALPACA_API_SECRET_PAPER_NYSE"],
             "nasdaq": ["ALPACA_API_SECRET_PAPER_NASDAQ"],
         }
