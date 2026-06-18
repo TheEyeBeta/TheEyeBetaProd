@@ -5,6 +5,7 @@ import { useAdminEvents } from "./hooks/useAdminEvents";
 import { OverviewPanel } from "./panels/OverviewPanel";
 import { PlaceholderPanel } from "./panels/PlaceholderPanel";
 import { MarketPanel } from "./panels/MarketPanel";
+import { TradingPanel } from "./panels/TradingPanel";
 import { StatusDot } from "./components/StatusDot";
 import { OPENAPI_PATHS } from "./api/openapi-schema";
 
@@ -174,7 +175,7 @@ function TerminalShell() {
           <Routes location={location}>
             <Route path="/overview" element={<OverviewPanel />} />
             <Route path="/market" element={<MarketPanel />} />
-            <Route path="/trading" element={<PlaceholderPanel title="TRADING" />} />
+            <Route path="/trading" element={<TradingPanel />} />
             <Route path="/signals" element={<PlaceholderPanel title="SIGNALS" />} />
             <Route path="/risk" element={<PlaceholderPanel title="RISK" />} />
             <Route path="/audit" element={<PlaceholderPanel title="AUDIT" />} />

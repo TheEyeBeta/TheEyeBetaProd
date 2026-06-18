@@ -141,3 +141,25 @@ export type MacroSeriesDetailResponse = MacroSeriesListItem & {
 };
 
 export type MacroRegimeResponse = Record<string, unknown>;
+
+export type PendingOrder = {
+  id?: string;
+  order_id?: string;
+  ticker?: string;
+  symbol?: string;
+  side?: string;
+  quantity?: number;
+  qty?: number;
+  order_type?: string;
+  status?: string;
+  created_at?: string;
+  proposed_at?: string;
+  metadata?: unknown;
+};
+
+export type PendingOrdersResponse = {
+  orders?: PendingOrder[];
+  total?: number;
+};
+
+export type PositionRow = Record<string, unknown>;
