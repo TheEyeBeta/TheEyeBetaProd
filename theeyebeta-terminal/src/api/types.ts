@@ -107,3 +107,37 @@ export type WsEvent = {
   correlation_id?: string;
   payload?: unknown;
 };
+
+export type MacroObservation = {
+  code?: string;
+  name?: string;
+  date?: string;
+  value?: number | string | null;
+  source?: string;
+  units?: string;
+};
+
+export type MacroLatestResponse = {
+  count?: number;
+  observations?: MacroObservation[];
+};
+
+export type MacroSeriesListItem = {
+  code?: string;
+  name?: string;
+  category?: string;
+  units?: string;
+  source?: string;
+  frequency?: string;
+};
+
+export type MacroSeriesListResponse = {
+  count?: number;
+  series?: MacroSeriesListItem[];
+};
+
+export type MacroSeriesDetailResponse = MacroSeriesListItem & {
+  observations?: MacroObservation[];
+};
+
+export type MacroRegimeResponse = Record<string, unknown>;
