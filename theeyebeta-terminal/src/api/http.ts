@@ -73,8 +73,9 @@ export async function apiRequest<T>(
   const method = options.method ?? (options.body === undefined ? "GET" : "POST");
   const headers = new Headers();
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
-  if (options.requireAuth !== false && authSnapshot.token) {
-    headers.set("Authorization", `Bearer ${authSnapshot.token}`);
+  const requestToken = authSnapshot.token;
+  if (options.requireAuth !== false && requestToken) {
+    headers.set("Authorization", `Bearer ${requestToken}`);
   }
 
   const response = await fetch(resolveUrl(surface, path, options.query), {
@@ -85,7 +86,13 @@ export async function apiRequest<T>(
     signal: options.signal
   });
 
-  if (response.status === 401 && surface === "admin" && options.notifyUnauthorized !== false) {
+  if (
+    response.status === 401 &&
+    surface === "admin" &&
+    options.notifyUnauthorized !== false &&
+    requestToken &&
+    requestToken === authSnapshot.token
+  ) {
     authSnapshot.onUnauthorized();
   }
 

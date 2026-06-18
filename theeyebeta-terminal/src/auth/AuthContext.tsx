@@ -39,6 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   const clear = useCallback(() => {
+    setAuthSnapshot({ token: null, role: null, onUnauthorized: clear });
     setState({ token: null, role: null, username: null, bootstrapped: true });
   }, []);
 
@@ -74,11 +75,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const applyToken = useCallback((response: LoginResponse | RefreshResponse) => {
-    const user = extractUser(response);
-    if (!user.token || !user.role) throw new Error("Auth response did not include token/role");
-    setState({ token: user.token, role: user.role, username: user.username, bootstrapped: true });
-  }, []);
+  const applyToken = useCallback(
+    (response: LoginResponse | RefreshResponse) => {
+      const user = extractUser(response);
+      if (!user.token || !user.role) throw new Error("Auth response did not include token/role");
+      setAuthSnapshot({ token: user.token, role: user.role, onUnauthorized: clear });
+      setState({ token: user.token, role: user.role, username: user.username, bootstrapped: true });
+    },
+    [clear]
+  );
 
   const login = useCallback(
     async (username: string, password: string, totp?: string): Promise<LoginResult> => {
