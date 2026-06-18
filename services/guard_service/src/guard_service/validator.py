@@ -476,15 +476,19 @@ class ConstitutionGuard:
                             detail=f"{symbol}: forbidden suffix {suffix!r} for {agent_id}",
                         ),
                     )
-            if valid_symbols is not None and symbol and symbol not in valid_symbols:  # noqa: SIM102 — inner if guards a separate condition; merging would hide the two-level logic
-                if rules.allowed_markets:
-                    hits.append(
-                        Violation(
-                            type="mandate_boundary",
-                            severity="high",
-                            detail=f"{symbol}: not in snapshot universe for mandate",
-                        ),
-                    )
+            if (
+                valid_symbols is not None
+                and symbol
+                and symbol not in valid_symbols
+                and rules.allowed_markets
+            ):
+                hits.append(
+                    Violation(
+                        type="mandate_boundary",
+                        severity="high",
+                        detail=f"{symbol}: not in snapshot universe for mandate",
+                    ),
+                )
         return hits or None
 
     def _check_forbidden_target(

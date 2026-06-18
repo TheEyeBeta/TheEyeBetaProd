@@ -106,7 +106,10 @@ def _swap_creds(url: str, user: str, password: str) -> str:
     return p._replace(netloc=netloc).geturl()
 
 
-def _conn(url: str = DATABASE_URL, **kwargs: Any) -> psycopg.Connection[Any]:  # noqa: ANN401 — psycopg kwargs are heterogeneous by design
+def _conn(
+    url: str = DATABASE_URL,
+    **kwargs: Any,  # noqa: ANN401 - psycopg kwargs are heterogeneous by design
+) -> psycopg.Connection[Any]:
     """Open a psycopg3 connection with autocommit enabled."""
     return psycopg.connect(url, autocommit=True, **kwargs)
 
@@ -950,10 +953,13 @@ def section_10(superconn: psycopg.Connection[Any]) -> None:
                 if table == "audit_log":
                     continue  # already tested
                 try:
-                    app.execute(f"SELECT 1 FROM theeyebeta.{table} LIMIT 1")  # noqa: S608 — table name from EXPECTED_TABLES constant, not user input
+                    app.execute(
+                        # table name from EXPECTED_TABLES constant, not user input
+                        f"SELECT 1 FROM theeyebeta.{table} LIMIT 1"  # noqa: S608
+                    )
                 except psycopg.errors.InsufficientPrivilege:
                     denied_tables.append(table)
-                except Exception:  # noqa: S110 — non-privilege errors (empty table, etc.) are benign in this probe
+                except Exception:  # noqa: S110 - non-privilege errors are benign in this probe
                     pass
             _record(
                 "tb_app: SELECT from every base table allowed",

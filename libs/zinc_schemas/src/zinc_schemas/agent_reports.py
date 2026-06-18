@@ -48,9 +48,9 @@ class AgentReportRow(BaseModel):
     def _coerce_payload(cls, value: object) -> dict[str, Any]:
         """asyncpg may return jsonb as str depending on driver settings."""
         if isinstance(value, str):
-            return json.loads(value)
+            return cast("dict[str, Any]", json.loads(value))
         if isinstance(value, dict):
-            return value
+            return cast("dict[str, Any]", value)
         return {}
 
 

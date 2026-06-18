@@ -54,7 +54,7 @@ def openai_tool_definition() -> dict[str, Any]:
     }
 
 
-def _as_float_array(values: Any, *, name: str) -> np.ndarray:  # noqa: ANN401 — accepts arbitrary JSON-decoded input before type-checking
+def _as_float_array(values: object, *, name: str) -> np.ndarray:
     if not isinstance(values, list) or not values:
         msg = f"{name} must be a non-empty list of numbers"
         raise ValueError(msg)

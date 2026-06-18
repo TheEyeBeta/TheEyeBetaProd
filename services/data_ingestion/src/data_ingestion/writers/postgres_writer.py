@@ -92,16 +92,22 @@ class PostgresWriter:
                 case FundamentalRecord():
                     fundamentals.append(record)
 
-        async with observe_duration(adapter, market):  # noqa: SIM117 — two distinct async context managers; combining would obscure their roles
-            async with span("writer.write_records", adapter=adapter, market=market):
-                totals = {
-                    "prices_daily": await self.write_prices_daily(prices),
-                    "macro_indicators": await self.write_macro(macro),
-                    "prices_intraday": await self.write_prices_intraday(intraday),
-                    "news_articles": await self.write_news(news),
-                    "news_embeddings": await self.write_news_embeddings(embeddings),
-                    "fundamentals": await self.write_fundamentals(fundamentals),
-                }
+        async with (
+            observe_duration(adapter, market),
+            span(
+                "writer.write_records",
+                adapter=adapter,
+                market=market,
+            ),
+        ):
+            totals = {
+                "prices_daily": await self.write_prices_daily(prices),
+                "macro_indicators": await self.write_macro(macro),
+                "prices_intraday": await self.write_prices_intraday(intraday),
+                "news_articles": await self.write_news(news),
+                "news_embeddings": await self.write_news_embeddings(embeddings),
+                "fundamentals": await self.write_fundamentals(fundamentals),
+            }
         for _table, count in totals.items():
             record_written(adapter, market, count)
         return totals
