@@ -75,19 +75,19 @@ two when reading `CLAUDE.md` vs `docs/agents.md`.
 | Service | Port | Runtime | Notes |
 |---------|------|---------|-------|
 | `data-ingestion` | 7010 | docker-compose | behind `caddy-data-ingestion` (mTLS) |
-| `snapshot-packager` | 7011 | docker-compose | behind `caddy-snapshot-packager` |
+| `snapshot-packager` | 7011 | systemd (`theeye-snapshot-packager.service`) | also defined in `docker-compose.yml` for dev, but the deployed instance is the bare-metal unit (added 2026-06-18) |
 | `llm-gateway` (LiteLLM proxy) | 4000 | docker-compose | behind `caddy-llm-gateway`; config in `config/litellm.yaml` |
 | `admin-service` | 7200 | docker-compose | behind `caddy-admin-service`; Tailscale ACL restricts who can reach it (ADR-0011) |
 | `agent_runtime` | 8004 | systemd (`theeye-agent-runtime.service`) | only fully-deployed agent worker today |
 | `theeyebeta-dataapi` (sibling repo `TheEyeBetaDataAPI`) | 7000 | systemd, **user** unit | not part of this repo's codebase — see [§12](#12-deployment) |
-| `master_orchestrator` | 7050 | code-complete, **no deploy unit** | gates the `risk_metrics` writer |
+| `master_orchestrator` | 7050 | systemd (`theeye-master-orchestrator.service`) | gates the `risk_metrics` writer |
 | `risk_service` | 7060 (gRPC) | code-complete, unit **staged + disabled** (`deploy/systemd/staged/`) | blocked upstream on "0 portfolios" — see `docs/ops/risk-metrics-activation.md` |
 | `guard_service` | 7040 (gRPC) / 8005 (HTTP bridge) | code-complete, no deploy unit | |
-| `oms` | 7080 | code-complete, no deploy unit | **live-trading-adjacent** — do not enable without explicit approval |
-| `broker_adapter_alpaca` | 7090 | code-complete, no deploy unit (unit file exists at `deploy/systemd/theeye-broker-adapter-alpaca.service` but is not installed) | **live-trading gated** |
+| `oms` | 7080 | systemd (`theeye-oms.service`) | paper-mode order lifecycle; live trading gated separately (`broker_adapter_alpaca.live_gate`) |
+| `broker_adapter_alpaca` | 7090 | systemd (`theeye-broker-adapter-alpaca.service`) | running in paper mode (`BROKER_MODE=paper`); live mode requires DB + Redis approval (`live_gate.py`) |
 | `backtest_engine` | 7100 | code-complete, no deploy unit | |
 | `audit_service` | 7110 | code-complete, no deploy unit | note: audit_log **writes** are already live via `BaseWorker._finish_completed`, independent of this HTTP service — see §4.3 of `SERVICES_STATUS.md` |
-| `compliance_service` | 7070 (gRPC) / 8008 (HTTP bridge) | code-complete, no deploy unit | |
+| `compliance_service` | 7070 (gRPC) / 8008 (HTTP bridge) | systemd (`theeye-compliance-service.service`) | |
 | `rnd_agent` | 7120 | code-complete, no deploy unit | |
 | PostgreSQL 17 + TimescaleDB + pgvector | 5432 | docker-compose | |
 | Redis 7 | 6379 | docker-compose | |
@@ -119,14 +119,16 @@ without checking why they were retired.
 deployed vs. scaffolded — read it before assuming any service in this list is actually running.
 Summary as of its last snapshot:
 
-- **Deployed:** `admin_service` (docker-compose, :7200), `agent_runtime` (systemd, :8004), plus
-  the `data-ingestion`/`snapshot-packager`/`llm-gateway` docker-compose services. The `llm_gateway`
-  service directory is config/scripts only — the actual running proxy is the LiteLLM container.
-- **Code-complete, not deployed:** `audit_service`, `backtest_engine`, `broker_adapter_alpaca`,
-  `compliance_service`, `guard_service`, `master_orchestrator`, `oms`, `rnd_agent`,
-  `snapshot_packager`-as-its-own-service, `risk_service` (unit staged but disabled — closest to
-  going live). Every one of these has real NATS consumers, settings modules, and tests; "not
-  deployed" means no systemd unit / compose entry, not "unfinished stub."
+- **Deployed:** `admin_service` (docker-compose, :7200), `agent_runtime` (systemd, :8004),
+  `snapshot_packager` (systemd, `theeye-snapshot-packager.service`, :7011, added 2026-06-18 —
+  writes to MinIO bucket `theeyebeta-snapshots`), `master_orchestrator`, `compliance_service`,
+  `oms`, `broker_adapter_alpaca` (all systemd, all running in paper mode), plus the
+  `data-ingestion`/`llm-gateway` docker-compose services. The `llm_gateway` service directory is
+  config/scripts only — the actual running proxy is the LiteLLM container.
+- **Code-complete, not deployed:** `audit_service`, `backtest_engine`, `guard_service`, `rnd_agent`,
+  `risk_service` (unit staged but disabled — closest to going live). Every one of these has real
+  NATS consumers, settings modules, and tests; "not deployed" means no systemd unit / compose
+  entry, not "unfinished stub."
   `services/api/` and `services/worker/` are genuinely empty placeholders — the live external API
   is the **separate sibling repo** `TheEyeBetaDataAPI`, not this repo.
 
@@ -143,8 +145,9 @@ Summary as of its last snapshot:
 
 All of the above are implemented in code (`consumer.py`/`producer.py` modules exist in
 `master_orchestrator`, `oms`, `audit_service`, `broker_adapter_alpaca`, `guard_service`,
-`agent_runtime`, `rnd_agent`). Whether traffic is actually flowing depends on §3.1 — most of this
-loop has no running process to publish or consume yet.
+`agent_runtime`, `rnd_agent`). Whether traffic is actually flowing depends on §3.1 —
+`master_orchestrator`, `oms`, and `broker_adapter_alpaca` are live and consuming/publishing today;
+`audit_service`, `guard_service`, and `rnd_agent` still have no running process.
 
 ### 3.3 The Two-Loop Cycle
 
@@ -152,12 +155,13 @@ _Diagram is embedded in the [README](../README.md#the-two-loop-architecture)._
 
 **Fast loop** (execution, as designed): `data-ingestion` → `agent_runtime` → `guard_service` →
 `master_orchestrator` → `risk_service` → `oms` → `broker_adapter_alpaca` → fills back to `oms`.
-**Today, only `data-ingestion` and `agent_runtime` are actually running**; the rest of the chain
-has no deploy unit, so signals currently have nowhere live to flow to past `agent_runtime`.
+**`data-ingestion`, `agent_runtime`, `master_orchestrator`, `oms`, and `broker_adapter_alpaca` are
+running** (paper mode); `guard_service` and `risk_service` still have no deploy unit, so pre-trade
+guard checks and live risk metrics are not yet wired into the loop.
 
 **Slow loop** (research, as designed): `snapshot_packager` → `backtest_engine` → `rnd_agent` →
-`llm-gateway` → proposals → `master_orchestrator`. **Today, only `snapshot-packager` and
-`llm-gateway` are running**; backtesting and the R&D agent are not deployed.
+`llm-gateway` → proposals → `master_orchestrator`. **`snapshot-packager`, `llm-gateway`, and
+`master_orchestrator` are running**; backtesting and the R&D agent are not deployed.
 
 The platform's actual day-to-day work is the timer-driven `workers/*` pipeline (§2.2), which is
 separate from this two-loop design and does not depend on it.
