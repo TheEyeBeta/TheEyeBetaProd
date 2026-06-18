@@ -67,6 +67,7 @@ export async function apiRequest<T>(
     body?: unknown;
     signal?: AbortSignal;
     requireAuth?: boolean;
+    notifyUnauthorized?: boolean;
   } = {}
 ): Promise<T> {
   const method = options.method ?? (options.body === undefined ? "GET" : "POST");
@@ -84,7 +85,7 @@ export async function apiRequest<T>(
     signal: options.signal
   });
 
-  if (response.status === 401) {
+  if (response.status === 401 && surface === "admin" && options.notifyUnauthorized !== false) {
     authSnapshot.onUnauthorized();
   }
 
@@ -109,6 +110,14 @@ export const adminGet = <T>(path: string, query?: Record<string, unknown>, signa
 
 export const adminPost = <T>(path: string, body?: unknown) =>
   apiRequest<T>("admin", path, { method: "POST", body });
+
+export const adminAuthPost = <T>(path: string, body?: unknown) =>
+  apiRequest<T>("admin", path, {
+    method: "POST",
+    body,
+    requireAuth: false,
+    notifyUnauthorized: false
+  });
 
 export const adminDelete = <T>(path: string) => apiRequest<T>("admin", path, { method: "DELETE" });
 

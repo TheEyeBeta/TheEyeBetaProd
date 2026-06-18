@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { adminPost, setAuthSnapshot } from "../api/http";
+import { adminAuthPost, adminPost, setAuthSnapshot } from "../api/http";
 import type { CurrentUserResponse, LoginResponse, RefreshResponse, Role } from "../api/types";
 
 type AuthState = {
@@ -48,24 +48,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let live = true;
-    adminPost<RefreshResponse>("/admin/auth/refresh")
+    adminAuthPost<RefreshResponse>("/admin/auth/refresh")
       .then((response) => {
         if (!live) return;
         const user = extractUser(response);
-        setState({
-          token: user.token,
-          role: user.role,
-          username: user.username,
-          bootstrapped: true
+        setState((current) => {
+          if (current.token) return current;
+          return {
+            token: user.token,
+            role: user.role,
+            username: user.username,
+            bootstrapped: true
+          };
         });
       })
       .catch(() => {
-        if (live) clear();
+        if (!live) return;
+        setState((current) => {
+          if (current.token) return current;
+          return { token: null, role: null, username: null, bootstrapped: true };
+        });
       });
     return () => {
       live = false;
     };
-  }, [clear]);
+  }, []);
 
   const applyToken = useCallback((response: LoginResponse | RefreshResponse) => {
     const user = extractUser(response);
@@ -75,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(
     async (username: string, password: string, totp?: string): Promise<LoginResult> => {
-      const response = await adminPost<LoginResponse>("/admin/auth/login", {
+      const response = await adminAuthPost<LoginResponse>("/admin/auth/login", {
         username,
         password,
         totp_code: totp || undefined
@@ -94,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const verifyMfa = useCallback(
     async (mfaToken: string, totp: string) => {
-      const response = await adminPost<LoginResponse>("/admin/auth/mfa/verify", {
+      const response = await adminAuthPost<LoginResponse>("/admin/auth/mfa/verify", {
         mfa_token: mfaToken,
         totp_code: totp
       });
