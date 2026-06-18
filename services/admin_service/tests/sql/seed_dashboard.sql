@@ -85,11 +85,11 @@ INSERT INTO theeyebeta.agents (
     constitution_path, active
 ) VALUES
     ('dash-agent-active-1', 'research', 'analyst',
-     'gpt-5', 'gpt-4.1', 'agents/technical-analyst.md', TRUE),
+     'gpt-5', 'gpt-4.1', 'agents/markets/technical-analyst.agent.md', TRUE),
     ('dash-agent-active-2', 'execution', 'trader',
-     'gpt-5', 'gpt-4.1', 'agents/technical-analyst.md', TRUE),
+     'gpt-5', 'gpt-4.1', 'agents/markets/technical-analyst.agent.md', TRUE),
     ('dash-agent-inactive', 'research', 'analyst',
-     'gpt-5', 'gpt-4.1', 'agents/technical-analyst.md', FALSE)
+     'gpt-5', 'gpt-4.1', 'agents/markets/technical-analyst.agent.md', FALSE)
 ON CONFLICT (id) DO UPDATE
    SET active = EXCLUDED.active;
 

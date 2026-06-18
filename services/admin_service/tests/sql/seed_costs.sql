@@ -13,7 +13,7 @@ VALUES
         'Technical analysis',
         'gpt-4o-mini',
         NULL,
-        'agents/technical-analyst.md',
+        'agents/markets/technical-analyst.agent.md',
         true
     ),
     (
@@ -22,7 +22,7 @@ VALUES
         'Macro and cross-asset stance',
         'claude-sonnet-4-6',
         'gpt-5',
-        'agents/macro-lead.md',
+        'agents/markets/macro-lead.agent.md',
         true
     )
 ON CONFLICT (id) DO UPDATE

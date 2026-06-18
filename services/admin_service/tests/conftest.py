@@ -81,6 +81,44 @@ class ASGITransport(_BaseASGITransport):
 
 httpx.ASGITransport = ASGITransport
 
+_ADMIN_TOP_LEVEL_MODULES = {
+    "audit_log",
+    "auth",
+    "auth_mfa",
+    "auth_sessions",
+    "deps",
+    "errors",
+    "main",
+    "rbac",
+    "settings",
+    "web",
+}
+
+
+def _purge_admin_modules() -> None:
+    """Drop top-level admin-service modules so dependency overrides bind correctly."""
+    for name, module in list(sys.modules.items()):
+        is_admin_namespace = (
+            name in _ADMIN_TOP_LEVEL_MODULES
+            or name == "api"
+            or name.startswith("api.")
+            or name == "lib"
+            or name.startswith("lib.")
+        )
+        if not is_admin_namespace:
+            continue
+        module_file = getattr(module, "__file__", None)
+        if module_file is None:
+            sys.modules.pop(name, None)
+            continue
+        try:
+            path = Path(module_file).resolve()
+        except OSError:
+            sys.modules.pop(name, None)
+            continue
+        if path.is_relative_to(_SERVICE_ROOT) or name in _ADMIN_TOP_LEVEL_MODULES:
+            sys.modules.pop(name, None)
+
 
 def _admin_create_app() -> Any:
     """Return admin-service create_app even after other tests mutate sys.path."""
@@ -88,12 +126,7 @@ def _admin_create_app() -> Any:
     if service_root in sys.path:
         sys.path.remove(service_root)
     sys.path.insert(0, service_root)
-    loaded_main = sys.modules.get("main")
-    expected = (_SERVICE_ROOT / "main.py").resolve()
-    if loaded_main is not None:
-        loaded_path = Path(getattr(loaded_main, "__file__", "")).resolve()
-        if loaded_path != expected:
-            del sys.modules["main"]
+    _purge_admin_modules()
     return import_module("main").create_app
 
 
@@ -289,10 +322,10 @@ async def _admin_client_for_dsn(
     auth_headers: dict[str, str],
 ) -> AsyncIterator[tuple[AsyncClient, _RecordingNats]]:
     """Yield httpx client + NATS stub for a bootstrapped DSN."""
+    create_app = _admin_create_app()
     from auth import get_current_user  # noqa: PLC0415
     from settings import Settings, get_settings  # noqa: PLC0415
 
-    create_app = _admin_create_app()
     get_settings.cache_clear()
     settings = Settings(
         database_url=dsn,

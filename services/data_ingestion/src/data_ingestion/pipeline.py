@@ -170,7 +170,10 @@ class IngestionPipeline:
                             "sha256": meta["sha256"],
                         },
                     ).encode()
-                    await js.publish(subject, payload)
+                    try:
+                        await js.publish(subject, payload)
+                    except nats.errors.TimeoutError:
+                        await nc.publish(subject, payload)
                     summary["nats_events"].append(subject)
                     record_success(market)
             finally:

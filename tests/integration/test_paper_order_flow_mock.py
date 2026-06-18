@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -9,7 +10,7 @@ import psycopg
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from audit_service.chain import verify_chain
+from audit_service.chain import verify_range
 from compliance_service.app import check_order_request
 from compliance_service.engine import ComplianceEngine
 from oms.app import create_app as create_oms_app
@@ -103,6 +104,7 @@ async def test_paper_order_flow_risk_compliance_oms_audit(alembic_upgraded: str)
         assert compliance_result.approved, compliance_result.reason
 
     before_audit = _audit_count(dsn, str(order["order_id"]))
+    verify_from = datetime.now(tz=UTC) - timedelta(seconds=1)
     app = create_oms_app(
         OmsSettings(
             database_url=dsn,
@@ -127,5 +129,9 @@ async def test_paper_order_flow_risk_compliance_oms_audit(alembic_upgraded: str)
 
     after_audit = _audit_count(dsn, str(order["order_id"]))
     assert after_audit == before_audit + 1
-    verified = await verify_chain(dsn)
+    verified = await verify_range(
+        dsn,
+        from_ts=verify_from,
+        to_ts=datetime.now(tz=UTC) + timedelta(seconds=1),
+    )
     assert verified.status == "OK", verified.detail

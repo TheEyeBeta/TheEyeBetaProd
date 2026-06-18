@@ -116,7 +116,6 @@ from api.sql import (
     run_write_statement,
 )
 from zinc_schemas.admin_dto import (
-    AgentMessageDTO,
     AgentsListResponse,
     AgentSummary,
     ApproveProposalRequest,
@@ -1680,14 +1679,9 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
         prompt: Annotated[str, Form(max_length=8000)] = "",
     ) -> HTMLResponse:
         """Trigger an agent run; return a flash card with the result."""
-        agent_messages: list[AgentMessageDTO] = []
-        prompt_stripped = prompt.strip()
-        if prompt_stripped:
-            agent_messages.append(AgentMessageDTO(role="user", content=prompt_stripped))
         body = RunAgentRequest(
             snapshot_id=snapshot_id,
             kind=kind.strip(),
-            agent_messages=agent_messages,
         )
         try:
             result = await trigger_agent_run_impl(

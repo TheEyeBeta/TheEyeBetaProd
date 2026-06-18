@@ -115,7 +115,7 @@ async def test_get_constitution_happy(
     assert response.status_code == 200
     body = response.json()
     assert body["agent_id"] == AGENT_ID
-    assert body["constitution_path"].endswith("technical-analyst.md")
+    assert body["constitution_path"].endswith("technical-analyst.agent.md")
     assert "# Role" in body["content"]
 
 

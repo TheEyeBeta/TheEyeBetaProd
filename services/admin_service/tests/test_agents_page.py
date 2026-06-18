@@ -137,7 +137,7 @@ async def test_agent_constitution_fragment_renders_markdown_source(
     assert 'data-tab="constitution"' in body
     assert "data-constitution-source" in body
     assert "data-constitution-target" in body
-    # Real file content — agents/technical-analyst.md has a "# Role" heading.
+    # Real file content has a "# Role" heading.
     assert "# Role" in body
 
 
@@ -230,7 +230,7 @@ async def test_agent_run_fragment_happy_path(
 
         async def post(self, _url: str, json: dict[str, Any]) -> _Resp:
             assert json["snapshot_id"] == str(SNAPSHOT_ID)
-            assert json["kind"] == "manual"
+            assert json["kind"] == "run"
             return _Resp()
 
     with patch("api.agents.httpx.AsyncClient", _StubClient):
@@ -239,7 +239,7 @@ async def test_agent_run_fragment_happy_path(
             headers=auth_headers,
             data={
                 "snapshot_id": str(SNAPSHOT_ID),
-                "kind": "manual",
+                "kind": "run",
                 "prompt": "  please re-analyse  ",
             },
         )
@@ -281,7 +281,7 @@ async def test_agent_run_fragment_runtime_unreachable_returns_flash(
             headers=auth_headers,
             data={
                 "snapshot_id": str(SNAPSHOT_ID),
-                "kind": "manual",
+                "kind": "run",
             },
         )
     assert response.status_code == 200
@@ -303,7 +303,7 @@ async def test_agent_run_fragment_unknown_agent(
         headers=auth_headers,
         data={
             "snapshot_id": str(SNAPSHOT_ID),
-            "kind": "manual",
+            "kind": "run",
         },
     )
     assert response.status_code == 200
@@ -353,6 +353,6 @@ async def test_agents_page_requires_auth(
             assert (
                 await anon.post(
                     f"/admin/agents/fragments/{AGENT_ID}/run",
-                    data={"snapshot_id": str(SNAPSHOT_ID), "kind": "manual"},
+                    data={"snapshot_id": str(SNAPSHOT_ID), "kind": "run"},
                 )
             ).status_code == 401

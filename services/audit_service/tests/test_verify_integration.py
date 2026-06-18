@@ -34,7 +34,7 @@ def _normalize_dsn(dsn: str) -> str:
 async def test_verify_detects_out_of_band_psql_insert(postgres_infra: PostgresInfra) -> None:
     """Acceptance: tampered row is reported at the first bad chain link."""
     dsn = _normalize_dsn(postgres_infra.database_url)
-    base_ts = datetime(2026, 5, 21, 10, 0, tzinfo=UTC)
+    base_ts = datetime.now(tz=UTC).replace(microsecond=0) - timedelta(minutes=5)
 
     await append_chained_row(
         dsn,
@@ -90,7 +90,7 @@ async def test_verify_detects_out_of_band_psql_insert(postgres_infra: PostgresIn
 @pytest.mark.asyncio
 async def test_append_and_verify_ok(postgres_infra: PostgresInfra) -> None:
     dsn = _normalize_dsn(postgres_infra.database_url)
-    ts = datetime(2026, 5, 22, 8, 0, tzinfo=UTC)
+    ts = datetime.now(tz=UTC).replace(microsecond=0) - timedelta(minutes=5)
     await append_chained_row(
         dsn,
         actor="risk",
