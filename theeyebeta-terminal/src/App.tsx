@@ -7,8 +7,10 @@ import { MarketPanel } from "./panels/MarketPanel";
 import { TradingPanel } from "./panels/TradingPanel";
 import { SignalsPanel } from "./panels/SignalsPanel";
 import { RiskPanel } from "./panels/RiskPanel";
+import { TraskPanel } from "./panels/TraskPanel";
 import { AuditPanel } from "./panels/AuditPanel";
 import { PipelinesPanel } from "./panels/PipelinesPanel";
+import { CliPanel } from "./panels/CliPanel";
 import { DataPanel } from "./panels/DataPanel";
 import { AdminPanel } from "./panels/AdminPanel";
 import { StatusDot } from "./components/StatusDot";
@@ -20,8 +22,10 @@ const navItems = [
   { path: "/trading", label: "TRADING" },
   { path: "/signals", label: "SIGNALS" },
   { path: "/risk", label: "RISK" },
+  { path: "/trask", label: "TRASK" },
   { path: "/audit", label: "AUDIT" },
   { path: "/pipelines", label: "PIPELINES" },
+  { path: "/cli", label: "CLI" },
   { path: "/data", label: "DATA" },
   { path: "/admin", label: "ADMIN" }
 ];
@@ -183,8 +187,10 @@ function TerminalShell() {
             <Route path="/trading" element={<TradingPanel />} />
             <Route path="/signals" element={<SignalsPanel />} />
             <Route path="/risk" element={<RiskPanel />} />
+            <Route path="/trask" element={<TraskPanel />} />
             <Route path="/audit" element={<AuditPanel />} />
             <Route path="/pipelines" element={<PipelinesPanel />} />
+            <Route path="/cli" element={<CliPanel />} />
             <Route path="/data" element={<DataPanel />} />
             <Route path="/admin" element={<AdminPanel />} />
             <Route path="*" element={<Navigate to="/overview" replace />} />

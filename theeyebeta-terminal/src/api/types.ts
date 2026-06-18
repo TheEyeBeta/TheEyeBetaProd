@@ -76,9 +76,13 @@ export type TimerRow = {
   unit?: string;
   active?: boolean;
   next_fire_at?: string;
+  next_trigger?: string;
   last_fire_at?: string;
+  last_trigger?: string;
   last_exit_code?: number | null;
   state?: string;
+  status?: string;
+  schedule?: string;
 };
 
 export type TimersListResponse = {
@@ -175,8 +179,11 @@ export type SignalRow = {
   confidence?: number;
   score?: number;
   entry?: number;
+  entry_price?: number;
   target?: number;
+  target_price?: number;
   stop?: number;
+  stop_loss?: number;
   created_at?: string;
   timestamp?: string;
 };
@@ -187,19 +194,80 @@ export type SignalsLatestResponse = {
 
 export type WorkerRun = {
   id?: string | number;
+  run_id?: string | number;
   worker?: string;
   worker_name?: string;
+  trade_date?: string;
+  run_type?: string;
   status?: string;
   started_at?: string;
+  ended_at?: string;
   finished_at?: string;
   exit_code?: number | null;
+  records_written?: number | null;
+  error_message?: string | null;
   stdout_tail?: string;
   stderr_tail?: string;
 };
 
 export type WorkerRunsResponse = {
   runs?: WorkerRun[];
+  limit?: number;
+  offset?: number;
   total?: number;
+};
+
+export type WorkerRegistryEntry = {
+  name?: string;
+  alias?: string | null;
+  worker_class?: string;
+  state?: string;
+  last_heartbeat?: string | null;
+  last_run_status?: string | null;
+  last_run_at?: string | null;
+  next_scheduled_fire?: string | null;
+  circuit_breaker_state?: string | null;
+};
+
+export type WorkersListResponse = {
+  workers?: WorkerRegistryEntry[];
+  total?: number;
+};
+
+export type TraskBreakerDetail = {
+  id?: number;
+  component_id?: string;
+  state?: string;
+  failure_count?: number;
+  opened_at?: string | null;
+  reset_eligible?: boolean;
+  recovery_timeout_seconds?: number;
+};
+
+export type TraskFailureSummary = {
+  component_id?: string;
+  worker_name?: string | null;
+  status?: string;
+  started_at?: string;
+  error_message?: string | null;
+};
+
+export type TraskDashboardResponse = {
+  components_total?: number;
+  components_healthy?: number;
+  components_degraded?: number;
+  components_failed?: number;
+  open_breakers?: TraskBreakerDetail[];
+  degraded_components?: string[];
+  recent_failures?: TraskFailureSummary[];
+};
+
+export type SqlQueryResponse = {
+  columns?: string[];
+  rows?: unknown[][];
+  row_count?: number;
+  truncated?: boolean;
+  elapsed_ms?: number;
 };
 
 export type DataTableRow = {
@@ -211,4 +279,24 @@ export type DataTableRow = {
 
 export type DataTablesResponse = {
   tables?: DataTableRow[];
+};
+
+export type DataColumnRow = {
+  name?: string;
+  data_type?: string;
+  nullable?: boolean;
+  ordinal_position?: number;
+};
+
+export type DataColumnsResponse = {
+  table?: string;
+  columns?: DataColumnRow[];
+};
+
+export type DataRowsResponse = {
+  table?: string;
+  limit?: number;
+  offset?: number;
+  row_count?: number;
+  rows?: Record<string, unknown>[];
 };

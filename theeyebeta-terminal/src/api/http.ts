@@ -8,7 +8,7 @@ export type ApiError = Error & {
 };
 
 const ADMIN_BASE = import.meta.env.VITE_ADMIN_API_BASE ?? "/admin-api";
-const DATA_BASE = import.meta.env.VITE_DATA_API_BASE ?? "/data-api";
+const DATA_BASE = import.meta.env.VITE_DATA_API_BASE ?? "/admin-api/admin/dataapi";
 
 function defaultAdminWsUrl(): string {
   if (typeof window === "undefined") return "ws://127.0.0.1:7200/admin/events/stream";
@@ -117,6 +117,44 @@ export const adminGet = <T>(path: string, query?: Record<string, unknown>, signa
 
 export const adminPost = <T>(path: string, body?: unknown) =>
   apiRequest<T>("admin", path, { method: "POST", body });
+
+export const adminPostWithHeaders = async <T>(
+  path: string,
+  body: unknown,
+  extraHeaders: Record<string, string>
+): Promise<T> => {
+  const method = "POST";
+  const requestToken = authSnapshot.token;
+  const headers = new Headers(extraHeaders);
+  headers.set("Content-Type", "application/json");
+  if (requestToken) headers.set("Authorization", `Bearer ${requestToken}`);
+
+  const response = await fetch(resolveUrl("admin", path), {
+    method,
+    headers,
+    body: JSON.stringify(body),
+    credentials: "include"
+  });
+
+  if (response.status === 401 && requestToken && requestToken === authSnapshot.token) {
+    authSnapshot.onUnauthorized();
+  }
+
+  if (!response.ok) {
+    const error = new Error(`${method} ${path} failed with ${response.status}`) as ApiError;
+    error.status = response.status;
+    const text = await response.text();
+    try {
+      error.payload = text ? JSON.parse(text) : undefined;
+    } catch {
+      error.payload = text;
+    }
+    throw error;
+  }
+
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+};
 
 export const adminAuthPost = <T>(path: string, body?: unknown) =>
   apiRequest<T>("admin", path, {

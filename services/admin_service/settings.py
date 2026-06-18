@@ -77,6 +77,25 @@ class Settings(BaseSettings):
         default="http://127.0.0.1:7090",
         validation_alias="BROKER_ADAPTER_URL",
     )
+    dataapi_url: str = Field(
+        default="http://127.0.0.1:7000",
+        validation_alias="ADMIN_DATAAPI_URL",
+    )
+    dataapi_client_id: str = Field(
+        default="",
+        validation_alias="ADMIN_DATAAPI_CLIENT_ID",
+    )
+    dataapi_client_secret: str = Field(
+        default="",
+        validation_alias="ADMIN_DATAAPI_CLIENT_SECRET",
+    )
+    dataapi_scopes: str = Field(
+        default=(
+            "advisor:read,market:read,symbols:read,analytics:read,"
+            "signals:read,portfolio:read,admin:read"
+        ),
+        validation_alias="ADMIN_DATAAPI_SCOPES",
+    )
     max_position_size_usd: float = Field(
         default=50000.0,
         validation_alias="MAX_POSITION_SIZE_USD",
@@ -197,6 +216,10 @@ class Settings(BaseSettings):
     def repo_root_path(self) -> Path:
         """Return :attr:`repo_root` as a :class:`pathlib.Path`."""
         return Path(self.repo_root).resolve()
+
+    def dataapi_scope_list(self) -> list[str]:
+        """Return DataAPI service scopes requested by the admin bridge."""
+        return [scope.strip() for scope in self.dataapi_scopes.split(",") if scope.strip()]
 
 
 @lru_cache

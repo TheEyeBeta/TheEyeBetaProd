@@ -67,8 +67,16 @@ export function PipelinesPanel() {
               render: (row) => <StatusDot status={row.state ?? row.active} />
             },
             { key: "name", header: "Timer", render: (row) => row.name ?? row.unit ?? "--" },
-            { key: "next", header: "Next Fire", render: (row) => formatDate(row.next_fire_at) },
-            { key: "last", header: "Last Fire", render: (row) => formatDate(row.last_fire_at) },
+            {
+              key: "next",
+              header: "Next Fire",
+              render: (row) => formatDate(row.next_trigger ?? row.next_fire_at)
+            },
+            {
+              key: "last",
+              header: "Last Fire",
+              render: (row) => formatDate(row.last_trigger ?? row.last_fire_at)
+            },
             {
               key: "trigger",
               header: "Trigger",
@@ -122,7 +130,7 @@ export function PipelinesPanel() {
         <DataTable<WorkerRun>
           rows={runRows}
           empty="No worker runs returned"
-          getKey={(row, index) => String(row.id ?? index)}
+          getKey={(row, index) => String(row.run_id ?? row.id ?? index)}
           columns={[
             {
               key: "worker",
@@ -130,7 +138,7 @@ export function PipelinesPanel() {
               render: (row) => row.worker ?? row.worker_name ?? "--"
             },
             { key: "status", header: "Status", render: (row) => row.status ?? "--" },
-            { key: "exit", header: "Exit", render: (row) => row.exit_code ?? "--" },
+            { key: "records", header: "Rows", render: (row) => row.records_written ?? "--" },
             { key: "started", header: "Started", render: (row) => formatDate(row.started_at) }
           ]}
         />
@@ -140,7 +148,7 @@ export function PipelinesPanel() {
         <DataTable<WorkerRun>
           rows={gapRuns}
           empty="No GapSentinel worker runs returned"
-          getKey={(row, index) => String(row.id ?? index)}
+          getKey={(row, index) => String(row.run_id ?? row.id ?? index)}
           columns={[
             {
               key: "worker",
@@ -148,8 +156,16 @@ export function PipelinesPanel() {
               render: (row) => row.worker ?? row.worker_name ?? "--"
             },
             { key: "status", header: "Status", render: (row) => row.status ?? "--" },
-            { key: "finished", header: "Finished", render: (row) => formatDate(row.finished_at) },
-            { key: "stderr", header: "stderr", render: (row) => row.stderr_tail ?? "--" }
+            {
+              key: "finished",
+              header: "Finished",
+              render: (row) => formatDate(row.ended_at ?? row.finished_at)
+            },
+            {
+              key: "error",
+              header: "Error",
+              render: (row) => row.error_message ?? row.stderr_tail ?? "--"
+            }
           ]}
         />
       </Panel>

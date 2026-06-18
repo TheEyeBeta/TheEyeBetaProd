@@ -82,9 +82,21 @@ export function SignalsPanel() {
               header: "Conf",
               render: (row) => formatNumber(row.confidence ?? row.score, 3)
             },
-            { key: "entry", header: "Entry", render: (row) => formatNumber(row.entry) },
-            { key: "target", header: "Target", render: (row) => formatNumber(row.target) },
-            { key: "stop", header: "Stop", render: (row) => formatNumber(row.stop) }
+            {
+              key: "entry",
+              header: "Entry",
+              render: (row) => formatNumber(row.entry ?? row.entry_price)
+            },
+            {
+              key: "target",
+              header: "Target",
+              render: (row) => formatNumber(row.target ?? row.target_price)
+            },
+            {
+              key: "stop",
+              header: "Stop",
+              render: (row) => formatNumber(row.stop ?? row.stop_loss)
+            }
           ]}
         />
       </Panel>
