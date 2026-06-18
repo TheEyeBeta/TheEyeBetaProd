@@ -3,7 +3,6 @@ import { useState } from "react";
 import { useAuth } from "./auth/AuthContext";
 import { useAdminEvents } from "./hooks/useAdminEvents";
 import { OverviewPanel } from "./panels/OverviewPanel";
-import { PlaceholderPanel } from "./panels/PlaceholderPanel";
 import { MarketPanel } from "./panels/MarketPanel";
 import { TradingPanel } from "./panels/TradingPanel";
 import { SignalsPanel } from "./panels/SignalsPanel";
@@ -11,6 +10,7 @@ import { RiskPanel } from "./panels/RiskPanel";
 import { AuditPanel } from "./panels/AuditPanel";
 import { PipelinesPanel } from "./panels/PipelinesPanel";
 import { DataPanel } from "./panels/DataPanel";
+import { AdminPanel } from "./panels/AdminPanel";
 import { StatusDot } from "./components/StatusDot";
 import { OPENAPI_PATHS } from "./api/openapi-schema";
 
@@ -186,7 +186,7 @@ function TerminalShell() {
             <Route path="/audit" element={<AuditPanel />} />
             <Route path="/pipelines" element={<PipelinesPanel />} />
             <Route path="/data" element={<DataPanel />} />
-            <Route path="/admin" element={<PlaceholderPanel title="ADMIN" />} />
+            <Route path="/admin" element={<AdminPanel />} />
             <Route path="*" element={<Navigate to="/overview" replace />} />
           </Routes>
         </main>
