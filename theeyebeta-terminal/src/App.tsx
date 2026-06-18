@@ -6,6 +6,7 @@ import { OverviewPanel } from "./panels/OverviewPanel";
 import { PlaceholderPanel } from "./panels/PlaceholderPanel";
 import { MarketPanel } from "./panels/MarketPanel";
 import { TradingPanel } from "./panels/TradingPanel";
+import { SignalsPanel } from "./panels/SignalsPanel";
 import { StatusDot } from "./components/StatusDot";
 import { OPENAPI_PATHS } from "./api/openapi-schema";
 
@@ -176,7 +177,7 @@ function TerminalShell() {
             <Route path="/overview" element={<OverviewPanel />} />
             <Route path="/market" element={<MarketPanel />} />
             <Route path="/trading" element={<TradingPanel />} />
-            <Route path="/signals" element={<PlaceholderPanel title="SIGNALS" />} />
+            <Route path="/signals" element={<SignalsPanel />} />
             <Route path="/risk" element={<PlaceholderPanel title="RISK" />} />
             <Route path="/audit" element={<PlaceholderPanel title="AUDIT" />} />
             <Route path="/pipelines" element={<PlaceholderPanel title="PIPELINES" />} />

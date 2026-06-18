@@ -163,3 +163,24 @@ export type PendingOrdersResponse = {
 };
 
 export type PositionRow = Record<string, unknown>;
+
+export type SignalRow = {
+  id?: string;
+  ticker?: string;
+  symbol?: string;
+  strategy_name?: string;
+  strategy?: string;
+  signal?: string;
+  side?: string;
+  confidence?: number;
+  score?: number;
+  entry?: number;
+  target?: number;
+  stop?: number;
+  created_at?: string;
+  timestamp?: string;
+};
+
+export type SignalsLatestResponse = {
+  signals?: SignalRow[];
+};
