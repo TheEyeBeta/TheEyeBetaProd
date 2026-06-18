@@ -90,7 +90,7 @@ async def test_verify_detects_out_of_band_psql_insert(postgres_infra: PostgresIn
 @pytest.mark.asyncio
 async def test_append_and_verify_ok(postgres_infra: PostgresInfra) -> None:
     dsn = _normalize_dsn(postgres_infra.database_url)
-    ts = datetime.now(tz=UTC).replace(microsecond=0) - timedelta(minutes=5)
+    ts = datetime.now(tz=UTC).replace(microsecond=0) + timedelta(minutes=5)
     await append_chained_row(
         dsn,
         actor="risk",

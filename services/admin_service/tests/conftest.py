@@ -320,6 +320,7 @@ async def _admin_client_for_dsn(
     """Yield httpx client + NATS stub for a bootstrapped DSN."""
     create_app = _admin_create_app()
     from auth import get_current_user  # noqa: PLC0415
+    from rbac import get_authenticated_user  # noqa: PLC0415
     from settings import Settings, get_settings  # noqa: PLC0415
 
     get_settings.cache_clear()
@@ -344,9 +345,10 @@ async def _admin_client_for_dsn(
         deps.bind_app_state(app, settings)
 
         async def _fake_user() -> dict[str, str]:
-            return {"sub": "test-operator"}
+            return {"sub": "test-operator", "role": "MASTER_ADMIN"}
 
         app.dependency_overrides[get_current_user] = _fake_user
+        app.dependency_overrides[get_authenticated_user] = _fake_user
         transport = ASGITransport(app=app)
         try:
             async with AsyncClient(transport=transport, base_url="http://test") as client:

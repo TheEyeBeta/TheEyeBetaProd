@@ -528,7 +528,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
                 request,
                 kind="warn",
                 message=(
-                    "Daily backtest is not configured — set "
+                    "Daily backtest is not configured - set "
                     "ADMIN_DAILY_BACKTEST_STRATEGY_ID to enable this action."
                 ),
             )
@@ -552,7 +552,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
             return _flash_response(
                 request,
                 kind="error",
-                message="backtest-engine is unreachable — check `tb status backtest-engine`.",
+                message="backtest-engine is unreachable - check `tb status backtest-engine`.",
             )
 
         if response.status_code >= 400:

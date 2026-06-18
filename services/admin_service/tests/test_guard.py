@@ -72,7 +72,7 @@ def _resolved_violation_id(dsn: str) -> int:
 
 
 def _reset_seed(dsn: str) -> None:
-    """Reset all violations to unresolved + clear admin audit rows for retries."""
+    """Reset seeded violations to their original resolved/unresolved shape."""
     with psycopg.connect(_normalize_psycopg_dsn(dsn), autocommit=True) as conn:
         conn.execute(
             """
@@ -81,7 +81,17 @@ def _reset_seed(dsn: str) -> None:
                    resolved_by = NULL,
                    resolved_at = NULL,
                    resolution_note = NULL
-             WHERE resolved_by IS NULL OR resolved_by LIKE 'admin-api:%'
+             WHERE violation_type IN ('schema', 'mandate_boundary')
+            """,
+        )
+        conn.execute(
+            """
+            UPDATE theeyebeta.guard_violations
+               SET resolved = true,
+                   resolved_by = 'admin-api:legacy-operator',
+                   resolved_at = COALESCE(resolved_at, now() - interval '30 minutes'),
+                   resolution_note = 'manual override'
+             WHERE violation_type = 'confidence_range'
             """,
         )
         conn.execute(

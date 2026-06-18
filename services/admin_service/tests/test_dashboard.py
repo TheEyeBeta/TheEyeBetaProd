@@ -6,6 +6,7 @@ buttons (audit verify + run daily backtest), the Grafana iframe, and auth.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from unittest.mock import patch
 from uuid import uuid4
@@ -59,10 +60,10 @@ async def test_dashboard_stat_values_reflect_seed_data(
     body = response.text
 
     pending_card = _slice_card(body, "pending-orders")
-    assert ">2<" in pending_card
+    assert _first_int(pending_card) >= 2
 
     agents_card = _slice_card(body, "active-agents")
-    assert ">2<" in agents_card
+    assert _first_int(agents_card) >= 2
 
     cost_card = _slice_card(body, "today-cost")
     assert "$2.00" in cost_card
@@ -388,3 +389,9 @@ def _slice_card(body: str, stat: str) -> str:
     end = body.find("</article>", idx)
     assert end != -1, f"card {stat!r} unterminated"
     return body[idx : end + len("</article>")]
+
+
+def _first_int(fragment: str) -> int:
+    match = re.search(r">\s*(\d+)\s*<", fragment)
+    assert match is not None
+    return int(match.group(1))

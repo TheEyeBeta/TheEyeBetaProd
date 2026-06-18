@@ -35,11 +35,11 @@ async def _client_with_role(
     import importlib.util
     from unittest.mock import patch
 
-    from auth import get_current_user  # noqa: PLC0415
-
     from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
 
     create_app = _admin_create_app()
+    from auth import get_current_user  # noqa: PLC0415
+    from rbac import get_authenticated_user  # noqa: PLC0415
     from settings import Settings, get_settings  # noqa: PLC0415
 
     spec = importlib.util.spec_from_file_location(
@@ -74,6 +74,7 @@ async def _client_with_role(
             return {"sub": "test-operator", "role": role}
 
         app.dependency_overrides[get_current_user] = _fake_user
+        app.dependency_overrides[get_authenticated_user] = _fake_user
         transport = ASGITransport(app=app)
         try:
             async with AsyncClient(transport=transport, base_url="http://test") as client:
