@@ -44,7 +44,7 @@ REQUIRED_GROUPS = (
 def main() -> int:
     """Run ``tb --help`` and assert required command groups appear."""
     proc = subprocess.run(  # noqa: S603
-        ["uv", "run", "tb", "--help"],
+        ["uv", "run", "--project", "tb", "tb", "--help"],
         capture_output=True,
         text=True,
         check=False,

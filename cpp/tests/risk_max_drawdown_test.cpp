@@ -7,11 +7,11 @@
 
 #include <cmath>
 #include <limits>
-#include <random>
 #include <span>
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <random>
 
 namespace {
 
@@ -19,7 +19,7 @@ bool IsNan(double value) {
     return std::isnan(value);
 }
 
-}  // namespace
+} // namespace
 
 TEST(MaxDrawdownTest, HappyPathHandComputed) {
     const double wealth[] = {100.0, 120.0, 90.0, 110.0};
@@ -28,7 +28,7 @@ TEST(MaxDrawdownTest, HappyPathHandComputed) {
 }
 
 TEST(MaxDrawdownTest, EmptyAndInvalidInputReturnsNan) {
-    EXPECT_TRUE(IsNan(zinc::risk::max_drawdown(std::span<const double>{}));
+    EXPECT_TRUE(IsNan(zinc::risk::max_drawdown(std::span<const double>{})));
     const double non_positive[] = {100.0, 0.0, 50.0};
     EXPECT_TRUE(IsNan(zinc::risk::max_drawdown(non_positive)));
 }

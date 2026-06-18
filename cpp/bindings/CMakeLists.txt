@@ -1,6 +1,4 @@
-find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
-
-nanobind_add_module(_zinc_risk NB_MODULE _zinc_risk.cpp)
+nanobind_add_module(_zinc_risk _zinc_risk.cpp)
 
 target_link_libraries(_zinc_risk PRIVATE zinc)
 target_compile_options(
@@ -28,7 +26,7 @@ install(
     RUNTIME DESTINATION "libs/zinc_native/zinc_native"
 )
 
-nanobind_add_module(_zinc_ta NB_MODULE _zinc_ta.cpp)
+nanobind_add_module(_zinc_ta _zinc_ta.cpp)
 
 target_link_libraries(_zinc_ta PRIVATE zinc)
 target_compile_options(
@@ -54,7 +52,7 @@ install(
     RUNTIME DESTINATION "libs/zinc_native/zinc_native"
 )
 
-nanobind_add_module(_zinc_opt NB_MODULE _zinc_opt.cpp)
+nanobind_add_module(_zinc_opt _zinc_opt.cpp)
 
 target_link_libraries(_zinc_opt PRIVATE zinc)
 target_compile_options(
@@ -80,7 +78,7 @@ install(
     RUNTIME DESTINATION "libs/zinc_native/zinc_native"
 )
 
-nanobind_add_module(_zinc_bt NB_MODULE _zinc_bt.cpp)
+nanobind_add_module(_zinc_bt _zinc_bt.cpp)
 
 target_link_libraries(_zinc_bt PRIVATE zinc)
 target_compile_options(
@@ -106,7 +104,7 @@ install(
     RUNTIME DESTINATION "libs/zinc_native/zinc_native"
 )
 
-nanobind_add_module(_zinc_oms NB_MODULE _zinc_oms.cpp)
+nanobind_add_module(_zinc_oms _zinc_oms.cpp)
 
 target_link_libraries(_zinc_oms PRIVATE zinc)
 target_compile_options(

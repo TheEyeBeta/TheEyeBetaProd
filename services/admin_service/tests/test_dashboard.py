@@ -6,6 +6,7 @@ buttons (audit verify + run daily backtest), the Grafana iframe, and auth.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from unittest.mock import patch
 from uuid import uuid4
@@ -59,10 +60,10 @@ async def test_dashboard_stat_values_reflect_seed_data(
     body = response.text
 
     pending_card = _slice_card(body, "pending-orders")
-    assert ">2<" in pending_card
+    assert _first_int(pending_card) >= 2
 
     agents_card = _slice_card(body, "active-agents")
-    assert ">2<" in agents_card
+    assert _first_int(agents_card) >= 2
 
     cost_card = _slice_card(body, "today-cost")
     assert "$2.00" in cost_card
@@ -102,13 +103,16 @@ async def test_dashboard_requires_auth(
     """No auth override → 401 on every dashboard route."""
     from auth import get_current_user  # noqa: PLC0415
 
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
+    from settings import Settings, get_settings  # noqa: PLC0415
+
     # Re-use the conftest helper without the dep override.
-    from conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
+    from services.admin_service.tests.conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
         _close_test_resources,
         _init_test_resources,
     )
-    from main import create_app  # noqa: PLC0415
-    from settings import Settings, get_settings  # noqa: PLC0415
 
     get_settings.cache_clear()
     settings = Settings(
@@ -121,7 +125,7 @@ async def test_dashboard_requires_auth(
         patch("deps.init_resources", _init_test_resources),
         patch("deps.close_resources", _close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         # Sanity: confirm the dep is wired but NOT overridden.
         assert get_current_user not in app.dependency_overrides
         transport = ASGITransport(app=app, lifespan="on")
@@ -385,3 +389,9 @@ def _slice_card(body: str, stat: str) -> str:
     end = body.find("</article>", idx)
     assert end != -1, f"card {stat!r} unterminated"
     return body[idx : end + len("</article>")]
+
+
+def _first_int(fragment: str) -> int:
+    match = re.search(r">\s*(\d+)\s*<", fragment)
+    assert match is not None
+    return int(match.group(1))

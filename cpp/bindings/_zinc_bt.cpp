@@ -3,20 +3,20 @@
  * @brief  nanobind bindings for zinc::bt kernels.
  */
 
-#include <nanobind/nanobind.h>
-#include <nanobind/ndarray.h>
-#include <nanobind/stl/string.h>
-#include <nanobind/stl/vector.h>
-
-#include <cstdint>
-#include <filesystem>
-#include <utility>
-
 #include "zinc/bt/decision.hpp"
 #include "zinc/bt/engine.hpp"
 #include "zinc/bt/result.hpp"
 #include "zinc/bt/slippage_model.hpp"
 #include "zinc/bt/snapshot.hpp"
+
+#include <cstdint>
+#include <filesystem>
+#include <utility>
+
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
 
 namespace nb = nanobind;
 
@@ -40,7 +40,7 @@ zinc::bt::SlippageModel make_slippage_model(const nb::object& formula) {
     });
 }
 
-}  // namespace
+} // namespace
 
 NB_MODULE(_zinc_bt, module) {
     module.doc() = "zinc::bt — event-loop backtest engine over daily Parquet data";
@@ -67,29 +67,29 @@ NB_MODULE(_zinc_bt, module) {
         .def_prop_ro(
             "close",
             [](const zinc::bt::Snapshot& snapshot) {
-                return nb::ndarray<const double, nb::numpy>(
-                    snapshot.close.data(), {snapshot.close.size()});
+                return nb::ndarray<const double, nb::numpy>(snapshot.close.data(),
+                                                            {snapshot.close.size()});
             },
             "Unadjusted closing prices (C-contiguous float64).")
         .def_prop_ro(
             "atr14",
             [](const zinc::bt::Snapshot& snapshot) {
-                return nb::ndarray<const double, nb::numpy>(
-                    snapshot.atr14.data(), {snapshot.atr14.size()});
+                return nb::ndarray<const double, nb::numpy>(snapshot.atr14.data(),
+                                                            {snapshot.atr14.size()});
             },
             "14-period ATR used for slippage.")
         .def_prop_ro(
             "adv",
             [](const zinc::bt::Snapshot& snapshot) {
                 return nb::ndarray<const double, nb::numpy>(snapshot.adv.data(),
-                                                              {snapshot.adv.size()});
+                                                            {snapshot.adv.size()});
             },
             "Average daily volume in shares for participation.")
         .def_prop_ro(
             "volume",
             [](const zinc::bt::Snapshot& snapshot) {
-                return nb::ndarray<const std::int64_t, nb::numpy>(
-                    snapshot.volume.data(), {snapshot.volume.size()});
+                return nb::ndarray<const std::int64_t, nb::numpy>(snapshot.volume.data(),
+                                                                  {snapshot.volume.size()});
             },
             "Share volume on the trade date.");
 
@@ -114,8 +114,7 @@ NB_MODULE(_zinc_bt, module) {
 
     nb::class_<zinc::bt::Result>(module, "Result", "Full backtest output.")
         .def_prop_ro(
-            "daily_pnl",
-            [](const zinc::bt::Result& result) { return nb::cast(result.daily_pnl); },
+            "daily_pnl", [](const zinc::bt::Result& result) { return nb::cast(result.daily_pnl); },
             "Mark-to-market PnL per calendar day.")
         .def_prop_ro(
             "drawdown_series",
@@ -131,7 +130,10 @@ NB_MODULE(_zinc_bt, module) {
         module, "SlippageModel",
         "Slippage as a function of ATR and participation (trade_size / ADV).")
         .def(
-            nb::init([](nb::object formula) { return make_slippage_model(formula); }),
+            "__init__",
+            [](zinc::bt::SlippageModel* self, nb::object formula) {
+                new (self) zinc::bt::SlippageModel(make_slippage_model(formula));
+            },
             nb::arg("formula") = nb::none(),
             "Construct a model with an optional custom formula(atr, participation).");
 
@@ -151,6 +153,5 @@ NB_MODULE(_zinc_bt, module) {
             "Path to the daily Parquet file (trade_date, symbol, OHLCV, atr14, adv).")
         .def("set_strategy", &engine_set_strategy, nb::arg("strategy"),
              "Register the strategy callback invoked once per trading day.")
-        .def("run", &zinc::bt::Engine::run,
-             "Run the event loop and produce a backtest result.");
+        .def("run", &zinc::bt::Engine::run, "Run the event loop and produce a backtest result.");
 }

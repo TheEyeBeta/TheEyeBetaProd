@@ -1,0 +1,12 @@
+[Unit]
+Description=Materialize latest_snapshots every 5 minutes (market hours) and post-close
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 13:30/5:00
+OnCalendar=Mon..Fri *-*-* 21:35:00
+Persistent=false
+RandomizedDelaySec=15
+Unit=theeye-latest-snapshot.service
+
+[Install]
+WantedBy=timers.target

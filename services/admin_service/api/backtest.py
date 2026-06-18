@@ -12,6 +12,7 @@ from audit_log import write_audit_log
 from auth import CurrentUser
 from deps import DbConn, SettingsDep
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from rbac import Role, require_role
 from settings import Settings
 from slowapi import Limiter
 
@@ -66,12 +67,12 @@ def _raise_for_engine_status(response: httpx.Response) -> None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=response.text)
     if response.status_code == status.HTTP_400_BAD_REQUEST:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=response.text,
         )
-    if response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY:
+    if response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=response.text,
         )
     if response.status_code >= 500:
@@ -116,14 +117,14 @@ def register_backtest_routes(limiter: Limiter) -> APIRouter:
     async def start_backtest(
         request: Request,  # noqa: ARG001 — required by slowapi
         body: StartBacktestRequest,
-        user: CurrentUser,
         conn: DbConn,
         settings: SettingsDep,
+        user: dict[str, str] = require_role(Role.ANALYST),
     ) -> StartBacktestResponse:
         """Forward to ``backtest-engine POST /backtest/run`` and audit log."""
         if body.start_date > body.end_date:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="start_date must be <= end_date",
             )
 

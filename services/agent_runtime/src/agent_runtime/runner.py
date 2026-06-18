@@ -22,7 +22,8 @@ from .guard import GuardViolation
 from .guard_client import GuardRejectedError, validate_agent_output
 from .math_tool import MathTool, openai_tool_definition
 from .observability import record_run_failure, record_run_success
-from .schemas import AgentDecision, AgentOutput
+from .schemas import AgentDecision, AgentOutput, ParsedRunOutput
+from .snapshot_context import snapshot_for_llm
 from .snapshot_loader import SnapshotLoader
 
 log = structlog.get_logger()
@@ -87,14 +88,20 @@ class AgentRunner:
         *,
         kind: str = "run",
         agent_messages: list[dict[str, Any]] | None = None,
+        parent_run_id: UUID | None = None,
+        operator_context: dict[str, Any] | None = None,
+        subordinate_reports: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Run one agent against a packaged snapshot.
 
         Args:
             agent_id: Agent PK in ``theeyebeta.agents``.
             snapshot_id: Packaged snapshot UUID.
-            kind: ``run`` (default) or ``rebuttal`` for debate rounds.
+            kind: ``run`` (default), ``rebuttal``, or ``rollup`` (department synthesis).
             agent_messages: Peer rationales when ``kind`` is ``rebuttal``.
+            parent_run_id: Optional parent run for chain-of-command tracking.
+            operator_context: Operator constraints forwarded to the constitution.
+            subordinate_reports: Child agent briefings when ``kind`` is ``rollup``.
 
         Returns:
             Summary with run_id, decision ids, cost, tokens, stance, regime.
@@ -113,6 +120,9 @@ class AgentRunner:
                 loader,
                 kind=kind,
                 agent_messages=agent_messages or [],
+                parent_run_id=parent_run_id,
+                operator_context=operator_context or {},
+                subordinate_reports=subordinate_reports or [],
             )
         finally:
             await loader.aclose()
@@ -126,6 +136,9 @@ class AgentRunner:
         *,
         kind: str = "run",
         agent_messages: list[dict[str, Any]] | None = None,
+        parent_run_id: UUID | None = None,
+        operator_context: dict[str, Any] | None = None,
+        subordinate_reports: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         started = time.perf_counter()
         async with await psycopg.AsyncConnection.connect(self.database_url) as conn:
@@ -145,17 +158,17 @@ class AgentRunner:
             await conn.execute(
                 """
                 INSERT INTO theeyebeta.agent_runs
-                    (id, agent_id, triggered_by, snapshot_id, status)
-                VALUES (%s, %s, %s, %s, 'running')
+                    (id, agent_id, triggered_by, parent_run_id, snapshot_id, status)
+                VALUES (%s, %s, %s, %s, %s, 'running')
                 """,
-                (run_id, agent_id, f"api:{agent_id}", snapshot_id),
+                (run_id, agent_id, f"api:{agent_id}", parent_run_id, snapshot_id),
             )
             await conn.commit()
 
         try:
             constitution = load_constitution(_resolve_constitution(const_path))
-            constitution_model = constitution.model or model_default
-            fallback_model = constitution.fallback or model_fallback
+            constitution_model = model_default or constitution.model
+            fallback_model = model_fallback or constitution.fallback
 
             snapshot_data = await loader.load(snapshot_id)
 
@@ -169,7 +182,7 @@ class AgentRunner:
                 run_id=run_id,
             ) as llm:
                 math_tool = MathTool(llm_client=llm)
-                parsed, totals, raw_text, tool_calls = await self._llm_loop(
+                parsed_run, totals, raw_text, tool_calls = await self._llm_loop(
                     llm=llm,
                     constitution=constitution,
                     snapshot_id=snapshot_id,
@@ -178,9 +191,43 @@ class AgentRunner:
                     model=constitution_model,
                     kind=kind,
                     agent_messages=agent_messages or [],
+                    operator_context=operator_context or {},
+                    subordinate_reports=subordinate_reports or [],
                 )
 
-                # Step 6: guard-service ValidateAgentOutput before persisting decisions.
+                if parsed_run.mode == "briefing":
+                    assert parsed_run.briefing is not None
+                    await self._persist_briefing_success(
+                        run_id=run_id,
+                        totals=totals,
+                    )
+                    stance, regime = _briefing_summary_fields(parsed_run.briefing)
+                    duration = time.perf_counter() - started
+                    record_run_success(
+                        agent_id,
+                        duration_seconds=duration,
+                        input_tokens=totals.input_tokens,
+                        output_tokens=totals.output_tokens,
+                    )
+                    log.info(
+                        "agent_briefing_succeeded",
+                        run_id=str(run_id),
+                        agent_id=agent_id,
+                        cost_usd=totals.cost_usd,
+                    )
+                    return {
+                        "run_id": str(run_id),
+                        "snapshot_id": str(snapshot_id),
+                        "decisions": [],
+                        "decision_rows": [],
+                        "cost_usd": totals.cost_usd,
+                        "market_stance": stance,
+                        "regime_call": regime,
+                        "briefing": parsed_run.briefing,
+                        "kind": kind,
+                    }
+
+                assert parsed_run.trading is not None
                 parsed = await self._guard_until_pass(
                     agent_id=agent_id,
                     run_id=str(run_id),
@@ -189,7 +236,7 @@ class AgentRunner:
                     math_tool=math_tool,
                     snapshot_id=snapshot_id,
                     snapshot_data=snapshot_data,
-                    parsed=parsed,
+                    parsed=parsed_run.trading,
                     raw_text=raw_text,
                     tool_calls=tool_calls,
                     valid_symbols=valid_symbols,
@@ -279,38 +326,54 @@ class AgentRunner:
         model: str,
         kind: str = "run",
         agent_messages: list[dict[str, Any]] | None = None,
-    ) -> tuple[AgentOutput, _TokenTotals, str, list[dict[str, str]]]:
+        operator_context: dict[str, Any] | None = None,
+        subordinate_reports: list[dict[str, Any]] | None = None,
+    ) -> tuple[ParsedRunOutput, _TokenTotals, str, list[dict[str, str]]]:
         """Chat with optional tool calls, then return validated output."""
         is_rebuttal = kind == "rebuttal"
+        is_rollup = kind == "rollup"
         allowed = set(constitution.tools)
         tools = (
             None
-            if is_rebuttal
+            if is_rebuttal or is_rollup
             else ([openai_tool_definition()] if "compute_stat" in allowed else None)
         )
         tool_calls_log: list[dict[str, str]] = []
+        llm_snapshot = snapshot_for_llm(snapshot_data, kind=kind)
         user_payload: dict[str, Any] = {
             "snapshot_id": str(snapshot_id),
-            "snapshot": snapshot_data,
+            "snapshot": llm_snapshot,
         }
+        if operator_context:
+            user_payload["operator_context"] = operator_context
         if is_rebuttal and agent_messages:
             user_payload["agent_messages"] = agent_messages
-        user_intro = (
-            "Rebut or affirm your prior stance using peer agent_messages below. "
-            "Return ONLY valid JSON matching the output schema.\n\n"
-            if is_rebuttal
-            else "Analyze the snapshot JSON below and return your decision object.\n\n"
-        )
+        if is_rollup and subordinate_reports:
+            user_payload["subordinate_reports"] = subordinate_reports
+        if is_rollup:
+            user_intro = (
+                "Synthesize the subordinate_reports below into your department briefing. "
+                "Return ONLY valid JSON matching the output schema.\n\n"
+            )
+        elif is_rebuttal:
+            user_intro = (
+                "Rebut or affirm your prior stance using peer agent_messages below. "
+                "Return ONLY valid JSON matching the output schema.\n\n"
+            )
+        else:
+            user_intro = "Analyze the snapshot JSON below and return your decision object.\n\n"
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": constitution.system_prompt},
             {
                 "role": "user",
-                "content": f"{user_intro}```json\n{json.dumps(user_payload, indent=2)}\n```",
+                "content": (
+                    f"{user_intro}```json\n{json.dumps(user_payload, separators=(',', ':'))}\n```"
+                ),
             },
         ]
         totals = _TokenTotals()
         raw_text = ""
-        max_turns = 1 if is_rebuttal else max(1, constitution.max_turns)
+        max_turns = 1 if is_rebuttal or is_rollup else max(1, constitution.max_turns)
 
         for turn in range(max_turns):
             is_final = turn >= max_turns - 1
@@ -320,7 +383,7 @@ class AgentRunner:
                 tools=None if is_final else tools,
                 tool_choice="auto" if tools and not is_final else None,
                 response_format={"type": "json_object"} if is_final else None,
-                max_tokens=4096,
+                max_tokens=8192 if is_rollup else 4096,
                 temperature=0.0,
                 prompt_cache_key=f"agent-{constitution.agent_id}",
             )
@@ -355,8 +418,12 @@ class AgentRunner:
                 continue
 
             raw_text = _content_as_text(response.content)
-            parsed = _parse_output(raw_text, constitution.output_schema_version)
-            return parsed, totals, raw_text, tool_calls_log
+            parsed_run = _parse_run_output(
+                raw_text,
+                constitution,
+                kind=kind,
+            )
+            return parsed_run, totals, raw_text, tool_calls_log
 
         msg = "LLM loop exhausted max_turns without final JSON"
         raise RuntimeError(msg)
@@ -414,10 +481,14 @@ class AgentRunner:
                     strict_prefix=result.sanitized_output,
                     totals=totals,
                 )
-                current_parsed = _parse_output(
+                current_parsed_run = _parse_run_output(
                     current_raw,
-                    constitution.output_schema_version,
+                    constitution,
+                    kind="run",
                 )
+                if current_parsed_run.mode != "trading" or current_parsed_run.trading is None:
+                    raise GuardRejectedError(["guard_retry_produced_non_trading_output"])
+                current_parsed = current_parsed_run.trading
                 continue
 
             if result.outcome == "ESCALATE":
@@ -437,10 +508,14 @@ class AgentRunner:
                     strict_prefix=result.sanitized_output,
                     totals=totals,
                 )
-                current_parsed = _parse_output(
+                current_parsed_run = _parse_run_output(
                     current_raw,
-                    constitution.output_schema_version,
+                    constitution,
+                    kind="run",
                 )
+                if current_parsed_run.mode != "trading" or current_parsed_run.trading is None:
+                    raise GuardRejectedError(["guard_retry_produced_non_trading_output"])
+                current_parsed = current_parsed_run.trading
                 continue
 
             log.warning("guard_unknown_outcome", outcome=result.outcome)
@@ -555,6 +630,33 @@ class AgentRunner:
 
         return decision_ids
 
+    async def _persist_briefing_success(
+        self,
+        *,
+        run_id: UUID,
+        totals: _TokenTotals,
+    ) -> None:
+        """Close a briefing run without inserting instrument decisions."""
+        async with await psycopg.AsyncConnection.connect(self.database_url) as conn:
+            await conn.execute(
+                """
+                UPDATE theeyebeta.agent_runs
+                   SET status = 'succeeded',
+                       ended_at = now(),
+                       total_input_tokens = %s,
+                       total_output_tokens = %s,
+                       total_cost_usd = %s
+                 WHERE id = %s
+                """,
+                (
+                    totals.input_tokens,
+                    totals.output_tokens,
+                    totals.cost_usd,
+                    run_id,
+                ),
+            )
+            await conn.commit()
+
     async def _finalize_guard_reject(
         self,
         run_id: UUID,
@@ -617,6 +719,7 @@ class AgentRunner:
         nc = await nats.connect(nats_url)
         try:
             await nc.publish(subject, payload)
+            await nc.flush()
             log.info("agent_decision_published", subject=subject, run_id=str(run_id))
         finally:
             await nc.close()
@@ -628,6 +731,68 @@ def _content_as_text(content: str | dict[str, Any] | list[Any] | None) -> str:
     if isinstance(content, str):
         return content
     return json.dumps(content)
+
+
+def _expects_trading_output(constitution: AgentConstitution, kind: str) -> bool:
+    """Return True when the agent must emit market_stance/regime_call/decisions."""
+    if kind == "rollup":
+        return False
+    body = constitution.system_prompt
+    if "Same contract as other market agents" in body:
+        return True
+    return (
+        "market_stance" in body
+        and "regime_call" in body
+        and "decisions" in body
+        and "instrument_symbol" in body
+    )
+
+
+def _briefing_summary_fields(briefing: dict[str, Any]) -> tuple[str, str]:
+    """Map heterogeneous briefing JSON to API stance/regime fields."""
+    stance_raw = (
+        briefing.get("market_stance")
+        or briefing.get("outcome")
+        or briefing.get("decision")
+        or briefing.get("verdict")
+        or "neutral"
+    )
+    regime_raw = briefing.get("regime_call") or briefing.get("regime") or "ranging"
+    stance = str(stance_raw).lower()
+    regime = str(regime_raw).lower()
+    if stance not in {"bullish", "bearish", "neutral"}:
+        stance = "neutral"
+    if regime not in {"trending", "ranging", "volatile", "calm"}:
+        regime = "ranging"
+    return stance, regime
+
+
+def _parse_run_output(
+    raw_text: str,
+    constitution: AgentConstitution,
+    *,
+    kind: str,
+) -> ParsedRunOutput:
+    """Parse LLM JSON as trading decisions or a department briefing."""
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise GuardViolation("schema_invalid_json", str(exc)) from exc
+    if not isinstance(payload, dict):
+        raise GuardViolation("schema_invalid_json", "Output must be a JSON object")
+
+    if _expects_trading_output(constitution, kind):
+        try:
+            trading = AgentOutput.model_validate(payload)
+        except ValidationError as exc:
+            log.warning(
+                "trading_schema_fallback_to_briefing",
+                agent_id=constitution.agent_id,
+                error=str(exc),
+            )
+            return ParsedRunOutput(mode="briefing", briefing=payload)
+        return ParsedRunOutput(mode="trading", trading=trading)
+    return ParsedRunOutput(mode="briefing", briefing=payload)
 
 
 def _parse_output(raw_text: str, schema_version: int) -> AgentOutput:

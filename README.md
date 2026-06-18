@@ -59,37 +59,48 @@ make install-hooks
 | Document | Contents |
 |----------|----------|
 | [docs/architecture.md](docs/architecture.md) | System overview, production host config (§2.2), service topology (§3.1–3.3), data model (§4), repo layout (§14), runbook (§15) |
-| [docs/data-model.md](docs/data-model.md) | PostgreSQL schema, TimescaleDB hypertables, pgvector indexes, Alembic migration conventions |
-| [docs/agents.md](docs/agents.md) | LLM agent architecture, prompt templates, guard-service rules, rnd-agent workflow |
+| [SERVICES_STATUS.md](SERVICES_STATUS.md) | Live snapshot of which services are actually deployed vs. code-complete-but-undeployed |
+| [docs/data-model.md](docs/data-model.md) | The real `theeyebeta` schema, hypertables/pgvector, and the public/iam shared-instance gotcha |
+| [docs/db-state-map.md](docs/db-state-map.md) | Generated diagnostic of every schema/table/role on the shared Postgres instance |
+| [docs/agents.md](docs/agents.md) | LLM agent hierarchy (`config/agents/hierarchy.yaml`), LiteLLM/OpenAI routing, guard-service rules |
 | [docs/admin-service.md](docs/admin-service.md) | Admin UI reference — Jinja2/htmx pages, order management, proposal workflow |
 | [docs/headless-operations.md](docs/headless-operations.md) | `tb` CLI reference, day-to-day ops, deployment runbook, incident response |
 | [docs/secrets.md](docs/secrets.md) | sops + age key management, 1Password workflow, CI setup |
-| [docs/adr/](docs/adr/) | Architecture Decision Records (0001–0007) |
+| [docs/adr/](docs/adr/) | Architecture Decision Records (0001–0011) |
 
 ---
 
 ## Service Map
 
-> Full table with ports, dependencies, and SLOs: [docs/architecture.md §3.1](docs/architecture.md#31-service-inventory)
+> Full table with deployment status and SLOs: [docs/architecture.md §2.2](docs/architecture.md#22-port-map),
+> live deployed-vs-scaffolded snapshot: [SERVICES_STATUS.md](SERVICES_STATUS.md).
+> **Only the rows marked "deployed" below are actually running** — everything else is real,
+> tested code with no systemd unit / compose entry yet.
 
 ### Application services
 
-| Service | Port | Visibility | Purpose |
-|---------|------|-----------|---------|
-| `data-ingestion` | 8001 | private | Market data ingestion from feeds; publishes to NATS |
-| `snapshot-packager` | 8002 | private | Packages OHLCV + orderbook snapshots to MinIO |
-| `llm-gateway` | 8003 | private | Unified LLM proxy (Anthropic / OpenAI) with rate-limiting and logging |
-| `agent-runtime` | 8004 | private | Executes research and trading agents; consumes NATS |
-| `guard-service` | 8005 | private | Pre-trade signal validation, position limits, circuit breakers |
-| `master-orchestrator` | 8006 | private | Coordinates the two-loop cycle; routes proposals to execution or research |
-| `risk-service` | 8007 | private | Real-time P&L, VaR, margin calculations |
-| `compliance-service` | 8008 | private | Regulatory rule checks; writes to audit_log |
-| `oms` | 8009 | private | Order management — lifecycle, fills, cancellations |
-| `broker-adapter-alpaca` | 8010 | private | Alpaca Markets REST + WebSocket adapter |
-| `backtest-engine` | 8011 | private | Vectorised backtester; reads snapshots from MinIO |
-| `audit-service` | 8012 | private | Append-only audit trail; audit_log is write-once |
-| `rnd-agent` | 7120 | 127.0.0.1 | Research agent — generates proposals from historical data + LLM |
-| `admin-service` | 7200 | 0.0.0.0 (Tailscale) | Jinja2 + htmx admin dashboard (JWT) |
+| Service | Port | Status | Purpose |
+|---------|------|--------|---------|
+| `data-ingestion` | 7010 | deployed (docker-compose) | Market data ingestion from feeds; publishes to NATS |
+| `snapshot-packager` | 7011 | deployed (docker-compose) | Packages OHLCV + orderbook snapshots to MinIO |
+| `llm-gateway` | 4000 | deployed (docker-compose) | LiteLLM proxy to OpenAI (gpt-5 / gpt-4o-mini); rate-limiting and logging |
+| `admin-service` | 7200 | deployed (docker-compose, Tailscale ACL) | Jinja2 + htmx admin dashboard (JWT + MFA) |
+| `agent_runtime` | 8004 | deployed (systemd) | Executes research and trading agents; consumes NATS |
+| `master_orchestrator` | 7050 | code-complete, not deployed | Coordinates the two-loop cycle; routes proposals to execution or research |
+| `guard_service` | 7040 (gRPC) / 8005 | code-complete, not deployed | Pre-trade signal validation, position limits, circuit breakers |
+| `risk_service` | 7060 (gRPC) | unit staged, disabled | Real-time P&L, VaR, margin calculations — blocked on "0 portfolios", not the unit |
+| `compliance_service` | 7070 (gRPC) / 8008 | code-complete, not deployed | Regulatory rule checks; writes to audit_log |
+| `oms` | 7080 | code-complete, not deployed | Order management — lifecycle, fills, cancellations. **Live-trading-adjacent** |
+| `broker_adapter_alpaca` | 7090 | code-complete, not deployed | Alpaca Markets REST + WebSocket adapter. **Live-trading gated** |
+| `backtest_engine` | 7100 | code-complete, not deployed | Vectorised backtester; reads snapshots from MinIO |
+| `audit_service` | 7110 | code-complete, not deployed | Audit **verify**/export API — `audit_log` writes are already live via `BaseWorker`, independent of this service |
+| `rnd_agent` | 7120 | code-complete, not deployed | Research agent — generates proposals from historical data + LLM |
+
+The actual production data pipeline runs separately from the table above: ~20 timer-driven
+`workers/*.py` jobs installed from `deploy/systemd/theeye-*.timer` (macro, intraday, daily
+pipeline, sector, market-cap, gap-sentinel, backup, news, etc.). The externally-facing market-data
+API is a **separate sibling repo**, `TheEyeBetaDataAPI` (`theeyebeta-dataapi.service`, :7000) — not
+part of this repo.
 
 ### Infrastructure services
 
@@ -109,7 +120,10 @@ make install-hooks
 
 ## The Two-Loop Architecture
 
-> From [docs/architecture.md §3.3](docs/architecture.md#33-the-two-loop-cycle)
+> From [docs/architecture.md §3.3](docs/architecture.md#33-the-two-loop-cycle).
+> **This is the design, not current reality.** Today only `data-ingestion`, `snapshot-packager`,
+> `llm-gateway`, `admin-service` (docker-compose) and `agent_runtime` (systemd) are running — the
+> rest of both loops is real, tested code with no deploy unit yet. See the Service Map above.
 
 ```mermaid
 flowchart LR
@@ -169,6 +183,9 @@ Production runbook → [docs/architecture.md §15](docs/architecture.md#15-opera
 ---
 
 ## Development Commands
+
+The Makefile is self-documenting — run `make help` for the full, current list (20+ targets,
+each with a one-line description). The most commonly used:
 
 ```bash
 make up              # start infra

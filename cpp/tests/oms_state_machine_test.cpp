@@ -6,10 +6,10 @@
 #include "zinc/oms/state_machine.hpp"
 
 #include <cstdint>
-#include <random>
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <random>
 
 namespace {
 
@@ -20,7 +20,7 @@ zinc::oms::Order make_order(const int64_t quantity = 100) {
 void expect_success(const zinc::oms::expected<zinc::oms::Order, zinc::oms::TransitionError>& result,
                     const zinc::oms::OrderStatus expected_status) {
     ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->status, expected_status);
+    EXPECT_EQ(result.value().status, expected_status);
 }
 
 void expect_failure(const zinc::oms::expected<zinc::oms::Order, zinc::oms::TransitionError>& result,
@@ -29,7 +29,7 @@ void expect_failure(const zinc::oms::expected<zinc::oms::Order, zinc::oms::Trans
     EXPECT_EQ(result.error().code, expected_code);
 }
 
-}  // namespace
+} // namespace
 
 TEST(OmsStateMachineTest, HappyPathHandComputedPartialFills) {
     zinc::oms::Order order = make_order(100);
@@ -41,14 +41,12 @@ TEST(OmsStateMachineTest, HappyPathHandComputedPartialFills) {
     expect_success(zinc::oms::StateMachine::transition(order, zinc::oms::Event::Accept),
                    zinc::oms::OrderStatus::Accepted);
 
-    expect_success(
-        zinc::oms::StateMachine::transition(order, zinc::oms::Event::PartialFill, 40),
-        zinc::oms::OrderStatus::PartiallyFilled);
+    expect_success(zinc::oms::StateMachine::transition(order, zinc::oms::Event::PartialFill, 40),
+                   zinc::oms::OrderStatus::PartiallyFilled);
     EXPECT_EQ(order.filled_quantity, 40);
 
-    expect_success(
-        zinc::oms::StateMachine::transition(order, zinc::oms::Event::PartialFill, 60),
-        zinc::oms::OrderStatus::Filled);
+    expect_success(zinc::oms::StateMachine::transition(order, zinc::oms::Event::PartialFill, 60),
+                   zinc::oms::OrderStatus::Filled);
     EXPECT_EQ(order.filled_quantity, 100);
 }
 
@@ -108,8 +106,8 @@ TEST(OmsStateMachineTest, AllLegalTransitionsSucceed) {
     for (const TransitionCase& transition_case : legal) {
         zinc::oms::Order order = make_order();
         order.status = transition_case.from;
-        const auto result = zinc::oms::StateMachine::transition(
-            order, transition_case.event, transition_case.fill_quantity);
+        const auto result = zinc::oms::StateMachine::transition(order, transition_case.event,
+                                                                transition_case.fill_quantity);
         ASSERT_TRUE(result.has_value());
         EXPECT_EQ(order.status, transition_case.to);
     }
@@ -130,8 +128,8 @@ TEST(OmsStateMachineTest, IllegalTransitionsAlwaysFail) {
         zinc::oms::Order order = make_order();
         order.status = status;
         const auto result = zinc::oms::StateMachine::transition(order, event, 10);
-        ASSERT_FALSE(result.has_value()) << "status=" << static_cast<int>(status)
-                                         << " event=" << static_cast<int>(event);
+        ASSERT_FALSE(result.has_value())
+            << "status=" << static_cast<int>(status) << " event=" << static_cast<int>(event);
         EXPECT_EQ(result.error().code, zinc::oms::TransitionErrorCode::IllegalTransition);
     }
 
@@ -156,10 +154,10 @@ TEST(OmsStateMachineTest, NumericalStabilityAgainstReferenceLiteral) {
     zinc::oms::Order order = make_order(100);
     order.status = zinc::oms::OrderStatus::Accepted;
 
-    const auto result = zinc::oms::StateMachine::transition(
-        order, zinc::oms::Event::PartialFill, kReferenceFilledQuantity);
+    const auto result = zinc::oms::StateMachine::transition(order, zinc::oms::Event::PartialFill,
+                                                            kReferenceFilledQuantity);
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(order.filled_quantity, kReferenceFilledQuantity);
-    EXPECT_EQ(result->filled_quantity, kReferenceFilledQuantity);
+    EXPECT_EQ(result.value().filled_quantity, kReferenceFilledQuantity);
     EXPECT_EQ(order.status, zinc::oms::OrderStatus::PartiallyFilled);
 }

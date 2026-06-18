@@ -87,7 +87,7 @@ def register_trading_routes(limiter: Limiter) -> APIRouter:
         """Update accounts.metadata.live_approval with dual-confirm and audit."""
         if not body.consequences_acknowledged:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="consequences_acknowledged must be true",
             )
         if not await validate_confirmation_token(redis, user["sub"], body.confirmation_token):
@@ -178,7 +178,7 @@ def register_trading_routes(limiter: Limiter) -> APIRouter:
         """Halt all trading submissions via NATS + Redis gate."""
         if not body.consequences_acknowledged:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="consequences_acknowledged must be true",
             )
 

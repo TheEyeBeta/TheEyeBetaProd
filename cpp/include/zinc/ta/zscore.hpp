@@ -31,4 +31,4 @@ namespace zinc::ta {
  */
 [[nodiscard]] std::vector<double> zscore(std::span<const double> series, int period);
 
-}  // namespace zinc::ta
+} // namespace zinc::ta

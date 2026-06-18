@@ -17,30 +17,31 @@ BEGIN
 END $$;
 
 CREATE TABLE IF NOT EXISTS theeyebeta.prices_intraday (
-    instrument_id bigint NOT NULL REFERENCES theeyebeta.instruments(id),
-    ts            timestamptz NOT NULL,
-    open          numeric(16, 6),
-    high          numeric(16, 6),
-    low           numeric(16, 6),
-    close         numeric(16, 6),
-    volume        bigint,
-    source        text NOT NULL,
-    ingested_at   timestamptz NOT NULL DEFAULT now()
+    instrument_id bigint NOT NULL REFERENCES theeyebeta.instruments (id),
+    ts timestamptz NOT NULL,
+    open numeric(16, 6),
+    high numeric(16, 6),
+    low numeric(16, 6),
+    close numeric(16, 6),
+    volume bigint,
+    source text NOT NULL,
+    ingested_at timestamptz NOT NULL DEFAULT now()
 );
 
 SELECT create_hypertable(
     'theeyebeta.prices_intraday',
     'ts',
-    chunk_time_interval => INTERVAL '1 day',
+    chunk_time_interval => interval '1 day',
     if_not_exists => TRUE
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_prices_intraday_inst_ts
-    ON theeyebeta.prices_intraday (instrument_id, ts);
+ON theeyebeta.prices_intraday (instrument_id, ts);
 
 ALTER TABLE theeyebeta.prices_intraday
-    SET (timescaledb.compress, timescaledb.compress_segmentby = 'instrument_id');
-SELECT add_compression_policy('theeyebeta.prices_intraday', INTERVAL '7 days', if_not_exists => TRUE);
+SET (timescaledb.compress, timescaledb.compress_segmentby = 'instrument_id');
+SELECT
+    add_compression_policy('theeyebeta.prices_intraday', interval '7 days', if_not_exists => TRUE);
 
 INSERT INTO theeyebeta.alembic_version (version_num)
 VALUES ('0013_prices_intraday')

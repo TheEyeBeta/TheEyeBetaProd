@@ -40,6 +40,7 @@ NAV_ITEMS: list[dict[str, str]] = [
     {"label": "Orders", "href": "/admin/orders", "key": "orders"},
     {"label": "Audit", "href": "/admin/audit", "key": "audit"},
     {"label": "Agents", "href": "/admin/agents", "key": "agents"},
+    {"label": "Briefings", "href": "/admin/briefings", "key": "briefings"},
     {"label": "Violations", "href": "/admin/violations", "key": "violations"},
     {"label": "Costs", "href": "/admin/costs", "key": "costs"},
     {"label": "SQL", "href": "/admin/sql", "key": "sql"},

@@ -13,6 +13,7 @@ from audit_log import write_audit_log
 from auth import CurrentUser
 from deps import DbConn, SettingsDep
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from rbac import Role, require_role
 from slowapi import Limiter
 
 if TYPE_CHECKING:
@@ -81,6 +82,7 @@ async def fetch_agents_summary(conn: asyncpg.Connection) -> list[AgentSummary]:
             a.model_fallback,
             a.constitution_path,
             a.active,
+            a.reports_to,
             r.last_run_at,
             COALESCE(r.runs_7d, 0)::int AS runs_7d,
             CASE
@@ -101,6 +103,7 @@ async def fetch_agents_summary(conn: asyncpg.Connection) -> list[AgentSummary]:
             model_fallback=row["model_fallback"],
             constitution_path=row["constitution_path"],
             active=bool(row["active"]),
+            reports_to=row["reports_to"],
             last_run_at=row["last_run_at"],
             runs_7d=int(row["runs_7d"]),
             success_rate_7d=(
@@ -238,9 +241,9 @@ async def trigger_agent_run_impl(
             status_code=status.HTTP_409_CONFLICT,
             detail=response.text,
         )
-    if response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY:
+    if response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=response.text,
         )
     if response.status_code >= 500:
@@ -261,6 +264,8 @@ async def trigger_agent_run_impl(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="agent-runtime response missing run_id",
         )
+    data.setdefault("snapshot_id", str(body.snapshot_id))
+    data.setdefault("kind", body.kind)
 
     await write_audit_log(
         conn,
@@ -295,7 +300,7 @@ def _resolve_constitution_path(repo_root: Path, raw: str) -> Path:
         target.relative_to(repo_resolved)
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="constitution_path escapes repository root",
         ) from exc
     if not target.is_file():
@@ -342,9 +347,9 @@ def register_agents_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         agent_id: str,
         body: RunAgentRequest,
-        user: CurrentUser,
         conn: DbConn,
         settings: SettingsDep,
+        user: dict[str, str] = require_role(Role.OPERATOR),
     ) -> RunAgentResponse:
         """Forward to ``agent-runtime`` and audit log the trigger."""
         result = await trigger_agent_run_impl(

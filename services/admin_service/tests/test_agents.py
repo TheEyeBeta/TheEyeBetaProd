@@ -115,7 +115,7 @@ async def test_get_constitution_happy(
     assert response.status_code == 200
     body = response.json()
     assert body["agent_id"] == AGENT_ID
-    assert body["constitution_path"].endswith("technical-analyst.md")
+    assert body["constitution_path"].endswith("technical-analyst.agent.md")
     assert "# Role" in body["content"]
 
 
@@ -245,7 +245,10 @@ async def test_run_agent_validation_error(
 async def test_agents_auth_required(agents_integration_dsn: str) -> None:
     """All agents endpoints reject unauthenticated requests."""
     from httpx import ASGITransport  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings  # noqa: PLC0415
 
     _close = _admin_conf._close_test_resources
@@ -257,7 +260,7 @@ async def test_agents_auth_required(agents_integration_dsn: str) -> None:
         patch("deps.init_resources", _init),
         patch("deps.close_resources", _close),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         transport = ASGITransport(app=app, lifespan="on")
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             assert (await client.get("/admin/agents")).status_code == 401
@@ -302,6 +305,9 @@ async def test_run_agent_rate_limit(
             return ""
 
     class _StubClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            return None
+
         async def __aenter__(self) -> _StubClient:
             return self
 

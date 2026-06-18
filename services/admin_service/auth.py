@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
@@ -21,7 +22,7 @@ from auth_sessions import (
 from deps import DbConn, RedisDep, SettingsDep
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
-from rbac import DEFAULT_ROLE, ENV_BOOTSTRAP_ROLE, Role, highest_role, require_role
+from rbac import DEFAULT_ROLE, Role, highest_role, require_role
 from redis.asyncio import Redis
 from settings import Settings
 from slowapi import Limiter
@@ -36,8 +37,51 @@ _TOKEN_TYPE_MFA_PENDING = "mfa_pending"
 _TOKEN_TYPE_MFA_ENROLL = "mfa_enrollment"
 
 
+# Per-user DB re-check cache: {username: (monotonic_expiry, role)}
+_user_db_cache: dict[str, tuple[float, str]] = {}
+_USER_DB_CACHE_TTL = 60.0  # seconds
+
+
+async def _db_role_for_user(request: Request, sub: str) -> str:
+    """Return the current DB role for ``sub``, cached for 60 seconds.
+
+    Also raises 401 if the account is inactive.  Falls back to JWT role if the
+    DB pool is unavailable (e.g. during tests without a real database).
+    """
+    now = time.monotonic()
+    cached = _user_db_cache.get(sub)
+    if cached and now < cached[0]:
+        return cached[1]
+
+    pool: asyncpg.Pool | None = getattr(request.app.state, "db_pool", None)
+    if pool is None:
+        return DEFAULT_ROLE
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT is_active FROM theeyebeta.admin_users WHERE username = $1",
+            sub,
+        )
+        if row is None or not row["is_active"]:
+            _user_db_cache.pop(sub, None)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User account is inactive",
+            )
+        db_roles = await fetch_user_roles(conn, sub)
+
+    db_role = highest_role(db_roles) if db_roles else DEFAULT_ROLE
+    _user_db_cache[sub] = (now + _USER_DB_CACHE_TTL, db_role)
+    return db_role
+
+
 async def get_current_user(request: Request) -> dict[str, str]:
-    """Validate Bearer access JWT and return ``{sub, role}``."""
+    """Validate Bearer access JWT; re-check DB for is_active and current role.
+
+    The DB lookup is cached per-user for 60 seconds.  If the DB role differs
+    from the JWT role the DB value wins — this ensures immediate effect for
+    role changes and revocations without waiting for token expiry.
+    """
     authorization = request.headers.get("Authorization")
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(
@@ -54,9 +98,7 @@ async def get_current_user(request: Request) -> dict[str, str]:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token subject",
         )
-    role = payload.get("role", DEFAULT_ROLE)
-    if not isinstance(role, str):
-        role = DEFAULT_ROLE
+    role = await _db_role_for_user(request, sub)
     return {"sub": sub, "role": role}
 
 
@@ -196,7 +238,7 @@ def register_auth_routes(limiter: Limiter) -> APIRouter:
     ) -> LoginResponse:
         """Verify operator credentials; issue tokens or MFA challenge."""
         _require_auth_config(settings)
-        role = await _authenticate(body.username, body.password, settings, conn)
+        role = await _authenticate(body.username, body.password, conn)
 
         mfa_state = await _fetch_mfa_state(conn, body.username)
         is_master = role == Role.MASTER_ADMIN.name
@@ -389,10 +431,9 @@ def _client_ip(request: Request) -> str | None:
 async def _authenticate(
     username: str,
     password: str,
-    settings: Settings,
     conn: asyncpg.Connection,
 ) -> str:
-    """Authenticate against DB users, falling back to env bootstrap admin."""
+    """Authenticate against DB-backed admin users only."""
     try:
         db_roles = await verify_db_credentials(conn, username, password)
         if db_roles is not None:
@@ -400,19 +441,6 @@ async def _authenticate(
     except asyncpg.UndefinedTableError:
         log.warning("admin_rbac_tables_missing", hint="run db migration 0026_admin_rbac")
 
-    if not settings.admin_password_bcrypt:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
-    _verify_env_password(
-        password,
-        username,
-        settings.admin_username,
-        settings.admin_password_bcrypt,
-    )
-    if username == settings.admin_username:
-        return ENV_BOOTSTRAP_ROLE
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid credentials",
@@ -425,33 +453,6 @@ def _require_auth_config(settings: Settings) -> None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Admin auth is not configured (JWT_PRIVATE_KEY or JWT_PRIVATE_KEY_PATH)",
-        )
-
-
-def _verify_env_password(
-    password: str,
-    username: str,
-    expected: str,
-    password_hash: str,
-) -> None:
-    """Check bcrypt password for env bootstrap user."""
-    if username != expected:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
-    try:
-        ok = bcrypt.checkpw(password.encode(), password_hash.encode())
-    except ValueError as exc:
-        log.error("admin_bcrypt_invalid", error=str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Admin auth misconfigured",
-        ) from exc
-    if not ok:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
         )
 
 

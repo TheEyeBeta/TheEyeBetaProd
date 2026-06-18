@@ -7,6 +7,8 @@ After=postgresql.service
 Type=oneshot
 User=the-eye-beta
 Group=the-eye-beta
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env.theeye-backup
+Environment=ENV_FILE=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env.theeye-backup
 ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/scripts/backup_db.sh
 TimeoutStartSec=3600
 RuntimeMaxSec=3600

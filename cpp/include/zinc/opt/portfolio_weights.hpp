@@ -18,4 +18,4 @@ struct PortfolioWeights {
     std::vector<double> weights;
 };
 
-}  // namespace zinc::opt
+} // namespace zinc::opt

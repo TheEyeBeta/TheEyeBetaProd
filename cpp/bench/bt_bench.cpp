@@ -3,17 +3,17 @@
  * @brief  Google Benchmark suite for zinc::bt::Engine.
  */
 
-#include <cstdio>
+#include "bt_test_parquet.hpp"
+#include "zinc/bt/engine.hpp"
+#include "zinc/bt/slippage_model.hpp"
+
 #include <filesystem>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 #include <benchmark/benchmark.h>
-
-#include "bt_test_parquet.hpp"
-#include "zinc/bt/engine.hpp"
-#include "zinc/bt/slippage_model.hpp"
+#include <cstdio>
 
 namespace {
 
@@ -72,7 +72,7 @@ std::vector<std::string> make_universe() {
 const std::filesystem::path kParquetPath = prepare_parquet_fixture();
 const std::vector<std::string> kUniverse = make_universe();
 
-}  // namespace
+} // namespace
 
 static void BM_bt_engine_252d_500_instruments(benchmark::State& state) {
     for (auto _ : state) {

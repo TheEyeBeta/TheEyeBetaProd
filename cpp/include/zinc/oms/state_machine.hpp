@@ -41,4 +41,4 @@ class StateMachine {
                                                                      int64_t fill_quantity = 0);
 };
 
-}  // namespace zinc::oms
+} // namespace zinc::oms

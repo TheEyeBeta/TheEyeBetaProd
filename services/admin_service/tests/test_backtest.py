@@ -278,7 +278,10 @@ async def test_get_results_engine_409(
 async def test_backtest_auth_required(backtest_integration_dsn: str) -> None:
     """All backtest endpoints reject unauthenticated requests."""
     from httpx import ASGITransport  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings  # noqa: PLC0415
 
     _close = _admin_conf._close_test_resources
@@ -290,7 +293,7 @@ async def test_backtest_auth_required(backtest_integration_dsn: str) -> None:
         patch("deps.init_resources", _init),
         patch("deps.close_resources", _close),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         transport = ASGITransport(app=app, lifespan="on")
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             assert (await client.get("/admin/backtest")).status_code == 401

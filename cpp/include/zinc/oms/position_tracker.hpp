@@ -65,4 +65,4 @@ class PositionTracker {
     std::unordered_map<std::string, std::shared_ptr<LegState>> legs_;
 };
 
-}  // namespace zinc::oms
+} // namespace zinc::oms

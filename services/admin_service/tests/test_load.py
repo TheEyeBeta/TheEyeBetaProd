@@ -56,8 +56,11 @@ async def _build_loaded_client(
     dsn: str,
 ) -> AsyncIterator[AsyncClient]:
     """Yield an ASGI-backed httpx client wired to a seeded Postgres DSN."""
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
     from auth import get_current_user  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
+    from rbac import get_authenticated_user  # noqa: PLC0415
     from settings import Settings, get_settings  # noqa: PLC0415
 
     get_settings.cache_clear()
@@ -66,12 +69,17 @@ async def _build_loaded_client(
         patch("deps.init_resources", _admin_conf._init_test_resources),
         patch("deps.close_resources", _admin_conf._close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
+        await _admin_conf._init_test_resources(settings)
+        import deps  # noqa: PLC0415
+
+        deps.bind_app_state(app, settings)
 
         async def _fake_user() -> dict[str, str]:
-            return {"sub": "load-test"}
+            return {"sub": "load-test", "role": "MASTER_ADMIN"}
 
         app.dependency_overrides[get_current_user] = _fake_user
+        app.dependency_overrides[get_authenticated_user] = _fake_user
 
         # Disable rate limiting for the load run — we are measuring the read
         # path's latency, not the slowapi middleware (which has its own tests).
@@ -80,10 +88,13 @@ async def _build_loaded_client(
         limiter: Limiter = app.state.limiter
         limiter.enabled = False
 
-        transport = ASGITransport(app=app, lifespan="on")
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            yield client
-        app.dependency_overrides.clear()
+        transport = ASGITransport(app=app)
+        try:
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                yield client
+        finally:
+            app.dependency_overrides.clear()
+            await _admin_conf._close_test_resources()
 
 
 async def _virtual_user(

@@ -36,15 +36,13 @@ bool PositionTracker::apply_fill(const std::string& leg_id, const int64_t quanti
 
     const std::shared_ptr<LegState> leg = leg_state(leg_id);
     int64_t current = leg->quantity.load(std::memory_order_relaxed);
-    while (!leg->quantity.compare_exchange_weak(current, current + quantity_delta,
-                                                std::memory_order_acq_rel,
-                                                std::memory_order_relaxed)) {
+    while (!leg->quantity.compare_exchange_weak(
+        current, current + quantity_delta, std::memory_order_acq_rel, std::memory_order_relaxed)) {
     }
 
     int64_t net = net_position_.load(std::memory_order_relaxed);
-    while (!net_position_.compare_exchange_weak(net, net + quantity_delta,
-                                                std::memory_order_acq_rel,
-                                                std::memory_order_relaxed)) {
+    while (!net_position_.compare_exchange_weak(
+        net, net + quantity_delta, std::memory_order_acq_rel, std::memory_order_relaxed)) {
     }
 
     return true;
@@ -63,4 +61,4 @@ int64_t PositionTracker::leg_position(const std::string& leg_id) const {
     return found->second->quantity.load(std::memory_order_acquire);
 }
 
-}  // namespace zinc::oms
+} // namespace zinc::oms

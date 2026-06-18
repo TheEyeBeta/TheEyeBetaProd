@@ -205,7 +205,7 @@ async def test_execute_requires_confirm_header(
         },
     )
     assert response.status_code == 422
-    assert "X-Confirm" in response.json()["detail"]
+    assert "X-Confirm" in response.json()["error"]["message"]
 
 
 @pytest.mark.integration
@@ -224,7 +224,7 @@ async def test_execute_requires_idempotency_key(
         },
     )
     assert response.status_code == 422
-    assert "Idempotency-Key" in response.json()["detail"]
+    assert "Idempotency-Key" in response.json()["error"]["message"]
 
 
 @pytest.mark.integration
@@ -264,7 +264,10 @@ async def test_execute_rejects_protected_tables(
 async def test_sql_auth_required(sql_integration_dsn: str) -> None:
     """Both endpoints reject unauthenticated requests with 401."""
     from httpx import ASGITransport  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings  # noqa: PLC0415
 
     _close = _admin_conf._close_test_resources
@@ -276,7 +279,7 @@ async def test_sql_auth_required(sql_integration_dsn: str) -> None:
         patch("deps.init_resources", _init),
         patch("deps.close_resources", _close),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         transport = ASGITransport(app=app, lifespan="on")
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             assert (

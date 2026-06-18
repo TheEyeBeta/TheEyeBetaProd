@@ -14,7 +14,7 @@ Effort is a rough order-of-magnitude estimate (S ≈ <1d, M ≈ 1–3d, L ≈ >3
 
 | Service | Purpose | Blocker | Effort |
 |---|---|---|---|
-| `agent_runtime` | AI agent runtime (FastAPI :8004) | No deploy unit; needs NATS + LLM-gateway wiring + health check | M |
+| `agent_runtime` | AI agent runtime (FastAPI :8004) | Deployed via `theeye-agent-runtime.service`; real workflows still require packaged snapshots + readable MinIO/S3 blobs | S |
 | `audit_service` | Hash-chain audit **verify** API + lifecycle (FastAPI) | No deploy unit. NOTE: chain **writes** are already live (BaseWorker → `audit_log`); only the verify/export API is undeployed | S |
 | `backtest_engine` | Backtest execution (FastAPI) | No deploy unit; data/snapshot wiring | M |
 | `broker_adapter_alpaca` | Alpaca broker adapter (FastAPI :7090) | No deploy unit; Alpaca creds. **Live-trading gated** — do not enable without explicit approval | M |

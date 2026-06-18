@@ -106,7 +106,10 @@ def _swap_creds(url: str, user: str, password: str) -> str:
     return p._replace(netloc=netloc).geturl()
 
 
-def _conn(url: str = DATABASE_URL, **kwargs: Any) -> psycopg.Connection[Any]:  # noqa: ANN401 — psycopg kwargs are heterogeneous by design
+def _conn(
+    url: str = DATABASE_URL,
+    **kwargs: Any,  # noqa: ANN401 - psycopg kwargs are heterogeneous by design
+) -> psycopg.Connection[Any]:
     """Open a psycopg3 connection with autocommit enabled."""
     return psycopg.connect(url, autocommit=True, **kwargs)
 
@@ -143,14 +146,12 @@ def section_1(conn: psycopg.Connection[Any]) -> None:
         _record(f"Schema '{schema}' exists", row is not None)
 
     # Database-level search_path is 'theeyebeta, public'
-    rows = conn.execute(
-        """
+    rows = conn.execute("""
         SELECT s.setconfig
         FROM pg_db_role_setting s
         JOIN pg_database d ON d.oid = s.setdatabase
         WHERE d.datname = 'TheEyeBeta2025Live'
-        """
-    ).fetchall()
+        """).fetchall()
     cfg_vals: list[str] = [v for row in rows for v in (row[0] or [])]
     sp_entry = next((v for v in cfg_vals if "search_path" in v), None)
     sp_ok = sp_entry is not None and "theeyebeta, public" in sp_entry
@@ -234,15 +235,13 @@ def section_2(conn: psycopg.Connection[Any]) -> None:
         )
 
     # Default privileges: tb_rnd_readonly must NOT have INSERT/UPDATE/DELETE
-    row = conn.execute(
-        """
+    row = conn.execute("""
         SELECT defaclacl
         FROM pg_default_acl da
         JOIN pg_namespace n ON n.oid = da.defaclnamespace
         WHERE n.nspname = 'theeyebeta'
           AND da.defaclobjtype = 'r'
-        """
-    ).fetchone()
+        """).fetchone()
     acl_entries: list[str] = list(row[0]) if (row and row[0]) else []
     rnd_entry = next((a for a in acl_entries if "tb_rnd_readonly" in a), "")
     # ACL format: "role=privileges/grantor"; a=INSERT, w=UPDATE, d=DELETE
@@ -301,14 +300,12 @@ def section_3(conn: psycopg.Connection[Any]) -> None:
     """Verify all 32 expected base tables exist with correct column counts."""
     _section(3, "Tables exist (32 base tables expected in theeyebeta)")
 
-    rows = conn.execute(
-        """
+    rows = conn.execute("""
         SELECT table_name, count(*)::int AS col_count
         FROM information_schema.columns
         WHERE table_schema = 'theeyebeta'
         GROUP BY table_name
-        """
-    ).fetchall()
+        """).fetchall()
     actual: dict[str, int] = {r[0]: r[1] for r in rows}
 
     for table, expected_cols in EXPECTED_TABLES.items():
@@ -512,8 +509,7 @@ def section_5(conn: psycopg.Connection[Any]) -> None:
     """Verify critical FK relationships via information_schema."""
     _section(5, "Foreign Keys (sample critical ones)")
 
-    rows = conn.execute(
-        """
+    rows = conn.execute("""
         SELECT
             kcu.table_name  AS child_table,
             kcu.column_name AS child_col,
@@ -528,8 +524,7 @@ def section_5(conn: psycopg.Connection[Any]) -> None:
             AND ccu.constraint_schema = rc.unique_constraint_schema
             AND ccu.ordinal_position  = kcu.ordinal_position
         WHERE kcu.table_schema = 'theeyebeta'
-        """
-    ).fetchall()
+        """).fetchall()
     fk_set: set[tuple[str, str, str, str]] = {(r[0], r[1], r[2], r[3]) for r in rows}
 
     for child, child_col, parent, parent_col in EXPECTED_FKS:
@@ -556,14 +551,12 @@ def section_6(conn: psycopg.Connection[Any]) -> None:
     """Verify TimescaleDB hypertables and compression policy."""
     _section(6, "Hypertables (5 expected)")
 
-    rows = conn.execute(
-        """
+    rows = conn.execute("""
         SELECT hypertable_name, num_dimensions, num_chunks
         FROM timescaledb_information.hypertables
         WHERE hypertable_schema = 'theeyebeta'
         ORDER BY hypertable_name
-        """
-    ).fetchall()
+        """).fetchall()
     actual_ht: set[str] = {r[0] for r in rows}
     ht_info: dict[str, tuple[int, int]] = {r[0]: (r[1], r[2]) for r in rows}
 
@@ -584,14 +577,12 @@ def section_6(conn: psycopg.Connection[Any]) -> None:
     )
 
     # prices_daily compression policy
-    row = conn.execute(
-        """
+    row = conn.execute("""
         SELECT schedule_interval
         FROM timescaledb_information.jobs
         WHERE proc_name = 'policy_compression'
           AND hypertable_name = 'prices_daily'
-        """
-    ).fetchone()
+        """).fetchone()
     ok = row is not None and row[0] is not None
     _record(
         "prices_daily has compression policy (schedule_interval not null)",
@@ -659,15 +650,13 @@ def section_7(conn: psycopg.Connection[Any]) -> None:
             _record(f"Index '{idx_name}' exists", True)
 
     # Exactly 2 HNSW indexes
-    hnsw_rows = conn.execute(
-        """
+    hnsw_rows = conn.execute("""
         SELECT indexname
         FROM pg_indexes
         WHERE schemaname = 'theeyebeta'
           AND indexdef LIKE '%USING hnsw%'
         ORDER BY indexname
-        """
-    ).fetchall()
+        """).fetchall()
     hnsw_actual: set[str] = {r[0] for r in hnsw_rows}
     _record(
         "Exactly 2 HNSW indexes: idx_news_embed_hnsw, idx_agent_mem_hnsw",
@@ -688,14 +677,12 @@ def section_8(conn: psycopg.Connection[Any]) -> None:
     _section(8, "Partitioning")
 
     # audit_log is a partitioned parent (relkind='p')
-    row = conn.execute(
-        """
+    row = conn.execute("""
         SELECT c.relkind
         FROM pg_class c
         JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'theeyebeta' AND c.relname = 'audit_log'
-        """
-    ).fetchone()
+        """).fetchone()
     is_partitioned = row is not None and row[0] == "p"
     _record(
         "audit_log is a partitioned parent (relkind='p')",
@@ -704,13 +691,11 @@ def section_8(conn: psycopg.Connection[Any]) -> None:
     )
 
     # At least 6 partitions
-    row = conn.execute(
-        """
+    row = conn.execute("""
         SELECT count(*)
         FROM pg_inherits
         WHERE inhparent = 'theeyebeta.audit_log'::regclass
-        """
-    ).fetchone()
+        """).fetchone()
     num_parts: int = int(row[0]) if row else 0
     _record(
         "audit_log has >= 6 partitions",
@@ -719,8 +704,7 @@ def section_8(conn: psycopg.Connection[Any]) -> None:
     )
 
     # Partition names follow pattern audit_log_YYYY_MM
-    part_rows = conn.execute(
-        """
+    part_rows = conn.execute("""
         SELECT c.relname
         FROM pg_inherits i
         JOIN pg_class c ON c.oid = i.inhrelid
@@ -728,8 +712,7 @@ def section_8(conn: psycopg.Connection[Any]) -> None:
         JOIN pg_namespace n ON n.oid = p.relnamespace
         WHERE n.nspname = 'theeyebeta' AND p.relname = 'audit_log'
         ORDER BY c.relname
-        """
-    ).fetchall()
+        """).fetchall()
     part_names = [r[0] for r in part_rows]
     pattern = re.compile(r"^audit_log_\d{4}_\d{2}$")
     bad = [n for n in part_names if not pattern.match(n)]
@@ -740,13 +723,11 @@ def section_8(conn: psycopg.Connection[Any]) -> None:
     )
 
     # Function ensure_audit_partitions(int) exists
-    row = conn.execute(
-        """
+    row = conn.execute("""
         SELECT 1 FROM pg_proc p
         JOIN pg_namespace n ON n.oid = p.pronamespace
         WHERE n.nspname = 'theeyebeta' AND p.proname = 'ensure_audit_partitions'
-        """
-    ).fetchone()
+        """).fetchone()
     fn_exists = row is not None
     _record("Function ensure_audit_partitions(int) exists", fn_exists)
 
@@ -771,12 +752,10 @@ def section_9(conn: psycopg.Connection[Any]) -> None:
     _section(9, "Views & Functions")
 
     # View system_audit_summary exists
-    row = conn.execute(
-        """
+    row = conn.execute("""
         SELECT 1 FROM information_schema.views
         WHERE table_schema = 'theeyebeta' AND table_name = 'system_audit_summary'
-        """
-    ).fetchone()
+        """).fetchone()
     view_exists = row is not None
     _record("View 'theeyebeta.system_audit_summary' exists", view_exists)
 
@@ -791,13 +770,11 @@ def section_9(conn: psycopg.Connection[Any]) -> None:
         "payload_summary",
     }
     if view_exists:
-        col_rows = conn.execute(
-            """
+        col_rows = conn.execute("""
             SELECT column_name
             FROM information_schema.columns
             WHERE table_schema='theeyebeta' AND table_name='system_audit_summary'
-            """
-        ).fetchall()
+            """).fetchall()
         actual_view_cols = {r[0] for r in col_rows}
         missing = expected_view_cols - actual_view_cols
         _record(
@@ -976,10 +953,13 @@ def section_10(superconn: psycopg.Connection[Any]) -> None:
                 if table == "audit_log":
                     continue  # already tested
                 try:
-                    app.execute(f"SELECT 1 FROM theeyebeta.{table} LIMIT 1")  # noqa: S608 — table name from EXPECTED_TABLES constant, not user input
+                    app.execute(
+                        # table name from EXPECTED_TABLES constant, not user input
+                        f"SELECT 1 FROM theeyebeta.{table} LIMIT 1"  # noqa: S608
+                    )
                 except psycopg.errors.InsufficientPrivilege:
                     denied_tables.append(table)
-                except Exception:  # noqa: S110 — non-privilege errors (empty table, etc.) are benign in this probe
+                except Exception:  # noqa: S110 - non-privilege errors are benign in this probe
                     pass
             _record(
                 "tb_app: SELECT from every base table allowed",
@@ -1106,12 +1086,10 @@ def section_11(conn: psycopg.Connection[Any]) -> None:
     )
 
     # Each exchange has non-null timezone and 3-char currency_iso
-    bad_rows = conn.execute(
-        """
+    bad_rows = conn.execute("""
         SELECT code FROM theeyebeta.exchanges
         WHERE timezone IS NULL OR length(currency_iso) != 3
-        """
-    ).fetchall()
+        """).fetchall()
     _record(
         "All exchanges have non-null timezone and 3-char currency_iso",
         not bad_rows,
@@ -1142,12 +1120,10 @@ def section_12(conn: psycopg.Connection[Any]) -> None:
     # theeyebeta.alembic_version exists with the correct revision.
     # public.alembic_version may also exist (belonging to the legacy platform)
     # and is irrelevant to this check.
-    row = conn.execute(
-        """
+    row = conn.execute("""
         SELECT 1 FROM information_schema.tables
         WHERE table_schema = 'theeyebeta' AND table_name = 'alembic_version'
-        """
-    ).fetchone()
+        """).fetchone()
     _record(
         "alembic_version table exists in schema 'theeyebeta'",
         row is not None,
@@ -1181,18 +1157,18 @@ def section_12(conn: psycopg.Connection[Any]) -> None:
     _record(
         "No theeyebeta-specific tables leak into other schemas",
         not wrong_schema_rows,
-        f"found elsewhere: {[(r[0], r[1]) for r in wrong_schema_rows]}"
-        if wrong_schema_rows
-        else "",  # noqa: E501
+        (
+            f"found elsewhere: {[(r[0], r[1]) for r in wrong_schema_rows]}"
+            if wrong_schema_rows
+            else ""
+        ),  # noqa: E501
     )
 
     # _audit_summary_placeholder was dropped (does not exist anywhere)
-    placeholder_rows = conn.execute(
-        """
+    placeholder_rows = conn.execute("""
         SELECT table_schema FROM information_schema.tables
         WHERE table_name = '_audit_summary_placeholder'
-        """
-    ).fetchall()
+        """).fetchall()
     _record(
         "_audit_summary_placeholder does not exist anywhere",
         not placeholder_rows,

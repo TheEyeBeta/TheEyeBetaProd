@@ -274,8 +274,10 @@ Required before every mutating action — see `.cursor/rules/frontend-htmx.mdc`:
 
 ## Authentication
 
-Single-user HTTP Basic Auth backed by `ADMIN_USERNAME` + `ADMIN_PASSWORD_BCRYPT` from `.env`.
-All requests require authentication. No anonymous access.
+JWT auth backed by `theeyebeta.admin_users` and `theeyebeta.admin_user_roles`.
+`MASTER_ADMIN` requires TOTP MFA before a full session is issued. The legacy
+env bootstrap fallback (`ADMIN_USERNAME` + `ADMIN_PASSWORD_BCRYPT`) is not used
+by admin-service.
 
 ## Template Structure
 

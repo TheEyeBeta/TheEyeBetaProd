@@ -27,6 +27,11 @@ class SnapshotEventConsumer:
         self._workflow = MarketTrioWorkflow(settings)
         self._tasks: set[asyncio.Task[Any]] = set()
 
+    @property
+    def inflight_tasks(self) -> int:
+        """Number of currently running async workflow tasks."""
+        return len(self._tasks)
+
     async def start(self) -> None:
         """Connect to NATS and bind the subscription."""
         self._nc = await nats.connect(self._settings.nats_url)

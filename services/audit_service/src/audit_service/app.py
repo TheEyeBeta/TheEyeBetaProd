@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -11,10 +12,12 @@ from datetime import datetime
 import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import Response
 
 from audit_service.chain import verify_range
 from audit_service.consumer import AuditEventConsumer
 from audit_service.export import schedule_nightly_export
+from audit_service.metrics import AuditMetrics
 from audit_service.models import VerifyResponse
 from audit_service.settings import Settings
 
@@ -24,7 +27,8 @@ log = structlog.get_logger()
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Build the audit-service FastAPI application."""
     cfg = settings or Settings()
-    consumer = AuditEventConsumer(cfg)
+    metrics = AuditMetrics()
+    consumer = AuditEventConsumer(cfg, metrics)
     scheduler = AsyncIOScheduler(timezone="UTC")
     schedule_nightly_export(cfg, scheduler)
     consumer_task: asyncio.Task[None] | None = None
@@ -43,7 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         scheduler.shutdown(wait=False)
         if consumer_task is not None:
             consumer_task.cancel()
-            with asyncio.suppress(asyncio.CancelledError):
+            with contextlib.suppress(asyncio.CancelledError):
                 await consumer_task
         await consumer.stop()
         log.info("audit_service_stopped")
@@ -54,6 +58,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def health() -> dict[str, str]:
         """Liveness probe."""
         return {"status": "ok"}
+
+    @app.get("/metrics")
+    async def prometheus_metrics() -> Response:
+        """Prometheus scrape endpoint."""
+        await metrics.refresh_from_db(cfg.pg_dsn())
+        body, content_type = metrics.render()
+        return Response(content=body, media_type=content_type)
 
     @app.get("/audit/verify", response_model=VerifyResponse)
     async def verify_audit(

@@ -72,7 +72,7 @@ def _resolved_violation_id(dsn: str) -> int:
 
 
 def _reset_seed(dsn: str) -> None:
-    """Reset all violations to unresolved + clear admin audit rows for retries."""
+    """Reset seeded violations to their original resolved/unresolved shape."""
     with psycopg.connect(_normalize_psycopg_dsn(dsn), autocommit=True) as conn:
         conn.execute(
             """
@@ -81,7 +81,17 @@ def _reset_seed(dsn: str) -> None:
                    resolved_by = NULL,
                    resolved_at = NULL,
                    resolution_note = NULL
-             WHERE resolved_by IS NULL OR resolved_by LIKE 'admin-api:%'
+             WHERE violation_type IN ('schema', 'mandate_boundary')
+            """,
+        )
+        conn.execute(
+            """
+            UPDATE theeyebeta.guard_violations
+               SET resolved = true,
+                   resolved_by = 'admin-api:legacy-operator',
+                   resolved_at = COALESCE(resolved_at, now() - interval '30 minutes'),
+                   resolution_note = 'manual override'
+             WHERE violation_type = 'confidence_range'
             """,
         )
         conn.execute(
@@ -242,7 +252,10 @@ async def test_resolve_validation_error(
 async def test_guard_auth_required(guard_integration_dsn: str) -> None:
     """All guard endpoints reject unauthenticated requests with 401."""
     from httpx import ASGITransport  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings  # noqa: PLC0415
 
     _close = _admin_conf._close_test_resources
@@ -254,7 +267,7 @@ async def test_guard_auth_required(guard_integration_dsn: str) -> None:
         patch("deps.init_resources", _init),
         patch("deps.close_resources", _close),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         transport = ASGITransport(app=app, lifespan="on")
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             assert (await client.get("/admin/guard/violations")).status_code == 401

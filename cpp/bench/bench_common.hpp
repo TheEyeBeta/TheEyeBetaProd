@@ -5,12 +5,13 @@
 
 #pragma once
 
+#include "zinc/ta/bar.hpp"
+
 #include <cmath>
 #include <cstdint>
-#include <random>
 #include <vector>
 
-#include "zinc/ta/bar.hpp"
+#include <random>
 
 namespace zinc::bench {
 
@@ -24,7 +25,8 @@ inline std::vector<double> make_returns(const std::size_t count, const std::uint
     return values;
 }
 
-inline std::vector<zinc::ta::Bar> make_ohlc_bars(const std::size_t count, const std::uint64_t seed) {
+inline std::vector<zinc::ta::Bar> make_ohlc_bars(const std::size_t count,
+                                                 const std::uint64_t seed) {
     std::mt19937_64 rng(seed);
     std::normal_distribution<double> normal(0.0, 0.5);
     std::vector<zinc::ta::Bar> bars(count);
@@ -39,4 +41,4 @@ inline std::vector<zinc::ta::Bar> make_ohlc_bars(const std::size_t count, const 
     return bars;
 }
 
-}  // namespace zinc::bench
+} // namespace zinc::bench

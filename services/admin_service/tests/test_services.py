@@ -97,13 +97,17 @@ async def test_status_inactive_unit_is_unhealthy(
 @pytest.mark.asyncio
 async def test_status_requires_auth(admin_integration_dsn: str) -> None:
     """GET /admin/services/status rejects unauthenticated requests."""
-    from conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
+    from httpx import ASGITransport  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
+    from settings import Settings, get_settings  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
         _close_test_resources,
         _init_test_resources,
     )
-    from httpx import ASGITransport  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
-    from settings import Settings, get_settings  # noqa: PLC0415
 
     get_settings.cache_clear()
     settings = Settings(database_url=admin_integration_dsn)
@@ -111,7 +115,7 @@ async def test_status_requires_auth(admin_integration_dsn: str) -> None:
         patch("deps.init_resources", _init_test_resources),
         patch("deps.close_resources", _close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         transport = ASGITransport(app=app, lifespan="on")
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get("/admin/services/status")
@@ -195,7 +199,7 @@ async def test_restart_unknown_service_returns_422(
         headers=auth_headers,
     )
     assert resp.status_code == 422
-    assert "whitelist" in resp.json()["detail"]
+    assert "whitelist" in resp.json()["error"]["message"]
 
 
 @pytest.mark.integration
@@ -222,20 +226,24 @@ async def test_restart_systemctl_failure_returns_409(
         )
 
     assert resp.status_code == 409
-    assert "systemctl refused" in resp.json()["detail"]
+    assert "systemctl refused" in resp.json()["error"]["message"]
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_restart_requires_auth(admin_integration_dsn: str) -> None:
     """POST /admin/services/{name}/restart rejects unauthenticated requests."""
-    from conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
+    from httpx import ASGITransport  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
+    from settings import Settings, get_settings  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
         _close_test_resources,
         _init_test_resources,
     )
-    from httpx import ASGITransport  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
-    from settings import Settings, get_settings  # noqa: PLC0415
 
     get_settings.cache_clear()
     settings = Settings(database_url=admin_integration_dsn)
@@ -243,7 +251,7 @@ async def test_restart_requires_auth(admin_integration_dsn: str) -> None:
         patch("deps.init_resources", _init_test_resources),
         patch("deps.close_resources", _close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         transport = ASGITransport(app=app, lifespan="on")
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(

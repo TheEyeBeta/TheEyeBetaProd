@@ -5,14 +5,14 @@
 
 #include "zinc/opt/hrp.hpp"
 
+#include "zinc/opt/detail/simplex.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <limits>
 #include <utility>
 #include <vector>
-
-#include "zinc/opt/detail/simplex.hpp"
 
 namespace zinc::opt {
 
@@ -70,8 +70,7 @@ void recursive_bisection(const Eigen::MatrixXd& covariance, const std::vector<in
     const double left_variance = cluster_variance(covariance, left);
     const double right_variance = cluster_variance(covariance, right);
     const double denominator = left_variance + right_variance;
-    const double left_share =
-        denominator > 0.0 ? 1.0 - left_variance / denominator : 0.5;
+    const double left_share = denominator > 0.0 ? 1.0 - left_variance / denominator : 0.5;
 
     recursive_bisection(covariance, order, weights, begin, mid, mass * left_share);
     recursive_bisection(covariance, order, weights, mid, end, mass * (1.0 - left_share));
@@ -83,8 +82,7 @@ double correlation_distance(const Eigen::MatrixXd& covariance, int left, int rig
     if (left_variance <= 0.0 || right_variance <= 0.0) {
         return 1.0;
     }
-    const double correlation =
-        covariance(left, right) / std::sqrt(left_variance * right_variance);
+    const double correlation = covariance(left, right) / std::sqrt(left_variance * right_variance);
     const double clamped = std::clamp(correlation, -1.0, 1.0);
     return std::sqrt(0.5 * (1.0 - clamped));
 }
@@ -106,9 +104,8 @@ std::vector<int> quasi_diagonal_order(const Eigen::MatrixXd& covariance) {
                 double minimum = std::numeric_limits<double>::infinity();
                 for (const int left_index : clusters[left]) {
                     for (const int right_index : clusters[right]) {
-                        minimum = std::min(minimum,
-                                           correlation_distance(covariance, left_index,
-                                                                right_index));
+                        minimum = std::min(
+                            minimum, correlation_distance(covariance, left_index, right_index));
                     }
                 }
                 if (minimum < best_distance) {
@@ -128,7 +125,7 @@ std::vector<int> quasi_diagonal_order(const Eigen::MatrixXd& covariance) {
     return clusters.front();
 }
 
-}  // namespace
+} // namespace
 
 PortfolioWeights hrp(const Eigen::Ref<const Eigen::MatrixXd>& covariance) {
     PortfolioWeights result;
@@ -149,4 +146,4 @@ PortfolioWeights hrp(const Eigen::Ref<const Eigen::MatrixXd>& covariance) {
     return result;
 }
 
-}  // namespace zinc::opt
+} // namespace zinc::opt

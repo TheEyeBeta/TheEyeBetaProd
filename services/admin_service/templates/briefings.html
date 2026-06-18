@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Briefings{% endblock %}
+
+{% block content %}
+  <section class="space-y-4" data-page="briefings">
+    <header class="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-semibold tracking-tight">Staff Briefings</h1>
+        <p class="text-sm text-slate-600 dark:text-slate-400">
+          Chain-of-command reports from your AI staff — department specialists roll up to
+          leads, leads to master-orchestrator, then to you.
+        </p>
+      </div>
+    </header>
+
+    {% if briefings %}
+      <div class="space-y-3">
+        {% for b in briefings %}
+          <article
+            class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+            data-briefing-id="{{ b.id }}"
+          >
+            <header class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {{ b.agent_id }}
+                </span>
+                <span class="rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200">
+                  {{ b.report_type }}
+                </span>
+              </div>
+              <time class="text-xs text-slate-500 dark:text-slate-400" datetime="{{ b.created_at.isoformat() }}">
+                {{ b.created_at.strftime('%Y-%m-%d %H:%M UTC') }}
+              </time>
+            </header>
+            <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">{{ b.summary }}</p>
+            {% if b.payload and b.payload.decision_rows %}
+              <details class="mt-3 text-xs text-slate-600 dark:text-slate-400">
+                <summary class="cursor-pointer font-medium">Decision detail</summary>
+                <pre class="mt-2 max-h-48 overflow-auto rounded bg-slate-950 p-2 text-slate-100">{{ b.payload.decision_rows | tojson(indent=2) }}</pre>
+              </details>
+            {% endif %}
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center dark:border-slate-700 dark:bg-slate-900/40">
+        <p class="text-sm text-slate-600 dark:text-slate-400">
+          No briefings yet. Run the reporting chain worker to collect reports from your staff.
+        </p>
+        <p class="mt-2 font-mono text-xs text-slate-500">
+          uv run python -m workers.reporting_chain_worker --market US
+        </p>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from compliance_service.models import ComplianceMandate, OrderProposal, PortfolioContext, RuleResult
 from compliance_service.rules.base import ComplianceRule, block_result, pass_result
@@ -19,7 +19,7 @@ class AmlStructuringRule(ComplianceRule):
         portfolio: PortfolioContext,
         mandate: ComplianceMandate,
     ) -> RuleResult:
-        today = datetime.now(tz=UTC).date()
+        window_start = datetime.now(tz=UTC) - timedelta(hours=24)
         notional = order.qty * order.limit_price
         small_today = 0
         if notional < mandate.aml_small_trade_usd:
@@ -28,7 +28,10 @@ class AmlStructuringRule(ComplianceRule):
         for prior in portfolio.recent_orders:
             if prior.instrument_id != order.instrument_id:
                 continue
-            if prior.created_at.date() != today:
+            created_at = prior.created_at
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=UTC)
+            if created_at < window_start:
                 continue
             price = prior.limit_price or order.limit_price
             if prior.qty * price < mandate.aml_small_trade_usd:
@@ -39,7 +42,7 @@ class AmlStructuringRule(ComplianceRule):
                 self.rule_id,
                 (
                     f"structuring heuristic: {small_today} sub-"
-                    f"${mandate.aml_small_trade_usd:.0f} trades today on "
+                    f"${mandate.aml_small_trade_usd:.0f} trades in 24h on "
                     f"instrument {order.instrument_id}"
                 ),
             )

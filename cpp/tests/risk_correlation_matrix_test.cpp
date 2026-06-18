@@ -7,10 +7,11 @@
 
 #include <cmath>
 #include <limits>
-#include <random>
 
 #include <Eigen/Dense>
+
 #include <gtest/gtest.h>
+#include <random>
 
 namespace {
 
@@ -18,7 +19,7 @@ bool IsNan(double value) {
     return std::isnan(value);
 }
 
-}  // namespace
+} // namespace
 
 TEST(CorrelationMatrixTest, HappyPathHandComputedPerfectCorrelation) {
     Eigen::MatrixXd data(3, 2);
@@ -66,7 +67,7 @@ TEST(CorrelationMatrixTest, RandomMatrixIsSymmetricWithUnitDiagonal) {
     }
 
     const Eigen::MatrixXd correlation = zinc::risk::correlation_matrix(data);
-    EXPECT_NEAR(correlation, correlation.transpose(), 1e-12);
+    EXPECT_NEAR((correlation - correlation.transpose()).norm(), 0.0, 1e-12);
     for (Eigen::Index index = 0; index < correlation.rows(); ++index) {
         EXPECT_NEAR(correlation(index, index), 1.0, 1e-12);
         EXPECT_GE(correlation(index, (index + 1) % correlation.cols()), -1.0 - 1e-12);
@@ -78,7 +79,9 @@ TEST(CorrelationMatrixTest, NumericalStabilityAgainstReferenceLiteral) {
     Eigen::MatrixXd data(4, 2);
     data << 10.0, 40.0, 20.0, 30.0, 30.0, 20.0, 40.0, 10.0;
 
-    constexpr double kReferenceCorrelation = -0.9;
+    // col1 = 50 - col0 exactly (perfect negative linear relationship), so the
+    // Pearson correlation is exactly -1.0, not -0.9 — the dataset is degenerate.
+    constexpr double kReferenceCorrelation = -1.0;
     const Eigen::MatrixXd correlation = zinc::risk::correlation_matrix(data);
     EXPECT_NEAR(correlation(0, 1), kReferenceCorrelation, 1e-12);
     EXPECT_NEAR(correlation(1, 0), kReferenceCorrelation, 1e-12);

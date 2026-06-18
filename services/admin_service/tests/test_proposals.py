@@ -97,7 +97,10 @@ async def test_list_happy(
 ) -> None:
     """GET /admin/proposals returns seeded rows newest first."""
     client, _ = proposals_admin_client
-    response = await client.get("/admin/proposals", headers=auth_headers)
+    response = await client.get(
+        "/admin/proposals",
+        headers={**auth_headers, "Accept": "application/json"},
+    )
     assert response.status_code == 200
     body = response.json()
     ids = {row["id"] for row in body["proposals"]}
@@ -117,7 +120,7 @@ async def test_list_filters(
     response = await client.get(
         "/admin/proposals",
         params={"status": "pending", "category": "strategy_param"},
-        headers=auth_headers,
+        headers={**auth_headers, "Accept": "application/json"},
     )
     assert response.status_code == 200
     body = response.json()
@@ -136,7 +139,7 @@ async def test_list_invalid_status(
     response = await client.get(
         "/admin/proposals",
         params={"status": "unknown"},
-        headers=auth_headers,
+        headers={**auth_headers, "Accept": "application/json"},
     )
     assert response.status_code == 422
 
@@ -386,7 +389,10 @@ async def test_reject_validation(
 async def test_proposals_auth_required(proposals_integration_dsn: str) -> None:
     """All proposal endpoints reject unauthenticated requests."""
     from httpx import ASGITransport  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings  # noqa: PLC0415
 
     _close = _admin_conf._close_test_resources
@@ -398,7 +404,7 @@ async def test_proposals_auth_required(proposals_integration_dsn: str) -> None:
         patch("deps.init_resources", _init),
         patch("deps.close_resources", _close),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         transport = ASGITransport(app=app, lifespan="on")
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             assert (await client.get("/admin/proposals")).status_code == 401

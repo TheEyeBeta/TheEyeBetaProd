@@ -1,7 +1,11 @@
-# ADR 0001 — Use public.* as Data Bridge for theeyebeta
+# ADR 0012 — Use public.* as Data Bridge for theeyebeta
 
 Date: 2026-03-01
-Status: Superseded by ADR 0002 — 2026-05-22
+Status: Superseded by [ADR 0013](0013-data-ingestion-ownership.md) — 2026-05-22
+
+> Renumbered from its original `0001` on 2026-06-18 — that number collided with the unrelated
+> `0001-postgres-timescale-pgvector.md` from a later ADR batch. See `docs/build-log.md` (entry
+> "P-ADR-02 — ADR-0001-b") if cross-checking against historical notes.
 
 ## Context
 

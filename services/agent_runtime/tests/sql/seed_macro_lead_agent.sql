@@ -8,7 +8,7 @@ VALUES
         'Macro lead — cross-asset stance from packaged snapshots',
         'claude-sonnet-4-6',
         'gpt-5',
-        'agents/macro-lead.md',
+        'agents/markets/macro-lead.agent.md',
         true
     )
 ON CONFLICT (id) DO UPDATE SET

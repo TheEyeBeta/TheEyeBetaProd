@@ -1,7 +1,11 @@
-# ADR 0002 — theeyebeta owns its own data ingestion
+# ADR 0013 — theeyebeta owns its own data ingestion
 
 Date: 2026-05-22
-Status: Accepted (supersedes ADR 0001)
+Status: Accepted (supersedes [ADR 0012](0012-public-schema-bridge.md))
+
+> Renumbered from its original `0002` on 2026-06-18 — that number collided with the unrelated
+> `0002-nats-jetstream-over-kafka.md` from a later ADR batch. See `docs/build-log.md` (entry
+> "P-ADR-04 — ADR-0002-b") if cross-checking against historical notes.
 
 ## Context
 

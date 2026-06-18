@@ -26,14 +26,12 @@ async def test_pipeline_run_us_market_end_to_end(integration_env) -> None:  # no
 
     pool = await asyncpg.create_pool(integration_env.ingest_database_url, min_size=1, max_size=2)
     async with pool.acquire() as conn:
-        instrument_id = await conn.fetchval(
-            """
+        instrument_id = await conn.fetchval("""
             SELECT i.id
             FROM theeyebeta.instruments i
             JOIN theeyebeta.exchanges e ON e.id = i.exchange_id
             WHERE i.symbol = 'AAPL' AND e.code = 'XNAS'
-            """
-        )
+            """)
     await pool.close()
     assert instrument_id is not None
 

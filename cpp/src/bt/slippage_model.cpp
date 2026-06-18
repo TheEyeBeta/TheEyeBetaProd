@@ -16,7 +16,7 @@ double default_formula(const double atr, const double participation) noexcept {
     return std::min(0.01, 1.0e-4 * std::max(atr, 0.0) * std::max(participation, 0.0));
 }
 
-}  // namespace
+} // namespace
 
 SlippageModel::SlippageModel(Formula formula) : formula_(std::move(formula)) {
     if (!formula_) {
@@ -30,4 +30,4 @@ double SlippageModel::slippage_fraction(const double atr, const double trade_siz
     return std::max(0.0, formula_(atr, participation));
 }
 
-}  // namespace zinc::bt
+} // namespace zinc::bt

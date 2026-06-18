@@ -35,9 +35,9 @@ class Expected {
     Expected& operator=(Expected&&) = default;
     ~Expected() = default;
 
-    Expected(const T& value) : storage_(value) {}  // NOLINT
-    Expected(T&& value) : storage_(std::move(value)) {}  // NOLINT
-    Expected(Unexpected<E> error) : storage_(std::move(error.error())) {}  // NOLINT
+    Expected(const T& value) : storage_(value) {}                         // NOLINT
+    Expected(T&& value) : storage_(std::move(value)) {}                   // NOLINT
+    Expected(Unexpected<E> error) : storage_(std::move(error.error())) {} // NOLINT
 
     [[nodiscard]] bool has_value() const noexcept { return storage_.index() == 0; }
     [[nodiscard]] explicit operator bool() const noexcept { return has_value(); }
@@ -59,7 +59,7 @@ Unexpected<std::decay_t<E>> unexpected(E&& error) {
     return Unexpected<std::decay_t<E>>(std::forward<E>(error));
 }
 
-}  // namespace zinc::oms::detail
+} // namespace zinc::oms::detail
 
 #if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202211L
 
@@ -69,7 +69,7 @@ namespace zinc::oms {
 template <typename T, typename E>
 using expected = std::expected<T, E>;
 using std::unexpected;
-}  // namespace zinc::oms
+} // namespace zinc::oms
 
 #else
 
@@ -77,6 +77,6 @@ namespace zinc::oms {
 template <typename T, typename E>
 using expected = detail::Expected<T, E>;
 using detail::unexpected;
-}  // namespace zinc::oms
+} // namespace zinc::oms
 
 #endif

@@ -9,7 +9,7 @@ User=the-eye-beta
 Group=the-eye-beta
 WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
 # Provides INGEST_DATABASE_URL (asyncpg pool target) + other config.
-EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env.theeye-news-ingest
 # otel-collector is not running on this host; silence console-exporter span spam.
 Environment=OTEL_SDK_DISABLED=true
 ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.venv/bin/python scripts/run_news_ingest.py

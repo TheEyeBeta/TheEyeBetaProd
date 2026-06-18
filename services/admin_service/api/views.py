@@ -68,7 +68,8 @@ from audit_log import write_audit_log
 from auth import CurrentUser
 from deps import DbConn, NatsClient, SettingsDep
 from fastapi import APIRouter, Form, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from rbac import Role, require_role
 from slowapi import Limiter
 from web import page_context, templates
@@ -102,6 +103,7 @@ from api.orders import (
 )
 from api.proposals import (
     PROPOSALS_DEFAULT_LIMIT,
+    PROPOSALS_MAX_LIMIT,
     VALID_PROPOSAL_CATEGORIES,
     approve_proposal_impl,
     fetch_backtest_status,
@@ -116,7 +118,6 @@ from api.sql import (
     run_write_statement,
 )
 from zinc_schemas.admin_dto import (
-    AgentMessageDTO,
     AgentsListResponse,
     AgentSummary,
     ApproveProposalRequest,
@@ -129,6 +130,7 @@ from zinc_schemas.admin_dto import (
     RejectProposalRequest,
     RunAgentRequest,
 )
+from zinc_schemas.agent_reports import fetch_operator_briefings
 
 log = structlog.get_logger()
 
@@ -160,7 +162,7 @@ def _proposals_category_or_none(value: str) -> str | None:
         return None
     if value not in VALID_PROPOSAL_CATEGORIES:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"category must be one of {VALID_PROPOSAL_CATEGORIES}",
         )
     return value
@@ -199,6 +201,7 @@ def _proposal_card_response(
     flash_payload = json.dumps(
         {"flash": {"kind": "success", "message": flash}},
         separators=(",", ":"),
+        ensure_ascii=True,
     )
     return templates.TemplateResponse(
         request,
@@ -227,17 +230,17 @@ def _decode_sql_parameters(raw: str) -> list[object]:
         decoded = json.loads(text)
     except json.JSONDecodeError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"parameters: invalid JSON — {exc.msg}",
         ) from exc
     if not isinstance(decoded, list):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="parameters must be a JSON array",
         )
     if len(decoded) > _SQL_MAX_PARAMS:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"parameters: at most {_SQL_MAX_PARAMS} values are allowed",
         )
     return list(decoded)
@@ -528,7 +531,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
                 request,
                 kind="warn",
                 message=(
-                    "Daily backtest is not configured — set "
+                    "Daily backtest is not configured - set "
                     "ADMIN_DAILY_BACKTEST_STRATEGY_ID to enable this action."
                 ),
             )
@@ -552,7 +555,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
             return _flash_response(
                 request,
                 kind="error",
-                message="backtest-engine is unreachable — check `tb status backtest-engine`.",
+                message="backtest-engine is unreachable - check `tb status backtest-engine`.",
             )
 
         if response.status_code >= 400:
@@ -1156,12 +1159,12 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
     @limiter.limit("20/minute")
     async def fragment_sql_execute(
         request: Request,
-        user: dict[str, str] = require_role(Role.MASTER_ADMIN),
         conn: DbConn,
         statement: Annotated[str, Form(min_length=1, max_length=20_000)],
         idempotency_key: Annotated[str, Form(min_length=1, max_length=64)],
         confirm_phrase: Annotated[str, Form(min_length=1, max_length=64)],
         parameters: Annotated[str, Form(max_length=8_000)] = "",
+        user: dict[str, str] = require_role(Role.MASTER_ADMIN),
     ) -> HTMLResponse:
         """Run a write statement after the operator typed the confirm phrase."""
         if confirm_phrase.strip() != _SQL_CONFIRM_PHRASE:
@@ -1170,7 +1173,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
                 "components/_sql_error.html",
                 {
                     "request": request,
-                    "status_code": status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    "status_code": status.HTTP_422_UNPROCESSABLE_CONTENT,
                     "detail": (f"Confirmation phrase mismatch — expected '{_SQL_CONFIRM_PHRASE}'."),
                     "statement": statement,
                 },
@@ -1216,10 +1219,9 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
                 "result": response,
             },
             headers={
-                "HX-Trigger": (
-                    f'{{"flash": {{"kind": "success", '
-                    f'"message": "Statement executed — rows affected: '
-                    f'{response.rows_affected}."}}}}'
+                "HX-Trigger": _flash_header(
+                    "success",
+                    f"Statement executed - rows affected: {response.rows_affected}.",
                 ),
             },
         )
@@ -1232,16 +1234,35 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
         user: CurrentUser,
         conn: DbConn,
         category: str = "",
-    ) -> HTMLResponse:
-        """Render the proposals page with three tabs (pending/approved/rejected)."""
-        active_status = "pending"
+        proposal_status: str | None = Query(default=None, alias="status"),
+        proposed_by: str | None = Query(default=None),
+        target: str | None = Query(default=None),
+        limit: int = Query(default=PROPOSALS_DEFAULT_LIMIT, ge=1, le=PROPOSALS_MAX_LIMIT),
+        cursor: datetime | None = Query(default=None),
+    ) -> Response:
+        """Render the proposals page, or preserve the JSON list contract via Accept."""
+        wants_json = "application/json" in request.headers.get("accept", "").lower()
+        active_status = proposal_status if wants_json else proposal_status or "pending"
         active_category = _proposals_category_or_none(category)
         page = await fetch_proposals_page(
             conn,
             proposal_status=active_status,
             category=active_category,
-            limit=PROPOSALS_DEFAULT_LIMIT,
+            proposed_by=proposed_by,
+            target=target,
+            limit=limit,
+            cursor=cursor,
         )
+        if wants_json:
+            log.info(
+                "admin_proposals_listed",
+                count=len(page.proposals),
+                status=active_status,
+                category=active_category,
+                sub=user["sub"],
+            )
+            return JSONResponse(jsonable_encoder(page))
+
         # Fetch detail rows for cards so jsonb fields (estimated_impact, evidence)
         # are available without an N+1 follow-up; for an MVP the proposal lists
         # are short (<=100 rows), so this stays inside the same hot path.
@@ -1282,7 +1303,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
         """Cards-list fragment for one of the three tabs."""
         if proposal_status not in _PROPOSAL_TAB_KEYS:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"status must be one of {_PROPOSAL_TAB_KEYS}",
             )
         active_category = _proposals_category_or_none(category)
@@ -1375,7 +1396,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
                 body_kwargs["start_date"] = date.fromisoformat(start_date.strip())
             except ValueError as exc:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=f"start_date: {exc}",
                 ) from exc
         if end_date.strip():
@@ -1383,7 +1404,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
                 body_kwargs["end_date"] = date.fromisoformat(end_date.strip())
             except ValueError as exc:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=f"end_date: {exc}",
                 ) from exc
 
@@ -1658,8 +1679,9 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
             "components/_violation_row.html",
             {"request": request, "row": refreshed},
         )
-        response.headers["HX-Trigger"] = (
-            f'{{"flash": {{"kind": "success", "message": "Violation {violation_id} resolved."}}}}'
+        response.headers["HX-Trigger"] = _flash_header(
+            "success",
+            f"Violation {violation_id} resolved.",
         )
         return response
 
@@ -1679,14 +1701,9 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
         prompt: Annotated[str, Form(max_length=8000)] = "",
     ) -> HTMLResponse:
         """Trigger an agent run; return a flash card with the result."""
-        agent_messages: list[AgentMessageDTO] = []
-        prompt_stripped = prompt.strip()
-        if prompt_stripped:
-            agent_messages.append(AgentMessageDTO(role="user", content=prompt_stripped))
         body = RunAgentRequest(
             snapshot_id=snapshot_id,
             kind=kind.strip(),
-            agent_messages=agent_messages,
         )
         try:
             result = await trigger_agent_run_impl(
@@ -1760,6 +1777,28 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
             },
         )
 
+    # ------------------------------------------------------------ Briefings page
+
+    @router.get("/briefings", response_class=HTMLResponse)
+    async def view_briefings(
+        request: Request,
+        user: CurrentUser,
+        conn: DbConn,
+    ) -> HTMLResponse:
+        """Render operator briefings from the agent chain of command."""
+        rows = await fetch_operator_briefings(conn, limit=50)
+        log.info("admin_briefings_page_rendered", count=len(rows), sub=user["sub"])
+        return templates.TemplateResponse(
+            request,
+            "briefings.html",
+            page_context(
+                request,
+                active="briefings",
+                title="Briefings",
+                extra={"briefings": rows},
+            ),
+        )
+
     return router
 
 
@@ -1776,11 +1815,17 @@ def _flash_response(request: Request, *, kind: str, message: str) -> HTMLRespons
         "components/_flash.html",
         {"request": request, "kind": kind, "message": message},
     )
-    response.headers["HX-Trigger"] = (
-        '{"flash": {"kind": "%s", "message": %r}}'  # noqa: UP031 — header format
-        % (kind, message)
-    )
+    response.headers["HX-Trigger"] = _flash_header(kind, message)
     return response
+
+
+def _flash_header(kind: str, message: str) -> str:
+    """Return an ASCII-safe HX-Trigger flash payload for HTTP headers."""
+    return json.dumps(
+        {"flash": {"kind": kind, "message": message}},
+        separators=(",", ":"),
+        ensure_ascii=True,
+    )
 
 
 def _short_error(exc: BaseException) -> str:

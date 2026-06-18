@@ -68,14 +68,21 @@ async def get_db(
     request: Request,
 ) -> AsyncIterator[asyncpg.Connection]:
     """Yield one connection from the asyncpg pool."""
-    pool: asyncpg.Pool = request.app.state.db_pool
+    pool: asyncpg.Pool | None = getattr(request.app.state, "db_pool", None)
+    if pool is None:
+        pool = _pool
+    if pool is None:
+        msg = "DB pool is not initialized"
+        raise RuntimeError(msg)
     async with pool.acquire() as conn:
         yield conn
 
 
 async def get_nats(request: Request) -> nats.NATS:
     """Return the singleton NATS client."""
-    client: nats.NATS | None = request.app.state.nats
+    client: nats.NATS | None = getattr(request.app.state, "nats", None)
+    if client is None:
+        client = _nats
     if client is None:
         msg = "NATS client is not initialized"
         raise RuntimeError(msg)
@@ -84,7 +91,9 @@ async def get_nats(request: Request) -> nats.NATS:
 
 async def get_redis(request: Request) -> Redis:
     """Return the Redis client used for refresh-token rotation."""
-    client: Redis | None = request.app.state.redis
+    client: Redis | None = getattr(request.app.state, "redis", None)
+    if client is None:
+        client = _redis
     if client is None:
         msg = "Redis client is not initialized"
         raise RuntimeError(msg)
@@ -93,7 +102,9 @@ async def get_redis(request: Request) -> Redis:
 
 async def get_redis_ops(request: Request) -> Redis:
     """Return the Redis client for cross-service operational keys (DB 0)."""
-    client: Redis | None = request.app.state.redis_ops
+    client: Redis | None = getattr(request.app.state, "redis_ops", None)
+    if client is None:
+        client = _redis_ops
     if client is None:
         msg = "Redis ops client is not initialized"
         raise RuntimeError(msg)

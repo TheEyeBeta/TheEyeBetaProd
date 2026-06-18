@@ -92,84 +92,92 @@ class IngestionPipeline:
             "nats_events": [],
         }
 
-        async with observe_duration("pipeline", "all"):  # noqa: SIM117 — two different async context managers; combining would obscure their distinct roles
-            async with span("pipeline.run", date=str(target_date)):
-                fetch_tasks = {
-                    name: asyncio.create_task(_fetch_adapter_records(name, target_date))
-                    for name in names
-                }
-                records_by_adapter: dict[str, list[Record]] = {}
-                for name, task in fetch_tasks.items():
-                    try:
-                        records_by_adapter[name] = await task
-                        summary["adapter_results"][name] = {
-                            "records_fetched": len(records_by_adapter[name]),
-                        }
-                    except Exception as exc:  # noqa: BLE001
-                        record_error(name, type(exc).__name__)
-                        raise
-
-                all_records: list[Record] = []
-                for batch in records_by_adapter.values():
-                    all_records.extend(batch)
-
-                async with pool.acquire() as conn, conn.transaction():
-                    writer = PostgresWriter(conn, upsert=self._upsert)
-                    try:
-                        written = await writer.write_records(
-                            all_records,
-                            adapter="pipeline",
-                            market="all",
-                        )
-                        summary["written"] = written
-
-                        for market in MARKETS:
-                            rows = await writer.fetch_market_daily_frame(market, target_date)
-                            if not rows:
-                                continue
-                            frame = pl.DataFrame([dict(row) for row in rows])
-                            snapshot = await self._parquet.write_daily_snapshot(
-                                market,
-                                target_date,
-                                frame,
-                            )
-                            await writer.register_snapshot(
-                                market=market,
-                                trade_date=target_date,
-                                blob_uri=snapshot.blob_uri,
-                                sha256_hex=snapshot.sha256_hex,
-                                row_count=snapshot.row_count,
-                            )
-                            summary["snapshots"][market] = {
-                                "blob_uri": snapshot.blob_uri,
-                                "row_count": snapshot.row_count,
-                                "sha256": snapshot.sha256_hex,
-                            }
-                    except Exception as exc:  # noqa: BLE001
-                        record_error("pipeline", type(exc).__name__)
-                        log.error("pipeline_transaction_failed", error=str(exc))
-                        raise
-
-                nats_url = os.environ.get("NATS_URL", "nats://127.0.0.1:4222")
-                nc = await nats.connect(nats_url)
-                js = nc.jetstream()
+        async with (
+            observe_duration("pipeline", "all"),
+            span(
+                "pipeline.run",
+                date=str(target_date),
+            ),
+        ):
+            fetch_tasks = {
+                name: asyncio.create_task(_fetch_adapter_records(name, target_date))
+                for name in names
+            }
+            records_by_adapter: dict[str, list[Record]] = {}
+            for name, task in fetch_tasks.items():
                 try:
-                    for market, meta in summary["snapshots"].items():
-                        subject = f"data.snapshots.{market}.{target_date.isoformat()}"
-                        payload = json.dumps(
-                            {
-                                "market": market,
-                                "date": str(target_date),
-                                "blob_uri": meta["blob_uri"],
-                                "row_count": meta["row_count"],
-                                "sha256": meta["sha256"],
-                            },
-                        ).encode()
+                    records_by_adapter[name] = await task
+                    summary["adapter_results"][name] = {
+                        "records_fetched": len(records_by_adapter[name]),
+                    }
+                except Exception as exc:  # noqa: BLE001
+                    record_error(name, type(exc).__name__)
+                    raise
+
+            all_records: list[Record] = []
+            for batch in records_by_adapter.values():
+                all_records.extend(batch)
+
+            async with pool.acquire() as conn, conn.transaction():
+                writer = PostgresWriter(conn, upsert=self._upsert)
+                try:
+                    written = await writer.write_records(
+                        all_records,
+                        adapter="pipeline",
+                        market="all",
+                    )
+                    summary["written"] = written
+
+                    for market in MARKETS:
+                        rows = await writer.fetch_market_daily_frame(market, target_date)
+                        if not rows:
+                            continue
+                        frame = pl.DataFrame([dict(row) for row in rows])
+                        snapshot = await self._parquet.write_daily_snapshot(
+                            market,
+                            target_date,
+                            frame,
+                        )
+                        await writer.register_snapshot(
+                            market=market,
+                            trade_date=target_date,
+                            blob_uri=snapshot.blob_uri,
+                            sha256_hex=snapshot.sha256_hex,
+                            row_count=snapshot.row_count,
+                        )
+                        summary["snapshots"][market] = {
+                            "blob_uri": snapshot.blob_uri,
+                            "row_count": snapshot.row_count,
+                            "sha256": snapshot.sha256_hex,
+                        }
+                except Exception as exc:  # noqa: BLE001
+                    record_error("pipeline", type(exc).__name__)
+                    log.error("pipeline_transaction_failed", error=str(exc))
+                    raise
+
+            nats_url = os.environ.get("NATS_URL", "nats://127.0.0.1:4222")
+            nc = await nats.connect(nats_url)
+            js = nc.jetstream()
+            try:
+                for market, meta in summary["snapshots"].items():
+                    subject = f"data.snapshots.{market}.{target_date.isoformat()}"
+                    payload = json.dumps(
+                        {
+                            "market": market,
+                            "date": str(target_date),
+                            "blob_uri": meta["blob_uri"],
+                            "row_count": meta["row_count"],
+                            "sha256": meta["sha256"],
+                        },
+                    ).encode()
+                    try:
                         await js.publish(subject, payload)
-                        summary["nats_events"].append(subject)
-                        record_success(market)
-                finally:
-                    await nc.close()
+                    except nats.errors.TimeoutError:
+                        await nc.publish(subject, payload)
+                    summary["nats_events"].append(subject)
+                    record_success(market)
+            finally:
+                await nc.close()
 
         log.info("pipeline_run_complete", **summary)
         return summary

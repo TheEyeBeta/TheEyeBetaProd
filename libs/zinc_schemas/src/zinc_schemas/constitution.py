@@ -105,10 +105,7 @@ def load_constitution(path: Path) -> AgentConstitution:
     if missing:
         raise ValueError(f"Constitution {path} missing required frontmatter: {missing}")
     raw_tools = fm.get("tools") or []
-    if isinstance(raw_tools, str):  # noqa: SIM108 — ternary would exceed line length and hurt readability
-        tools = [raw_tools]
-    else:
-        tools = [str(t) for t in raw_tools]
+    tools = [raw_tools] if isinstance(raw_tools, str) else [str(t) for t in raw_tools]
     raw_forbidden = fm.get("forbidden_targets") or []
     if isinstance(raw_forbidden, str):
         forbidden_targets = [raw_forbidden]

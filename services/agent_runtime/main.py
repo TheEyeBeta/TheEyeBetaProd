@@ -1,4 +1,4 @@
-# STATUS: scaffolded, not deployed. Pending: deploy unit + NATS/LLM wiring.
+# STATUS: deployed via theeye-agent-runtime.service.
 """FastAPI entrypoint for agent-runtime (port 8004)."""
 
 from __future__ import annotations
@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import lru_cache
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 import structlog
@@ -50,8 +50,11 @@ class AgentRunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     snapshot_id: UUID
-    kind: Literal["run", "rebuttal"] = "run"
+    kind: Literal["run", "rebuttal", "rollup"] = "run"
     agent_messages: list[AgentMessage] = Field(default_factory=list)
+    parent_run_id: UUID | None = None
+    operator_context: dict[str, str] = Field(default_factory=dict)
+    subordinate_reports: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AgentDecisionRow(BaseModel):
@@ -82,6 +85,7 @@ class AgentRunResponse(BaseModel):
     market_stance: str
     regime_call: str
     kind: str = "run"
+    briefing: dict[str, Any] | None = None
 
 
 @lru_cache
@@ -135,6 +139,9 @@ def create_app() -> FastAPI:
                 body.snapshot_id,
                 kind=body.kind,
                 agent_messages=[m.model_dump() for m in body.agent_messages],
+                parent_run_id=body.parent_run_id,
+                operator_context=body.operator_context,
+                subordinate_reports=body.subordinate_reports,
             )
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -152,6 +159,7 @@ def create_app() -> FastAPI:
             market_stance=summary["market_stance"],
             regime_call=summary["regime_call"],
             kind=body.kind,
+            briefing=summary.get("briefing"),
         )
 
     return app

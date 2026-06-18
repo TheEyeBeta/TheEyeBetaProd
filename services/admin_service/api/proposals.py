@@ -127,17 +127,17 @@ async def fetch_proposals_page(
     """
     if limit < 1 or limit > _MAX_LIMIT:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"limit must be between 1 and {_MAX_LIMIT}",
         )
     if proposal_status is not None and proposal_status not in _VALID_STATUSES:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"status must be one of {_VALID_STATUSES}",
         )
     if category is not None and category not in _VALID_CATEGORIES:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"category must be one of {_VALID_CATEGORIES}",
         )
 
@@ -223,7 +223,7 @@ async def _create_validation_backtest(
         or body.universe is None
     ):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 "strategy_id, start_date, end_date, universe are required when "
                 "skip_backtest is false"
@@ -231,7 +231,7 @@ async def _create_validation_backtest(
         )
     if body.start_date > body.end_date:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="start_date must be <= end_date",
         )
 
@@ -241,7 +241,7 @@ async def _create_validation_backtest(
     )
     if not strategy_exists:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Unknown strategy_id '{body.strategy_id}'",
         )
 
@@ -450,7 +450,7 @@ async def fetch_backtest_status(
     """Return the ``status`` / ``started_at`` / ``completed_at`` of a backtest run."""
     row = await conn.fetchrow(
         """
-        SELECT id, status, created_at, started_at, completed_at
+        SELECT id, status, started_at, ended_at
           FROM theeyebeta.backtest_runs
          WHERE id = $1
         """,
@@ -461,9 +461,9 @@ async def fetch_backtest_status(
     return {
         "id": row["id"],
         "status": row["status"],
-        "created_at": row["created_at"],
+        "created_at": row["started_at"],
         "started_at": row["started_at"],
-        "completed_at": row["completed_at"],
+        "completed_at": row["ended_at"],
     }
 
 
@@ -525,9 +525,9 @@ def register_proposals_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         proposal_id: UUID,
         body: ApproveProposalRequest,
-        user: dict[str, str] = require_role(Role.OPERATOR),
         conn: DbConn,
         nats: NatsClient,
+        user: dict[str, str] = require_role(Role.OPERATOR),
     ) -> ApproveProposalResponse:
         """Transition a proposal to ``approved`` and request a validation backtest."""
         actor = _actor(user)
@@ -554,8 +554,8 @@ def register_proposals_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         proposal_id: UUID,
         body: RejectProposalRequest,
-        user: dict[str, str] = require_role(Role.OPERATOR),
         conn: DbConn,
+        user: dict[str, str] = require_role(Role.OPERATOR),
     ) -> RejectProposalResponse:
         """Transition a proposal to ``rejected`` with a required ``review_notes``."""
         actor = _actor(user)

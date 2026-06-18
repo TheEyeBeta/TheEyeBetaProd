@@ -1,9 +1,12 @@
 [Unit]
-Description=TheEyeBeta Supabase sync v2 (after nightly chain)
+Description=TheEyeBeta Supabase stock_snapshots sync (2m market hours, 15m off-hours)
 
 [Timer]
-OnCalendar=Mon..Fri 22:20 UTC
+OnCalendar=Mon..Fri *-*-* 13:30/2:00
+OnCalendar=Mon..Fri *-*-* 00/15:00
+OnCalendar=Sat..Sun *-*-* 00/15:00
 Persistent=false
+RandomizedDelaySec=10
 Unit=theeye-supabase-sync.service
 
 [Install]

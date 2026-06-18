@@ -10,6 +10,7 @@ import json
 from typing import Any
 from unittest.mock import patch
 
+import asyncpg
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -77,16 +78,39 @@ async def test_orders_empty_state(
     auth_headers: dict[str, str],
 ) -> None:
     """When there are no pending orders the table renders the empty-state row."""
-    # Use the *admin* DSN (migrations only — no seed) so the table is empty.
-    from conftest import _admin_client_for_dsn  # type: ignore[import-not-found]  # noqa: PLC0415
+    from services.admin_service.tests.conftest import (
+        _admin_client_for_dsn,  # type: ignore[import-not-found]  # noqa: PLC0415
+    )
 
-    async for tup in _admin_client_for_dsn(admin_integration_dsn, auth_headers):
-        client, _ = tup
-        response = await client.get("/admin/orders", headers=auth_headers)
-        assert response.status_code == 200
-        body = response.text
-        assert "Nothing pending" in body
-        assert 'data-empty="true"' in body
+    conn = await asyncpg.connect(dsn=admin_integration_dsn)
+    pending_ids = await conn.fetch(
+        """
+        UPDATE theeyebeta.orders
+           SET status = 'approved'
+         WHERE status = 'pending_approval'
+         RETURNING id
+        """,
+    )
+    try:
+        async for tup in _admin_client_for_dsn(admin_integration_dsn, auth_headers):
+            client, _ = tup
+            response = await client.get("/admin/orders", headers=auth_headers)
+            assert response.status_code == 200
+            body = response.text
+            assert "Nothing pending" in body
+            assert 'data-empty="true"' in body
+    finally:
+        ids = [row["id"] for row in pending_ids]
+        if ids:
+            await conn.execute(
+                """
+                UPDATE theeyebeta.orders
+                   SET status = 'pending_approval'
+                 WHERE id = ANY($1::uuid[])
+                """,
+                ids,
+            )
+        await conn.close()
 
 
 @pytest.mark.integration
@@ -298,12 +322,15 @@ async def test_orders_page_requires_auth(
     orders_page_integration_dsn: str,
 ) -> None:
     """Every orders route is JWT-gated."""
-    from conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
+    from settings import Settings, get_settings  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
         _close_test_resources,
         _init_test_resources,
     )
-    from main import create_app  # noqa: PLC0415
-    from settings import Settings, get_settings  # noqa: PLC0415
 
     get_settings.cache_clear()
     settings = Settings(
@@ -314,7 +341,7 @@ async def test_orders_page_requires_auth(
         patch("deps.init_resources", _init_test_resources),
         patch("deps.close_resources", _close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         transport = ASGITransport(app=app, lifespan="on")
         async with AsyncClient(transport=transport, base_url="http://test") as anon:
             page = await anon.get("/admin/orders")

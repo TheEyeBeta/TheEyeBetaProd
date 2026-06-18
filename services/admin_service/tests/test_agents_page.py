@@ -137,7 +137,7 @@ async def test_agent_constitution_fragment_renders_markdown_source(
     assert 'data-tab="constitution"' in body
     assert "data-constitution-source" in body
     assert "data-constitution-target" in body
-    # Real file content — agents/technical-analyst.md has a "# Role" heading.
+    # Real file content has a "# Role" heading.
     assert "# Role" in body
 
 
@@ -230,7 +230,7 @@ async def test_agent_run_fragment_happy_path(
 
         async def post(self, _url: str, json: dict[str, Any]) -> _Resp:
             assert json["snapshot_id"] == str(SNAPSHOT_ID)
-            assert json["kind"] == "manual"
+            assert json["kind"] == "run"
             return _Resp()
 
     with patch("api.agents.httpx.AsyncClient", _StubClient):
@@ -239,7 +239,7 @@ async def test_agent_run_fragment_happy_path(
             headers=auth_headers,
             data={
                 "snapshot_id": str(SNAPSHOT_ID),
-                "kind": "manual",
+                "kind": "run",
                 "prompt": "  please re-analyse  ",
             },
         )
@@ -281,7 +281,7 @@ async def test_agent_run_fragment_runtime_unreachable_returns_flash(
             headers=auth_headers,
             data={
                 "snapshot_id": str(SNAPSHOT_ID),
-                "kind": "manual",
+                "kind": "run",
             },
         )
     assert response.status_code == 200
@@ -303,7 +303,7 @@ async def test_agent_run_fragment_unknown_agent(
         headers=auth_headers,
         data={
             "snapshot_id": str(SNAPSHOT_ID),
-            "kind": "manual",
+            "kind": "run",
         },
     )
     assert response.status_code == 200
@@ -321,12 +321,15 @@ async def test_agents_page_requires_auth(
     agents_integration_dsn: str,
 ) -> None:
     """All agents-page routes are JWT-gated."""
-    from conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
+    from settings import Settings, get_settings  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
         _close_test_resources,
         _init_test_resources,
     )
-    from main import create_app  # noqa: PLC0415
-    from settings import Settings, get_settings  # noqa: PLC0415
 
     get_settings.cache_clear()
     settings = Settings(database_url=agents_integration_dsn)
@@ -334,7 +337,7 @@ async def test_agents_page_requires_auth(
         patch("deps.init_resources", _init_test_resources),
         patch("deps.close_resources", _close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         transport = ASGITransport(app=app, lifespan="on")
         async with AsyncClient(transport=transport, base_url="http://test") as anon:
             assert (
@@ -350,6 +353,6 @@ async def test_agents_page_requires_auth(
             assert (
                 await anon.post(
                     f"/admin/agents/fragments/{AGENT_ID}/run",
-                    data={"snapshot_id": str(SNAPSHOT_ID), "kind": "manual"},
+                    data={"snapshot_id": str(SNAPSHOT_ID), "kind": "run"},
                 )
             ).status_code == 401

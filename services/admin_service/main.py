@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
+import deps
 import structlog
 import uvicorn
 from api.agents import register_agents_routes
@@ -16,6 +17,7 @@ from api.audit import register_audit_routes
 from api.audit import router as audit_router
 from api.backtest import register_backtest_routes
 from api.backtest import router as backtest_router
+from api.briefings import router as briefings_router
 from api.broker import register_broker_routes
 from api.broker import router as broker_router
 from api.compliance import register_compliance_routes
@@ -52,9 +54,9 @@ from api.views import register_views_routes
 from api.views import router as views_router
 from api.workers import register_workers_routes
 from api.workers import router as workers_router
+from audit_log import configure_audit_dsn
 from auth import register_auth_routes
 from auth import router as auth_router
-from deps import bind_app_state, close_resources, init_resources
 from dotenv import load_dotenv
 from errors import register_error_handlers
 from fastapi import FastAPI, Request, Response
@@ -106,8 +108,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        await init_resources(cfg)
-        bind_app_state(app, cfg)
+        await deps.init_resources(cfg)
+        deps.bind_app_state(app, cfg)
+        configure_audit_dsn(cfg.database_url)
         app.state.event_broadcaster = EventBroadcaster()
         await start_nats_event_bridge(app)
         log.info("admin_service_started", host=cfg.host, port=cfg.port)
@@ -115,7 +118,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         drain = getattr(app.state, "_nats_event_drain", None)
         if drain is not None:
             await drain()
-        await close_resources()
+        await deps.close_resources()
         log.info("admin_service_stopped")
 
     app = FastAPI(
@@ -166,6 +169,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(orders_router, prefix="/admin")
     app.include_router(audit_router, prefix="/admin")
     app.include_router(agents_router, prefix="/admin")
+    app.include_router(briefings_router, prefix="/admin")
     app.include_router(guard_router, prefix="/admin")
     app.include_router(services_router, prefix="/admin")
     app.include_router(backtest_router, prefix="/admin")

@@ -5,10 +5,10 @@
 
 #include "zinc/risk/cvar.hpp"
 
+#include "zinc/risk/detail/quantile.hpp"
+
 #include <limits>
 #include <vector>
-
-#include "zinc/risk/detail/quantile.hpp"
 
 namespace zinc::risk {
 
@@ -25,4 +25,4 @@ double cvar(std::span<const double> samples, double alpha) noexcept {
     return detail::tail_mean(samples, threshold);
 }
 
-}  // namespace zinc::risk
+} // namespace zinc::risk

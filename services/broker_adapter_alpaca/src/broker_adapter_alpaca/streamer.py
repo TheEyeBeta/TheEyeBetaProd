@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from contextlib import suppress
 from typing import Any
 
 import nats
@@ -39,7 +40,7 @@ class TradeUpdateStreamer:
         self._adapter.stop_stream()
         if self._task is not None:
             self._task.cancel()
-            with asyncio.suppress(asyncio.CancelledError):
+            with suppress(asyncio.CancelledError):
                 await self._task
             self._task = None
         if self._nc is not None:
@@ -66,7 +67,7 @@ class TradeUpdateStreamer:
             log.warning(
                 "trade_update_missing_order_id",
                 client_order_id=event.get("client_order_id"),
-                event=event_type,
+                trade_event=event_type,
             )
             return
 

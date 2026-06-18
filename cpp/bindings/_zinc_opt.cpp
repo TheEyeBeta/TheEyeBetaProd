@@ -3,17 +3,17 @@
  * @brief  nanobind bindings for zinc::opt kernels.
  */
 
-#include <nanobind/nanobind.h>
-#include <nanobind/ndarray.h>
-#include <nanobind/stl/vector.h>
-
-#include <Eigen/Dense>
-#include <stdexcept>
-
 #include "zinc/opt/black_litterman.hpp"
 #include "zinc/opt/hrp.hpp"
 #include "zinc/opt/mvo.hpp"
 #include "zinc/opt/portfolio_weights.hpp"
+
+#include <stdexcept>
+
+#include <Eigen/Dense>
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/vector.h>
 
 namespace nb = nanobind;
 
@@ -27,7 +27,7 @@ Eigen::Map<const Eigen::VectorXd> as_vector(const ContiguousVector& array) {
         throw std::invalid_argument("array must be one-dimensional");
     }
     return Eigen::Map<const Eigen::VectorXd>(array.data(),
-                                            static_cast<Eigen::Index>(array.shape(0)));
+                                             static_cast<Eigen::Index>(array.shape(0)));
 }
 
 Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
@@ -35,13 +35,12 @@ as_matrix(const ContiguousMatrix& array) {
     if (array.ndim() != 2) {
         throw std::invalid_argument("array must be two-dimensional");
     }
-    return Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,
-                                          Eigen::RowMajor>>(
+    return Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(
         array.data(), static_cast<Eigen::Index>(array.shape(0)),
         static_cast<Eigen::Index>(array.shape(1)));
 }
 
-}  // namespace
+} // namespace
 
 NB_MODULE(_zinc_opt, module) {
     module.doc() = "zinc::opt — Markowitz MVO, Black–Litterman, and HRP portfolio weights";
@@ -93,8 +92,7 @@ long_only is true. Weights sum to 1.0.
             }
             const auto picking_map = as_matrix(picking_matrix);
             if (picking_map.cols() != assets) {
-                throw std::invalid_argument(
-                    "picking_matrix columns must match covariance size");
+                throw std::invalid_argument("picking_matrix columns must match covariance size");
             }
             const Eigen::Index views = picking_map.rows();
             if (as_vector(view_returns).size() != views ||
@@ -103,9 +101,8 @@ long_only is true. Weights sum to 1.0.
                     "view_returns and view_uncertainty length must match picking_matrix rows");
             }
             return zinc::opt::black_litterman(
-                covariance_map, as_vector(market_weights), picking_map,
-                as_vector(view_returns), as_vector(view_uncertainty), risk_aversion, tau,
-                long_only);
+                covariance_map, as_vector(market_weights), picking_map, as_vector(view_returns),
+                as_vector(view_uncertainty), risk_aversion, tau, long_only);
         },
         nb::arg("covariance"), nb::arg("market_weights"), nb::arg("picking_matrix"),
         nb::arg("view_returns"), nb::arg("view_uncertainty"), nb::arg("risk_aversion") = 2.5,

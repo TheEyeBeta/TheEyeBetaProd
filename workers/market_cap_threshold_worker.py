@@ -116,9 +116,11 @@ async def record_cap_events(
             crossing.instrument_id,
             crossing.event_type,
             Decimal(str(crossing.market_cap)),
-            Decimal(str(crossing.prior_market_cap))
-            if crossing.prior_market_cap is not None
-            else None,
+            (
+                Decimal(str(crossing.prior_market_cap))
+                if crossing.prior_market_cap is not None
+                else None
+            ),
             action_for_event(crossing.event_type),
         )
         written += 1

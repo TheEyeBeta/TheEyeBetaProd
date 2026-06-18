@@ -7,11 +7,11 @@
 
 #include <cmath>
 #include <limits>
-#include <random>
 #include <span>
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <random>
 
 namespace {
 
@@ -21,7 +21,7 @@ bool IsNan(double value) {
     return std::isnan(value);
 }
 
-}  // namespace
+} // namespace
 
 TEST(HistoricalVarTest, HappyPathHandComputed) {
     const double samples[] = {-5.0, -3.0, -2.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0};

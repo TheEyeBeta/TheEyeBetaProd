@@ -182,5 +182,5 @@ In the CI workflow, the decrypt script automatically uses `$SOPS_AGE_KEY` when t
 | `ALPACA_API_SECRET_PAPER` | Order service | Paper trading only |
 | `JWT_PRIVATE_KEY` | Auth service | RS256 signing key (PEM) |
 | `JWT_PUBLIC_KEY` | Auth service | RS256 verification key (PEM) |
-| `ADMIN_USERNAME` | Admin service | Admin UI login |
-| `ADMIN_PASSWORD_BCRYPT` | Admin service | bcrypt hash, not plaintext |
+| `ADMIN_USERNAME` | Data ingestion service | Basic Auth username; not an admin-service bootstrap |
+| `ADMIN_PASSWORD_BCRYPT` | Data ingestion service | Basic Auth bcrypt hash; not an admin-service bootstrap |

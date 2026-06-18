@@ -38,6 +38,12 @@ Closes #<!-- issue number -->
 - [ ] `docs/architecture.md` updated (service map, port map, or data model)
 - [ ] ADR added in `docs/adr/` — see [CONTRIBUTING.md §Adding a New ADR](../CONTRIBUTING.md#adding-a-new-adr)
 
+**If this PR touches `services/`, `db/migrations/`, `docker-compose.yml`, `deploy/systemd/`, `config/`, or `.github/workflows/`**
+
+- [ ] Ran the `doc-sync` skill (`.claude/skills/doc-sync/SKILL.md`) to keep `docs/architecture.md`,
+      `README.md`, `docs/repo-layout.md`, `SERVICES_STATUS.md`, `docs/data-model.md`,
+      `docs/agents.md`, and `docs/ci.md` in sync with the change
+
 **If admin-service UI changed**
 
 - [ ] Screenshot or screen recording attached below

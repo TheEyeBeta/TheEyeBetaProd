@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
+import importlib.util
+import sys
 from datetime import date
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
-import main as main_module
 import pytest
 from fastapi.testclient import TestClient
-from main import create_app
 from snapshot_packager.package import PackageResult
+
+_MAIN_PATH = Path(__file__).resolve().parents[1] / "main.py"
+_SPEC = importlib.util.spec_from_file_location("snapshot_packager_main", _MAIN_PATH)
+assert _SPEC is not None and _SPEC.loader is not None
+main_module = importlib.util.module_from_spec(_SPEC)
+sys.modules["snapshot_packager_main"] = main_module
+_SPEC.loader.exec_module(main_module)
 
 
 @pytest.mark.unit
@@ -37,15 +45,11 @@ def test_snapshots_build_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_consumer.run_forever = AsyncMock()
 
     with (
-        patch("main.asyncpg.create_pool", AsyncMock(return_value=mock_pool)),
-        patch("main.SnapshotPackagerService", return_value=mock_consumer),
-        patch(
-            "main.package_snapshot",
-            new_callable=AsyncMock,
-            return_value=result,
-        ),
+        patch.object(main_module.asyncpg, "create_pool", AsyncMock(return_value=mock_pool)),
+        patch.object(main_module, "SnapshotPackagerService", return_value=mock_consumer),
+        patch.object(main_module, "package_snapshot", AsyncMock(return_value=result)),
     ):
-        client = TestClient(create_app())
+        client = TestClient(main_module.create_app())
         main_module._pool = mock_pool
         response = client.post(
             "/snapshots/build",

@@ -18,6 +18,7 @@ class SubmitOrderRequest(BaseModel):
     side: str
     qty: float = Field(gt=0)
     order_type: str = "market"
+    account: str = "zinc"  # sub-account: "zinc" | "nyse" | "nasdaq"
 
 
 class SubmitOrderResult(BaseModel):
@@ -32,6 +33,7 @@ class SubmitOrderResult(BaseModel):
     side: str
     qty: float
     status: str
+    account: str = "zinc"
     raw: dict[str, Any] = Field(default_factory=dict)
 
 

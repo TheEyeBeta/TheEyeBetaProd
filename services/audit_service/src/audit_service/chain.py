@@ -227,3 +227,40 @@ async def verify_range(
         return VerifyResult(status="OK", rows_checked=0)
     initial_prev = await fetch_prev_hash_before(dsn, from_ts)
     return verify_rows(rows, initial_prev_hash=initial_prev)
+
+
+async def verify_chain(dsn: str) -> VerifyResult:
+    """Verify hash chain integrity across every row in ``audit_log``.
+
+    Fetches all rows ordered by ``id``, recomputes each ``row_hash`` from
+    ``SHA-256(prev_hash || canonical_json(row))``, and asserts the stored
+    value matches.  The genesis hash is used as the seed for the first row.
+
+    Returns a :class:`VerifyResult` with ``status="OK"`` when the chain is
+    intact, or ``status="MISMATCH"`` with the first bad row id on failure.
+    """
+    async with await psycopg.AsyncConnection.connect(dsn) as conn:
+        cur = await conn.execute(
+            """
+            SELECT id, ts, actor, action, entity_type, entity_id, payload, prev_hash, row_hash
+              FROM theeyebeta.audit_log
+             ORDER BY id ASC
+            """,
+        )
+        rows_raw = await cur.fetchall()
+
+    rows = [
+        AuditRow(
+            id=int(r[0]),
+            ts=r[1],
+            actor=str(r[2]),
+            action=str(r[3]),
+            entity_type=str(r[4]),
+            entity_id=str(r[5]),
+            payload=r[6] if isinstance(r[6], dict) else json.loads(r[6]),
+            prev_hash=bytes(r[7]) if r[7] is not None else None,
+            row_hash=bytes(r[8]),
+        )
+        for r in rows_raw
+    ]
+    return verify_rows(rows, initial_prev_hash=GENESIS_HASH)

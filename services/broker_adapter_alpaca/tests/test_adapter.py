@@ -57,10 +57,35 @@ def test_submit_order_registers_uuidv7_client_mapping() -> None:
 
 
 @pytest.mark.unit
-def test_normalize_trade_update_builds_nats_payload() -> None:
+def test_get_account_returns_cash_equity_buying_power() -> None:
+    """get_account surfaces the Alpaca account fields tb account balance reads."""
+    settings = Settings(mode="paper", database_url="postgresql://test:test@localhost/db")
+    adapter = AlpacaAdapter(settings)
+
+    raw_account = MagicMock()
+    raw_account.cash = "-222847.94"
+    raw_account.equity = "98304.75"
+    raw_account.buying_power = "0"
+    raw_account.portfolio_value = "98304.75"
+
+    with patch.object(adapter, "_client") as mock_client:
+        mock_client.return_value.get_account.return_value = raw_account
+        result = adapter.get_account("zinc")
+
+    assert result == {
+        "account": "zinc",
+        "cash": -222847.94,
+        "equity": 98304.75,
+        "buying_power": 0.0,
+        "portfolio_value": 98304.75,
+    }
+
+
+@pytest.mark.unit
+async def test_normalize_trade_update_builds_nats_payload() -> None:
     """Trade updates include order_id routing and full event envelope."""
     adapter = AlpacaAdapter(Settings(mode="paper", database_url="postgresql://x/x"))
-    adapter.register_order_mapping("order-abc", "client-xyz")
+    adapter.register_order_mapping("order-abc", "client-xyz", "zinc")
 
     event = {
         "event": "fill",
@@ -75,7 +100,7 @@ def test_normalize_trade_update_builds_nats_payload() -> None:
             "filled_avg_price": 190.5,
         },
     }
-    normalized = normalize_trade_update(event, adapter)
+    normalized = await normalize_trade_update(event, adapter)
 
     assert normalized["order_id"] == "order-abc"
     assert normalized["event"] == "fill"
@@ -83,3 +108,25 @@ def test_normalize_trade_update_builds_nats_payload() -> None:
     assert normalized["price"] == 190.5
     assert normalized["order"]["symbol"] == "AAPL"
     assert normalized["raw"] == event
+
+
+@pytest.mark.unit
+async def test_normalize_trade_update_falls_back_to_db_after_cache_miss(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A restart-wiped in-memory map is recovered via the persisted client_order_id."""
+    adapter = AlpacaAdapter(Settings(mode="paper", database_url="postgresql://x/x"))
+
+    async def fake_resolve(self: AlpacaAdapter, client_order_id: str) -> str | None:
+        assert client_order_id == "client-xyz"
+        return "order-from-db"
+
+    monkeypatch.setattr(AlpacaAdapter, "resolve_order_id_durable", fake_resolve)
+
+    event = {
+        "event": "fill",
+        "order": {"id": "alpaca-99", "client_order_id": "client-xyz", "filled_qty": 1},
+    }
+    normalized = await normalize_trade_update(event, adapter)
+
+    assert normalized["order_id"] == "order-from-db"

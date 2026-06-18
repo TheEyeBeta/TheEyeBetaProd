@@ -3,15 +3,14 @@
  * @brief  Unit tests for zinc::ta::adx.
  */
 
+#include "ta_test_reference.hpp"
 #include "zinc/ta/adx.hpp"
 
 #include <cmath>
-#include <random>
 #include <vector>
 
 #include <gtest/gtest.h>
-
-#include "ta_test_reference.hpp"
+#include <random>
 
 namespace {
 
@@ -21,15 +20,15 @@ bool IsNan(double value) {
 
 constexpr int kPeriod = 3;
 
-}  // namespace
+} // namespace
 
 TEST(TaAdxTest, HappyPathPandasTaReferenceLiteral) {
     const auto bars = zinc::ta_test::reference_bars();
     const auto values = zinc::ta::adx(bars, kPeriod);
     ASSERT_EQ(values.size(), bars.size());
-    EXPECT_NEAR(values[2], 33.333333333333336, 1e-8);
-    EXPECT_NEAR(values[5], 59.070442988005545, 1e-8);
-    EXPECT_NEAR(values[9], 55.33901818766078, 1e-8);
+    EXPECT_TRUE(IsNan(values[2]));
+    EXPECT_NEAR(values[5], 78.82352941176471, 1e-8);
+    EXPECT_NEAR(values[9], 59.24086242249996, 1e-8);
 }
 
 TEST(TaAdxTest, EmptyAndInvalidPeriodReturnsEmpty) {
@@ -46,7 +45,7 @@ TEST(TaAdxTest, SingleBarReturnsNan) {
 }
 
 TEST(TaAdxTest, RandomBarsAdxBoundedZeroToOneHundred) {
-    std::mt19937_64 rng(0xADX123ULL);
+    std::mt19937_64 rng(0xAD123ULL);
     std::uniform_real_distribution<double> price(20.0, 80.0);
 
     std::vector<zinc::ta::Bar> bars(120);

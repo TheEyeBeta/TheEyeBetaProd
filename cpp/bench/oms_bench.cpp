@@ -3,10 +3,10 @@
  * @brief  Google Benchmark suite for zinc::oms kernels.
  */
 
-#include <benchmark/benchmark.h>
-
 #include "zinc/oms/order.hpp"
 #include "zinc/oms/state_machine.hpp"
+
+#include <benchmark/benchmark.h>
 
 namespace {
 
@@ -18,7 +18,7 @@ zinc::oms::Order make_accepted_order() {
     return order;
 }
 
-}  // namespace
+} // namespace
 
 static void BM_state_machine_transition_throughput(benchmark::State& state) {
     for (auto _ : state) {

@@ -3,15 +3,16 @@
  * @brief  Google Benchmark suite for zinc::risk kernels.
  */
 
-#include <random>
-#include <vector>
-
-#include <benchmark/benchmark.h>
-#include <Eigen/Dense>
-
 #include "bench_common.hpp"
 #include "zinc/risk/correlation_matrix.hpp"
 #include "zinc/risk/historical_var.hpp"
+
+#include <vector>
+
+#include <Eigen/Dense>
+
+#include <benchmark/benchmark.h>
+#include <random>
 
 namespace {
 
@@ -28,7 +29,7 @@ const Eigen::MatrixXd kCorrelationData = []() {
     return matrix;
 }();
 
-}  // namespace
+} // namespace
 
 static void BM_historical_var_10k(benchmark::State& state) {
     for (auto _ : state) {

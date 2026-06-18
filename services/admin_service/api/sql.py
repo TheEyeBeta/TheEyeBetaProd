@@ -92,7 +92,7 @@ def _check_blocked_patterns(statement: str) -> None:
     for pattern in _BLOCKED_PATTERNS:
         if pattern.search(statement):
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Blocked SQL pattern: {pattern.pattern}",
             )
 
@@ -120,12 +120,12 @@ def _parse_one(statement: str) -> Statement:
     parsed = [s for s in sqlparse.parse(statement) if s.tokens and str(s).strip()]
     if not parsed:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Empty SQL statement",
         )
     if len(parsed) > 1:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Multiple statements are not allowed",
         )
     return parsed[0]
@@ -148,14 +148,14 @@ def _validate_select_only(statement: str) -> Statement:
     if stmt_type not in {"SELECT", "UNKNOWN"}:
         # ``UNKNOWN`` covers ``WITH`` CTEs that ultimately SELECT.
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Only SELECT statements are allowed (got {stmt_type})",
         )
     keywords = _statement_keywords(stmt)
     forbidden = keywords & _FORBIDDEN_QUERY_KEYWORDS
     if forbidden:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Forbidden keyword in /query: {sorted(forbidden)}",
         )
     if stmt_type == "UNKNOWN":
@@ -166,7 +166,7 @@ def _validate_select_only(statement: str) -> Statement:
         )
         if first_token is None or first_token.value.upper() != "WITH":
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Only SELECT or WITH...SELECT statements are allowed",
             )
     return stmt
@@ -180,7 +180,7 @@ def _validate_execute(statement: str) -> Statement:
     for table in _PROTECTED_TABLES:
         if table in lowered:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Statement may not reference protected table '{table}'",
             )
     return stmt
@@ -249,7 +249,7 @@ async def run_select_statement(
         ) from exc
     except asyncpg.PostgresError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 
@@ -283,7 +283,7 @@ async def run_write_statement(
     """
     if not idempotency_key or not idempotency_key.strip():
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="X-Idempotency-Key header is required",
         )
     _validate_execute(statement)
@@ -328,7 +328,7 @@ async def run_write_statement(
         ) from exc
     except asyncpg.PostgresError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 
@@ -377,12 +377,12 @@ def register_sql_routes(limiter: Limiter) -> APIRouter:
         """Execute a write SQL statement after explicit confirmation (MASTER_ADMIN)."""
         if (x_confirm or "").lower() != "true":
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="X-Confirm: true header is required",
             )
         if not x_idempotency_key or not x_idempotency_key.strip():
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="X-Idempotency-Key header is required",
             )
 

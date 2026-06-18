@@ -10,10 +10,11 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
-#include <numbers>
 #include <numeric>
 #include <span>
 #include <vector>
+
+#include <numbers>
 
 namespace zinc::ta {
 
@@ -71,9 +72,8 @@ void initialize_model(GaussianHmm& model, std::span<const double> observations) 
     model.means[1] = high_count > 0 ? high_sum / static_cast<double>(high_count) : median + 1.0;
 
     double global_variance = 0.0;
-    const double global_mean =
-        std::accumulate(observations.begin(), observations.end(), 0.0) /
-        static_cast<double>(observations.size());
+    const double global_mean = std::accumulate(observations.begin(), observations.end(), 0.0) /
+                               static_cast<double>(observations.size());
     for (const double value : observations) {
         const double delta = value - global_mean;
         global_variance += delta * delta;
@@ -84,8 +84,7 @@ void initialize_model(GaussianHmm& model, std::span<const double> observations) 
 
     for (int row = 0; row < kNumStates; ++row) {
         for (int column = 0; column < kNumStates; ++column) {
-            model.transition_log[static_cast<std::size_t>(row)]
-                                 [static_cast<std::size_t>(column)] =
+            model.transition_log[static_cast<std::size_t>(row)][static_cast<std::size_t>(column)] =
                 row == column ? std::log(0.95) : std::log(0.05);
         }
     }
@@ -101,9 +100,9 @@ bool baum_welch(GaussianHmm& model, std::span<const double> observations, int ma
                                                   std::vector<double>(kNumStates, kLogZero));
     for (std::size_t time = 0; time < length; ++time) {
         for (int state = 0; state < kNumStates; ++state) {
-            emission_log[time][static_cast<std::size_t>(state)] = gaussian_log_pdf(
-                observations[time], model.means[static_cast<std::size_t>(state)],
-                model.variances[static_cast<std::size_t>(state)]);
+            emission_log[time][static_cast<std::size_t>(state)] =
+                gaussian_log_pdf(observations[time], model.means[static_cast<std::size_t>(state)],
+                                 model.variances[static_cast<std::size_t>(state)]);
         }
     }
 
@@ -178,14 +177,15 @@ bool baum_welch(GaussianHmm& model, std::span<const double> observations, int ma
         for (std::size_t time = 0; time < length; ++time) {
             double normalizer = kLogZero;
             for (int state = 0; state < kNumStates; ++state) {
-                normalizer = log_sum_exp(normalizer, alpha[time][static_cast<std::size_t>(state)] +
-                                                      beta[time][static_cast<std::size_t>(state)]);
+                normalizer =
+                    log_sum_exp(normalizer, alpha[time][static_cast<std::size_t>(state)] +
+                                                beta[time][static_cast<std::size_t>(state)]);
             }
 
             for (int state = 0; state < kNumStates; ++state) {
-                gamma[time][static_cast<std::size_t>(state)] = std::exp(
-                    alpha[time][static_cast<std::size_t>(state)] +
-                    beta[time][static_cast<std::size_t>(state)] - normalizer);
+                gamma[time][static_cast<std::size_t>(state)] =
+                    std::exp(alpha[time][static_cast<std::size_t>(state)] +
+                             beta[time][static_cast<std::size_t>(state)] - normalizer);
             }
 
             if (time + 1 < length) {
@@ -210,8 +210,8 @@ bool baum_welch(GaussianHmm& model, std::span<const double> observations, int ma
                                                 [static_cast<std::size_t>(to_state)] +
                             emission_log[time + 1][static_cast<std::size_t>(to_state)] +
                             beta[time + 1][static_cast<std::size_t>(to_state)] - xi_normalizer;
-                        xi[static_cast<std::size_t>(from_state)][static_cast<std::size_t>(to_state)] +=
-                            std::exp(value);
+                        xi[static_cast<std::size_t>(from_state)]
+                          [static_cast<std::size_t>(to_state)] += std::exp(value);
                     }
                 }
             }
@@ -228,14 +228,15 @@ bool baum_welch(GaussianHmm& model, std::span<const double> observations, int ma
         for (int from_state = 0; from_state < kNumStates; ++from_state) {
             double row_sum = 0.0;
             for (int to_state = 0; to_state < kNumStates; ++to_state) {
-                row_sum += xi[static_cast<std::size_t>(from_state)][static_cast<std::size_t>(to_state)];
+                row_sum +=
+                    xi[static_cast<std::size_t>(from_state)][static_cast<std::size_t>(to_state)];
             }
             if (row_sum > 0.0) {
                 for (int to_state = 0; to_state < kNumStates; ++to_state) {
                     model.transition_log[static_cast<std::size_t>(from_state)]
                                         [static_cast<std::size_t>(to_state)] =
                         std::log(xi[static_cast<std::size_t>(from_state)]
-                                           [static_cast<std::size_t>(to_state)] /
+                                   [static_cast<std::size_t>(to_state)] /
                                  row_sum);
                 }
             }
@@ -285,10 +286,9 @@ std::vector<int> viterbi_decode(const GaussianHmm& model, std::span<const double
             double best_score = kLogZero;
             int best_state = 0;
             for (int previous = 0; previous < kNumStates; ++previous) {
-                const double candidate =
-                    delta[time - 1][static_cast<std::size_t>(previous)] +
-                    model.transition_log[static_cast<std::size_t>(previous)]
-                                        [static_cast<std::size_t>(state)];
+                const double candidate = delta[time - 1][static_cast<std::size_t>(previous)] +
+                                         model.transition_log[static_cast<std::size_t>(previous)]
+                                                             [static_cast<std::size_t>(state)];
                 if (candidate > best_score) {
                     best_score = candidate;
                     best_state = previous;
@@ -315,14 +315,13 @@ std::vector<int> viterbi_decode(const GaussianHmm& model, std::span<const double
     path[length - 1] = best_final_state;
     for (int time = static_cast<int>(length) - 2; time >= 0; --time) {
         const std::size_t time_index = static_cast<std::size_t>(time);
-        path[time_index] =
-            psi[time_index + 1][static_cast<std::size_t>(path[time_index + 1])];
+        path[time_index] = psi[time_index + 1][static_cast<std::size_t>(path[time_index + 1])];
     }
 
     return path;
 }
 
-}  // namespace
+} // namespace
 
 HmmRegimeResult hmm_regime(std::span<const double> observations, int n_states, int max_iter) {
     HmmRegimeResult result;
@@ -340,4 +339,4 @@ HmmRegimeResult hmm_regime(std::span<const double> observations, int n_states, i
     return result;
 }
 
-}  // namespace zinc::ta
+} // namespace zinc::ta

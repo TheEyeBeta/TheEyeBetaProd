@@ -49,7 +49,9 @@ _SERVICE_ROOT = Path(__file__).resolve().parents[1]
 if str(_SERVICE_ROOT) not in sys.path:
     sys.path.insert(0, str(_SERVICE_ROOT))
 
-from tests.conftest import _RecordingNats  # noqa: E402 — sys.path tweak above.
+from services.admin_service.tests.conftest import (
+    _RecordingNats,  # noqa: E402 — sys.path tweak above.
+)
 
 # Pin axe-core to a version that ships ``axe.run`` returning a Promise.
 _AXE_CDN_URL = "https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js"
@@ -213,7 +215,10 @@ def frontend_app_server(frontend_seeded_dsn: str) -> Iterator[dict[str, str]]:
     """
     import bcrypt
     import uvicorn
-    from main import create_app
+
+    from services.admin_service.tests.conftest import _admin_create_app
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings
 
     private_pem, public_pem = _rsa_keypair_pem()
@@ -240,7 +245,7 @@ def frontend_app_server(frontend_seeded_dsn: str) -> Iterator[dict[str, str]]:
         stack.enter_context(patch("deps.init_resources", _init_frontend_resources))
         stack.enter_context(patch("deps.close_resources", _close_frontend_resources))
 
-        app = create_app(settings)
+        app = create_app(settings=settings)
 
         config = uvicorn.Config(
             app,

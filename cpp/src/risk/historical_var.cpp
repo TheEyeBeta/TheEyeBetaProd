@@ -5,10 +5,10 @@
 
 #include "zinc/risk/historical_var.hpp"
 
+#include "zinc/risk/detail/quantile.hpp"
+
 #include <limits>
 #include <vector>
-
-#include "zinc/risk/detail/quantile.hpp"
 
 namespace zinc::risk {
 
@@ -24,4 +24,4 @@ double historical_var(std::span<const double> samples, double alpha) noexcept {
     return detail::nth_lower_quantile(work, alpha);
 }
 
-}  // namespace zinc::risk
+} // namespace zinc::risk

@@ -12,6 +12,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "structlog>=24.4",
     "python-frontmatter>=1.1",
+    "pyyaml>=6.0",
 ]
 
 [build-system]

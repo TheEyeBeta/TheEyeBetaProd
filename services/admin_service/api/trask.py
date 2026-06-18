@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import asyncpg
 import structlog
@@ -43,6 +45,16 @@ def _breaker_reset_eligible(
     return elapsed >= timedelta(seconds=recovery_timeout_seconds)
 
 
+def _parse_json_object(raw: object) -> dict[str, Any]:
+    """Normalize JSONB values that asyncpg may return as dicts or strings."""
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
 async def fetch_trask_dashboard(conn: asyncpg.Connection) -> TraskDashboardResponse:
     """Aggregate Trask component and breaker state."""
     components = await conn.fetch(
@@ -65,7 +77,7 @@ async def fetch_trask_dashboard(conn: asyncpg.Connection) -> TraskDashboardRespo
     )
     open_breakers: list[TraskBreakerDetail] = []
     for row in breaker_rows:
-        config = row["config"] or {}
+        config = _parse_json_object(row["config"])
         recovery = int(config.get("recovery_timeout_seconds", 300))
         opened = row["opened_at"]
         open_breakers.append(
@@ -154,7 +166,7 @@ def register_trask_routes(limiter: Limiter) -> APIRouter:
         """Reset an open circuit breaker with audit trail."""
         if not body.consequences_acknowledged:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="consequences_acknowledged must be true",
             )
 

@@ -41,4 +41,4 @@ struct HmmRegimeResult {
 [[nodiscard]] HmmRegimeResult hmm_regime(std::span<const double> observations, int n_states = 2,
                                          int max_iter = 100);
 
-}  // namespace zinc::ta
+} // namespace zinc::ta

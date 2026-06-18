@@ -70,7 +70,7 @@ def validate_severity(severity: str | None) -> None:
     """Raise 422 unless ``severity`` is ``None`` or in :data:`VALID_SEVERITIES`."""
     if severity is not None and severity not in _VALID_SEVERITIES:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"severity must be one of {_VALID_SEVERITIES}",
         )
 
@@ -250,8 +250,8 @@ def register_guard_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         violation_id: int,
         body: ResolveGuardViolationRequest,
-        user: dict[str, str] = require_role(Role.OPERATOR),
         conn: DbConn,
+        user: dict[str, str] = require_role(Role.OPERATOR),
     ) -> ResolveGuardViolationResponse:
         """Mark a guard violation as resolved by the current operator."""
         result = await resolve_guard_violation_impl(

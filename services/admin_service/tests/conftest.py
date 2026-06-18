@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import sys
 from collections.abc import AsyncIterator
+from importlib import import_module
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import asyncpg
+import httpx
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 
 # ``zinc_test`` registers itself via the ``pytest11`` entry-point in
 # ``libs/zinc_test/pyproject.toml`` (auto-loaded once ``uv sync`` installs the
@@ -34,6 +37,98 @@ from zinc_test._infra import (  # noqa: E402
 # admin conftest module without depending on ``zinc_test`` internals directly.
 __all__ = ["_normalize_psycopg_dsn", "_run_sql_file", "app_dsn_from_admin"]
 
+if not hasattr(httpx, "_theeye_original_asgi_transport"):
+    httpx._theeye_original_asgi_transport = httpx.ASGITransport  # type: ignore[attr-defined]
+
+_BaseASGITransport = httpx._theeye_original_asgi_transport  # type: ignore[attr-defined]
+
+
+class ASGITransport(_BaseASGITransport):
+    """httpx 0.28-compatible transport with the old ``lifespan='on'`` hook."""
+
+    def __init__(
+        self,
+        *args: Any,
+        lifespan: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        self._lifespan_mode = lifespan
+        self._lifespan_context: Any | None = None
+        self._lifespan_started = False
+        self._lifespan_app = args[0] if args else kwargs.get("app")
+        super().__init__(*args, **kwargs)
+
+    async def _ensure_lifespan_started(self) -> None:
+        if self._lifespan_mode != "on" or self._lifespan_started:
+            return
+        if self._lifespan_app is None:
+            return
+        self._lifespan_context = self._lifespan_app.router.lifespan_context(
+            self._lifespan_app,
+        )
+        await self._lifespan_context.__aenter__()
+        self._lifespan_started = True
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        await self._ensure_lifespan_started()
+        return await super().handle_async_request(request)
+
+    async def aclose(self) -> None:
+        try:
+            await super().aclose()
+        finally:
+            if self._lifespan_started and self._lifespan_context is not None:
+                await self._lifespan_context.__aexit__(None, None, None)
+                self._lifespan_started = False
+
+
+httpx.ASGITransport = ASGITransport
+
+_ADMIN_TOP_LEVEL_MODULES = {
+    "audit_log",
+    "auth",
+    "auth_mfa",
+    "auth_sessions",
+    "deps",
+    "errors",
+    "main",
+    "rbac",
+    "settings",
+    "web",
+}
+
+
+def _purge_admin_modules() -> None:
+    """Drop top-level admin-service modules so dependency overrides bind correctly."""
+    for name, module in list(sys.modules.items()):
+        is_admin_namespace = (
+            name in _ADMIN_TOP_LEVEL_MODULES or name == "api" or name.startswith("api.")
+        )
+        if not is_admin_namespace:
+            continue
+        module_file = getattr(module, "__file__", None)
+        if module_file is None:
+            sys.modules.pop(name, None)
+            continue
+        try:
+            path = Path(module_file).resolve()
+        except OSError:
+            sys.modules.pop(name, None)
+            continue
+        if path.is_relative_to(_SERVICE_ROOT) or name in _ADMIN_TOP_LEVEL_MODULES:
+            sys.modules.pop(name, None)
+
+
+def _admin_create_app() -> Any:
+    """Return admin-service create_app even after other tests mutate sys.path."""
+    service_root = str(_SERVICE_ROOT)
+    if service_root in sys.path:
+        sys.path.remove(service_root)
+    sys.path.insert(0, service_root)
+    _purge_admin_modules()
+    return import_module("main").create_app
+
+
 PENDING_ORDER_ID = "cc0e8400-e29b-41d4-a716-446655440001"
 APPROVED_ORDER_ID = "cc0e8400-e29b-41d4-a716-446655440002"
 PENDING_ORDER_ID_2 = "cc0e8400-e29b-41d4-a716-446655440003"
@@ -44,14 +139,26 @@ class _RecordingNats:
 
     def __init__(self) -> None:
         self.published: list[tuple[str, bytes]] = []
+        self.subscriptions: list[tuple[str, object | None]] = []
 
     async def publish(self, subject: str, payload: bytes) -> None:
         self.published.append((subject, payload))
+
+    async def subscribe(self, subject: str, cb: object | None = None) -> _RecordingSubscription:
+        self.subscriptions.append((subject, cb))
+        return _RecordingSubscription()
 
     async def drain(self) -> None:
         return None
 
     async def close(self) -> None:
+        return None
+
+
+class _RecordingSubscription:
+    """Minimal subscription handle returned by the NATS test stub."""
+
+    async def unsubscribe(self) -> None:
         return None
 
 
@@ -115,6 +222,7 @@ class _MockRedis:
 async def _init_test_resources(settings: object) -> None:
     """Start asyncpg pool, mock NATS, and in-memory Redis."""
     import deps  # noqa: PLC0415
+    from audit_log import configure_audit_dsn  # noqa: PLC0415
 
     deps._pool = await asyncpg.create_pool(  # noqa: SLF001
         dsn=settings.database_url,  # type: ignore[attr-defined]
@@ -126,6 +234,7 @@ async def _init_test_resources(settings: object) -> None:
     mock_redis = _MockRedis()
     deps._redis = mock_redis  # noqa: SLF001
     deps._redis_ops = mock_redis  # noqa: SLF001
+    configure_audit_dsn(settings.database_url)  # type: ignore[attr-defined]
 
 
 async def _close_test_resources() -> None:
@@ -153,10 +262,11 @@ def orders_integration_dsn(admin_integration_dsn: str) -> str:
 
 
 @pytest.fixture(scope="session")
-def audit_integration_dsn(admin_integration_dsn: str) -> str:
+def audit_integration_dsn(alembic_upgraded: str) -> str:
     """Postgres with audit log + checkpoint seed data."""
-    _run_sql_file(admin_integration_dsn, _SQL_DIR / "seed_audit.sql")
-    return admin_integration_dsn
+    app_dsn = app_dsn_from_admin(alembic_upgraded)
+    _run_sql_file(app_dsn, _SQL_DIR / "seed_audit.sql")
+    return app_dsn
 
 
 @pytest.fixture(scope="session")
@@ -202,10 +312,11 @@ def proposals_integration_dsn(admin_integration_dsn: str) -> str:
 
 
 @pytest.fixture(scope="session")
-def dashboard_integration_dsn(admin_integration_dsn: str) -> str:
+def dashboard_integration_dsn(alembic_upgraded: str) -> str:
     """Postgres seeded for the dashboard's four stat-card queries."""
-    _run_sql_file(admin_integration_dsn, _SQL_DIR / "seed_dashboard.sql")
-    return admin_integration_dsn
+    app_dsn = app_dsn_from_admin(alembic_upgraded)
+    _run_sql_file(app_dsn, _SQL_DIR / "seed_dashboard.sql")
+    return app_dsn
 
 
 @pytest.fixture(scope="session")
@@ -226,8 +337,10 @@ async def _admin_client_for_dsn(
     auth_headers: dict[str, str],
 ) -> AsyncIterator[tuple[AsyncClient, _RecordingNats]]:
     """Yield httpx client + NATS stub for a bootstrapped DSN."""
+    create_app = _admin_create_app()
+    from audit_log import configure_audit_dsn  # noqa: PLC0415
     from auth import get_current_user  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
+    from rbac import get_authenticated_user  # noqa: PLC0415
     from settings import Settings, get_settings  # noqa: PLC0415
 
     get_settings.cache_clear()
@@ -245,20 +358,27 @@ async def _admin_client_for_dsn(
         patch("deps.init_resources", _init_test_resources),
         patch("deps.close_resources", _close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
+        await _init_test_resources(settings)
+        import deps  # noqa: PLC0415
+
+        deps.bind_app_state(app, settings)
+        configure_audit_dsn(settings.database_url)
 
         async def _fake_user() -> dict[str, str]:
-            return {"sub": "test-operator"}
+            return {"sub": "test-operator", "role": "MASTER_ADMIN"}
 
         app.dependency_overrides[get_current_user] = _fake_user
-        transport = ASGITransport(app=app, lifespan="on")
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            import deps  # noqa: PLC0415
-
-            nats_stub = deps._nats
-            assert isinstance(nats_stub, _RecordingNats)
-            yield client, nats_stub
-        app.dependency_overrides.clear()
+        app.dependency_overrides[get_authenticated_user] = _fake_user
+        transport = ASGITransport(app=app)
+        try:
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                nats_stub = deps._nats
+                assert isinstance(nats_stub, _RecordingNats)
+                yield client, nats_stub
+        finally:
+            app.dependency_overrides.clear()
+            await _close_test_resources()
 
 
 @pytest.fixture

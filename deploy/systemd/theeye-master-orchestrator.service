@@ -8,7 +8,7 @@ Type=simple
 User=the-eye-beta
 Group=the-eye-beta
 WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/services/master_orchestrator
-EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env.theeye-master-orchestrator
 Environment=PYTHONPATH=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/services/master_orchestrator/src
 ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.venv/bin/python main.py
 Restart=on-failure

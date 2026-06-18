@@ -1,0 +1,9 @@
+[sqlfluff]
+dialect = postgres
+max_line_length = 100
+templater = raw
+
+[sqlfluff:indentation]
+indented_joins = false
+indented_using_on = true
+tab_space_size = 4

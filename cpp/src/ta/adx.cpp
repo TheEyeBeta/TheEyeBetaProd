@@ -5,12 +5,13 @@
 
 #include "zinc/ta/adx.hpp"
 
+#include "zinc/ta/detail/wilder.hpp"
+
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <span>
 #include <vector>
-
-#include "zinc/ta/detail/wilder.hpp"
 
 namespace zinc::ta {
 
@@ -61,4 +62,4 @@ std::vector<double> adx(std::span<const Bar> bars, int period) {
     return detail::wilder_rma(dx, period);
 }
 
-}  // namespace zinc::ta
+} // namespace zinc::ta

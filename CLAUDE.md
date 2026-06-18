@@ -30,14 +30,17 @@ modules, and a full observability stack.
 
 ## 3. Repository Layout
 
-Canonical tree is defined in `docs/architecture.md §14.1`.
-Until that file exists, consult `docs/repo-layout.md` for the bootstrap scaffold.
+Canonical tree is defined in `docs/architecture.md §14.1`; `docs/repo-layout.md` is the
+condensed version. Most of `services/*` is code-complete but **not deployed** — see
+`SERVICES_STATUS.md` before assuming any service is actually running.
 
 Rules of thumb:
-- `services/<name>/` — one directory per deployable service.
+- `services/<name>/` — one directory per deployable service (16 today; most undeployed).
+- `workers/` — the actual production data pipeline, timer-driven via `deploy/systemd/`.
 - `libs/` — shared Python packages (imported by services, never deployed alone).
 - `cpp/` — C++20 source; built with CMake + Conan; Python bindings via nanobind.
-- `infra/` — Docker Compose configs, k8s manifests (future), observability provisioning.
+- `infra/` — dev-infra config mounted into docker-compose containers; `deploy/systemd/` (not
+  `infra/systemd/`) holds the real bare-metal deploy units.
 - `docs/adr/` — Architecture Decision Records (ADR template: `docs/templates/adr.md`).
 - `tests/` — `unit/` (no I/O), `integration/`, `smoke/` (requires live infra).
 
@@ -127,25 +130,31 @@ before execution. This includes but is not limited to:
 
 ## 8. CI
 
-- Platform: GitHub Actions (`.github/workflows/ci.yml`)
-- Matrix: Python 3.12 on `ubuntu-latest`; smoke tests only on `main` push or `smoke`-label PRs
-- CI must be green before any PR merges into `main`
+- Platform: GitHub Actions — 5 workflows (`ci.yml`, `deploy.yml`, `release.yml`,
+  `paper-smoke.yml`, `bench.yml`)
+- `ci.yml`: `lint` gates `py-test`→`integration-tests`→`smoke-staging` plus parallel
+  `cpp-build`/`sbom`/`docs`; `all-ok` requires all seven. No Python version matrix — 3.12 pinned.
+- CI must be green (`all-ok`) before any PR merges into `main`
 - See `docs/ci.md` for the full job description
 
 ---
 
 ## 9. Quick Reference
 
+The Makefile is self-documenting — run `make help` for the full, current list of 20+ targets.
+A few need more context than their one-line `##` comment:
+
 ```bash
-make up           # start all local infra (postgres, redis, nats, minio, otel stack)
-make down         # stop infra
-make lint         # all linters
-make format       # auto-format (ruff + clang-format)
-make test         # unit + integration tests
-make test-smoke   # full-stack smoke tests (requires make up)
-make db-migrate   # alembic upgrade head — LOCAL only
-make build-cpp    # CMake + Conan build
+make db-migrate          # alembic upgrade head — LOCAL only, never run against prod from here
+make nuke CONFIRM=yes    # ⚠ stops containers and DELETES all volumes — dev only
+make decrypt-env         # decrypt secrets → .env (reads secrets/dev.enc.yaml via sops+age)
 ```
+
+Don't hand-maintain a longer command list here — it has drifted from the real Makefile before.
+If you change `services/`, `db/migrations/`, `docker-compose.yml`, `deploy/systemd/`, or
+`config/`, run the `doc-sync` skill (`.claude/skills/doc-sync/SKILL.md`) before opening the PR so
+`docs/architecture.md`, `README.md`, `docs/repo-layout.md`, and `SERVICES_STATUS.md` don't drift
+out of sync the way they did before this section was last rewritten.
 
 > **When in doubt, ask.** Do not guess at production config, port numbers, or
 > deployment targets — always read `docs/architecture.md` first.

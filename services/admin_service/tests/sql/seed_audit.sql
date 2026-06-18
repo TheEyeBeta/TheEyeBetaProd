@@ -43,6 +43,9 @@ VALUES (
     digest('seed-audit-row-3', 'sha256')
 );
 
+DELETE FROM theeyebeta.audit_checkpoints
+ WHERE checkpoint_id = '2026-05-24';
+
 INSERT INTO theeyebeta.audit_checkpoints (
     checkpoint_id,
     last_row_id,
@@ -60,5 +63,4 @@ VALUES (
     now() - interval '1 day',
     3,
     's3://theeyebeta-snapshots/checkpoints/2026-05-24.json'
-)
-ON CONFLICT (checkpoint_id) DO NOTHING;
+);

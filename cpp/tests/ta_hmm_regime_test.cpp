@@ -7,10 +7,10 @@
 
 #include <cmath>
 #include <cstdint>
-#include <random>
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <random>
 
 namespace {
 
@@ -64,7 +64,7 @@ double regime_accuracy(const std::vector<int>& predicted, const std::vector<int>
     return std::max(direct_rate, flipped_rate);
 }
 
-}  // namespace
+} // namespace
 
 TEST(TaHmmRegimeTest, HappyPathRecoversSyntheticRegimesAboveEightyFivePercent) {
     const SyntheticHmm data = make_synthetic_two_regime(500, 42U);
@@ -74,9 +74,9 @@ TEST(TaHmmRegimeTest, HappyPathRecoversSyntheticRegimesAboveEightyFivePercent) {
 }
 
 TEST(TaHmmRegimeTest, EmptyAndInvalidInputReturnsEmpty) {
-    EXPECT_TRUE(zinc::ta::hmm_regime({}, 2).states.empty());
-    EXPECT_TRUE(zinc::ta::hmm_regime({1.0, 2.0}, 2).states.empty());
-    EXPECT_TRUE(zinc::ta::hmm_regime({1.0, 2.0, 3.0}, 3).states.empty());
+    EXPECT_TRUE(zinc::ta::hmm_regime(std::vector<double>{}, 2).states.empty());
+    EXPECT_TRUE(zinc::ta::hmm_regime(std::vector<double>{1.0, 2.0}, 2).states.empty());
+    EXPECT_TRUE(zinc::ta::hmm_regime(std::vector<double>{1.0, 2.0, 3.0}, 3).states.empty());
 }
 
 TEST(TaHmmRegimeTest, SingleRegimeClusterStillReturnsStates) {

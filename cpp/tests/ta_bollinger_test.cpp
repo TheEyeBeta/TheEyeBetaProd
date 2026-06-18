@@ -3,25 +3,20 @@
  * @brief  Unit tests for zinc::ta::bollinger.
  */
 
+#include "ta_test_reference.hpp"
 #include "zinc/ta/bollinger.hpp"
 
 #include <cmath>
-#include <random>
 #include <vector>
 
 #include <gtest/gtest.h>
-
-#include "ta_test_reference.hpp"
+#include <random>
 
 namespace {
 
-bool IsNan(double value) {
-    return std::isnan(value);
-}
-
 constexpr int kPeriod = 3;
 
-}  // namespace
+} // namespace
 
 TEST(TaBollingerTest, HappyPathPandasTaReferenceLiteral) {
     const auto closes = zinc::ta_test::reference_closes();
@@ -69,6 +64,6 @@ TEST(TaBollingerTest, RandomSeriesUpperDominatesLower) {
 TEST(TaBollingerTest, NumericalStabilityLargeMagnitude) {
     const std::vector<double> series{1.0e6, 1.2e6, 0.9e6, 1.1e6};
     const auto bands = zinc::ta::bollinger(series, 3, 2.0);
-    EXPECT_NEAR(bands.middle[3], 1.1e6, 1.0);
+    EXPECT_NEAR(bands.middle[3], 1066666.6666666667, 1.0);
     EXPECT_NEAR(bands.upper[3] - bands.middle[3], bands.middle[3] - bands.lower[3], 1.0);
 }

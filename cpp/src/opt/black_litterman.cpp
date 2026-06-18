@@ -5,9 +5,9 @@
 
 #include "zinc/opt/black_litterman.hpp"
 
-#include <cmath>
-
 #include "zinc/opt/mvo.hpp"
+
+#include <cmath>
 
 namespace zinc::opt {
 
@@ -47,10 +47,9 @@ PortfolioWeights black_litterman(const Eigen::Ref<const Eigen::MatrixXd>& covari
         precision_prior + picking_matrix.transpose() * omega * picking_matrix;
     const Eigen::VectorXd posterior_returns =
         posterior_precision.inverse() *
-        (precision_prior * equilibrium_returns +
-         picking_matrix.transpose() * omega * view_returns);
+        (precision_prior * equilibrium_returns + picking_matrix.transpose() * omega * view_returns);
 
     return mvo(posterior_returns, covariance, risk_aversion, long_only);
 }
 
-}  // namespace zinc::opt
+} // namespace zinc::opt

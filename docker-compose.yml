@@ -115,6 +115,7 @@ services:
   # ───────────────────────────────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest
+    network_mode: host
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -122,8 +123,6 @@ services:
       - "--web.enable-lifecycle"
       - "--web.console.libraries=/usr/share/prometheus/console_libraries"
       - "--web.console.templates=/usr/share/prometheus/consoles"
-    ports:
-      - "127.0.0.1:9090:9090"
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
@@ -140,8 +139,6 @@ services:
       start_period: 15s
       retries: 5
     restart: unless-stopped
-    networks:
-      - theeyebeta-net
 
   # ───────────────────────────────────────────────────────────────────────────
   # Loki (log aggregation)
@@ -150,16 +147,7 @@ services:
     image: prom/alertmanager:latest
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
-      - "--config.expand-env"
       - "--storage.path=/alertmanager"
-    environment:
-      SMTP_HOST: ${SMTP_HOST:-localhost}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM: ${SMTP_FROM:-alerts@theeyebeta.local}
-      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-ops@theeyebeta.local}
-      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
     ports:
       - "127.0.0.1:9093:9093"
     volumes:
@@ -176,6 +164,8 @@ services:
 
   blackbox-exporter:
     image: prom/blackbox-exporter:latest
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command:
       - "--config.file=/etc/blackbox_exporter/config.yml"
     ports:

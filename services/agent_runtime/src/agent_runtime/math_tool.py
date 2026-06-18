@@ -54,14 +54,16 @@ def openai_tool_definition() -> dict[str, Any]:
     }
 
 
-def _as_float_array(values: Any, *, name: str) -> np.ndarray:  # noqa: ANN401 — accepts arbitrary JSON-decoded input before type-checking
+def _as_float_array(values: object, *, name: str) -> np.ndarray:
     if not isinstance(values, list) or not values:
         msg = f"{name} must be a non-empty list of numbers"
         raise ValueError(msg)
     return np.asarray(values, dtype=np.float64)
 
 
-def _as_ohlc_matrix(rows: Any) -> np.ndarray:  # noqa: ANN401 — accepts arbitrary JSON-decoded input before type-checking
+def _as_ohlc_matrix(
+    rows: Any,  # noqa: ANN401 — accepts arbitrary JSON-decoded input before type-checking
+) -> np.ndarray:
     if not isinstance(rows, list) or not rows:
         msg = "ohlc must be a non-empty list of [open, high, low, close] rows"
         raise ValueError(msg)
@@ -72,7 +74,9 @@ def _as_ohlc_matrix(rows: Any) -> np.ndarray:  # noqa: ANN401 — accepts arbitr
     return matrix
 
 
-def _dispatch(req: ComputeStatRequest) -> Any:  # noqa: ANN401 — dispatch returns heterogeneous kernel results
+def _dispatch(
+    req: ComputeStatRequest,
+) -> Any:  # noqa: ANN401 — dispatch returns heterogeneous kernel results
     """Execute the requested zinc_native kernel operation."""
     op = req.operation.strip().lower()
     params = req.params

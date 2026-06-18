@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from testcontainers.core.container import DockerContainer
-from testcontainers.core.waiting_utils import wait_for_logs
+from testcontainers.core.wait_strategies import LogMessageWaitStrategy
 from testcontainers.postgres import PostgresContainer
 from testcontainers.redis import RedisContainer
 
@@ -28,7 +28,7 @@ def postgres_container() -> Generator[PostgresContainer, None, None]:
         pytest.skip("Docker daemon not available (required for testcontainers)")
 
     container = (
-        PostgresContainer("timescale/timescaledb-ha:pg17-latest")
+        PostgresContainer("timescale/timescaledb-ha:pg17")
         .with_env("POSTGRES_USER", "postgres")
         .with_env("POSTGRES_PASSWORD", "postgres")
         .with_env("POSTGRES_DB", "theeyebeta")
@@ -65,11 +65,13 @@ def nats_container() -> Generator[DockerContainer, None, None]:
         pytest.skip("Docker daemon not available (required for testcontainers)")
 
     container = (
-        DockerContainer("nats:2-alpine").with_command("-js -m 8222").with_exposed_ports(4222)
+        DockerContainer("nats:2-alpine")
+        .with_command("-js -m 8222")
+        .with_exposed_ports(4222)
+        .waiting_for(LogMessageWaitStrategy("Listening for client connections"))
     )
     container.start()
     try:
-        wait_for_logs(container, "Listening for client connections")
         yield container
     finally:
         container.stop()
@@ -95,10 +97,10 @@ def minio_container() -> Generator[DockerContainer, None, None]:
         .with_env("MINIO_ROOT_USER", "minioadmin")
         .with_env("MINIO_ROOT_PASSWORD", "minioadmin123")
         .with_exposed_ports(9000)
+        .waiting_for(LogMessageWaitStrategy("API:"))
     )
     container.start()
     try:
-        wait_for_logs(container, "API:")
         yield container
     finally:
         container.stop()

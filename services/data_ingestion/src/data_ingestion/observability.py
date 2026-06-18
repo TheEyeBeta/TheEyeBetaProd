@@ -117,6 +117,12 @@ async def traced_fetch(  # noqa: UP047 — TypeVar T declared at module level; t
     coro_factory: Callable[[], Awaitable[T]],
 ) -> T:
     """Run an adapter fetch inside span + duration metrics."""
-    async with observe_duration(adapter, market):  # noqa: SIM117 — async with nesting required; combinable only in 3.10+ and contextmanager types must match
-        async with span("adapter.fetch", adapter=adapter, market=market):
-            return await coro_factory()
+    async with (
+        observe_duration(adapter, market),
+        span(
+            "adapter.fetch",
+            adapter=adapter,
+            market=market,
+        ),
+    ):
+        return await coro_factory()

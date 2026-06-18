@@ -251,9 +251,11 @@ def enrich_from_registry(row: pd.Series) -> dict:
         "source": row.get("source") or meta.get("source", "MANUAL"),
         "units": row.get("units") or meta.get("units", ""),
         "frequency": row.get("frequency") or meta.get("freq", ""),
-        "seasonal_adj": row.get("seasonal_adj")
-        if not pd.isna(row.get("seasonal_adj", None))
-        else meta.get("seasonal_adj"),
+        "seasonal_adj": (
+            row.get("seasonal_adj")
+            if not pd.isna(row.get("seasonal_adj", None))
+            else meta.get("seasonal_adj")
+        ),
         "notes": row.get("notes", ""),
     }
 

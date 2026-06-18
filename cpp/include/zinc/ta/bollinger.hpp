@@ -45,4 +45,4 @@ struct BollingerBands {
 [[nodiscard]] BollingerBands bollinger(std::span<const double> series, int period,
                                        double std_dev = 2.0);
 
-}  // namespace zinc::ta
+} // namespace zinc::ta

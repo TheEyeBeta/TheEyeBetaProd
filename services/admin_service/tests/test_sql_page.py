@@ -184,7 +184,7 @@ async def test_sql_query_fragment_rejects_bad_parameters_json(
     sql_admin_client: tuple[AsyncClient, Any],
     auth_headers: dict[str, str],
 ) -> None:
-    """Malformed JSON in ``parameters`` returns the error card."""
+    """Malformed JSON in ``parameters`` returns the normalized 422 envelope."""
     client, _ = sql_admin_client
     response = await client.post(
         "/admin/sql/fragments/query",
@@ -194,9 +194,8 @@ async def test_sql_query_fragment_rejects_bad_parameters_json(
             "parameters": "{not-json}",
         },
     )
-    assert response.status_code == 200
-    assert 'data-test-id="sql-error"' in response.text
-    assert "invalid JSON" in response.text
+    assert response.status_code == 422
+    assert "invalid JSON" in response.json()["error"]["message"]
 
 
 # ---------------------------------------------------------------- Fragment: confirm
@@ -330,12 +329,15 @@ async def test_sql_page_requires_auth(
     sql_integration_dsn: str,
 ) -> None:
     """All SQL page routes are JWT-gated."""
-    from conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
+    from settings import Settings, get_settings  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
         _close_test_resources,
         _init_test_resources,
     )
-    from main import create_app  # noqa: PLC0415
-    from settings import Settings, get_settings  # noqa: PLC0415
 
     get_settings.cache_clear()
     settings = Settings(database_url=sql_integration_dsn)
@@ -343,7 +345,7 @@ async def test_sql_page_requires_auth(
         patch("deps.init_resources", _init_test_resources),
         patch("deps.close_resources", _close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         transport = ASGITransport(app=app, lifespan="on")
         async with AsyncClient(transport=transport, base_url="http://test") as anon:
             page = await anon.get("/admin/sql")

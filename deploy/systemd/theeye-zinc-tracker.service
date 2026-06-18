@@ -1,0 +1,14 @@
+[Unit]
+Description=TheEyeBeta ZINC INVESTMENTS 15-min fund snapshot
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=the-eye-beta
+Group=the-eye-beta
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env.theeye-zinc-tracker
+ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.venv/bin/python scripts/zinc_fund_tracker.py
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=theeye-zinc-tracker

@@ -3,29 +3,28 @@
  * @brief  Unit tests for zinc::bt::Engine.
  */
 
+#include "bt_test_parquet.hpp"
 #include "zinc/bt/engine.hpp"
 #include "zinc/bt/slippage_model.hpp"
 
 #include <cmath>
-#include <cstdio>
 #include <filesystem>
 #include <numeric>
-#include <random>
 #include <string>
 #include <vector>
 
+#include <cstdio>
 #include <gtest/gtest.h>
-
-#include "bt_test_parquet.hpp"
+#include <random>
 
 namespace {
 
 constexpr double kGrowthPerDay = 1.0001;
 constexpr int kBuyHoldDays = 100;
-constexpr double kReferenceTotalReturn = 0.009950330903168;  // 1.0001^99 - 1
+constexpr double kReferenceTotalReturn = 0.009950330903168; // 1.0001^99 - 1
 
-SlippageModel ZeroSlippage() {
-    return SlippageModel([](const double, const double) { return 0.0; });
+zinc::bt::SlippageModel ZeroSlippage() {
+    return zinc::bt::SlippageModel([](const double, const double) { return 0.0; });
 }
 
 std::filesystem::path write_buy_hold_fixture() {
@@ -64,7 +63,7 @@ double sum_pnl(const std::vector<double>& daily_pnl) {
     return std::accumulate(daily_pnl.begin(), daily_pnl.end(), 0.0);
 }
 
-}  // namespace
+} // namespace
 
 TEST(BtEngineTest, HappyPathBuyAndHoldWithinOneBasisPoint) {
     const std::filesystem::path parquet_path = write_buy_hold_fixture();
@@ -137,15 +136,7 @@ TEST(BtEngineTest, RandomPricesProduceFiniteMetrics) {
         close *= log_normal(rng);
         char date_buffer[11];
         std::snprintf(date_buffer, sizeof(date_buffer), "2024-01-%02d", day + 1);
-        rows.push_back({date_buffer,
-                        "SPY",
-                        close,
-                        close,
-                        close,
-                        close,
-                        1'000'000,
-                        1.0,
-                        1.0e9});
+        rows.push_back({date_buffer, "SPY", close, close, close, close, 1'000'000, 1.0, 1.0e9});
     }
     ASSERT_TRUE(zinc::bt::test::write_daily_parquet(parquet_path, rows));
 

@@ -5,9 +5,9 @@
 
 #pragma once
 
-#include <Eigen/Dense>
-
 #include "zinc/opt/portfolio_weights.hpp"
+
+#include <Eigen/Dense>
 
 namespace zinc::opt {
 
@@ -40,12 +40,12 @@ namespace zinc::opt {
  *     Eigen::VectorXd::Constant(1, 0.001));
  * @endcode
  */
-[[nodiscard]] PortfolioWeights black_litterman(
-    const Eigen::Ref<const Eigen::MatrixXd>& covariance,
-    const Eigen::Ref<const Eigen::VectorXd>& market_weights,
-    const Eigen::Ref<const Eigen::MatrixXd>& picking_matrix,
-    const Eigen::Ref<const Eigen::VectorXd>& view_returns,
-    const Eigen::Ref<const Eigen::VectorXd>& view_uncertainty, double risk_aversion = 2.5,
-    double tau = 0.05, bool long_only = true);
+[[nodiscard]] PortfolioWeights
+black_litterman(const Eigen::Ref<const Eigen::MatrixXd>& covariance,
+                const Eigen::Ref<const Eigen::VectorXd>& market_weights,
+                const Eigen::Ref<const Eigen::MatrixXd>& picking_matrix,
+                const Eigen::Ref<const Eigen::VectorXd>& view_returns,
+                const Eigen::Ref<const Eigen::VectorXd>& view_uncertainty,
+                double risk_aversion = 2.5, double tau = 0.05, bool long_only = true);
 
-}  // namespace zinc::opt
+} // namespace zinc::opt

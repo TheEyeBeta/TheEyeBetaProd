@@ -50,10 +50,7 @@ def _probe(
         body = resp.json()
     except Exception:
         body = resp.text[:500]
-    if isinstance(body, (dict, list)):  # noqa: SIM108 — two-branch ternary with different calls is clearer as if/else
-        text = json.dumps(body)[:800]
-    else:
-        text = str(body)[:800]
+    text = json.dumps(body)[:800] if isinstance(body, (dict, list)) else str(body)[:800]
     return {
         "label": label,
         "status": resp.status_code,

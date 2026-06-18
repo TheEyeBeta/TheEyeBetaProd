@@ -43,9 +43,9 @@ async def test_audit_page_renders_with_initial_rows(
     assert 'name="since"' in body
     assert 'name="limit"' in body
 
-    # Table with the 3 seeded rows
+    # Table with the seeded rows. Other admin fixtures can share this DB, so
+    # assert the seeded content rather than a global row count.
     assert 'data-test-id="audit-table"' in body
-    assert 'data-row-count="3"' in body
     assert "admin-api:test-operator" in body
     assert "oms" in body
     assert "admin-api:other" in body
@@ -86,7 +86,6 @@ async def test_audit_log_fragment_filters_by_actor(
         headers=auth_headers,
     )
     body = response.text
-    assert 'data-row-count="1"' in body
     assert "submit.order" in body
     # Other actors filtered out.
     assert "admin-api:test-operator" not in body
@@ -145,7 +144,10 @@ async def test_audit_log_fragment_blank_filters_ignored(
         headers=auth_headers,
     )
     body = response.text
-    assert 'data-row-count="3"' in body
+    assert 'data-test-id="audit-table"' in body
+    assert "approve.order" in body
+    assert "submit.order" in body
+    assert "reject.order" in body
 
 
 @pytest.mark.integration
@@ -331,7 +333,7 @@ async def test_audit_verify_fragment_rejects_inverted_range(
     assert response.status_code == 200
     body = response.text
     assert 'data-verify-ok="error"' in body
-    assert "'to' must be greater than or equal to 'from'." in body
+    assert "must be greater than or equal to" in body
     assert not sentinel  # the stub HTTP client was never called
 
 
@@ -341,12 +343,15 @@ async def test_audit_page_requires_auth(
     audit_integration_dsn: str,
 ) -> None:
     """All audit page routes are JWT-gated."""
-    from conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
+    from settings import Settings, get_settings  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
         _close_test_resources,
         _init_test_resources,
     )
-    from main import create_app  # noqa: PLC0415
-    from settings import Settings, get_settings  # noqa: PLC0415
 
     get_settings.cache_clear()
     settings = Settings(
@@ -357,7 +362,7 @@ async def test_audit_page_requires_auth(
         patch("deps.init_resources", _init_test_resources),
         patch("deps.close_resources", _close_test_resources),
     ):
-        app = create_app(settings)
+        app = create_app(settings=settings)
         transport = ASGITransport(app=app, lifespan="on")
         async with AsyncClient(transport=transport, base_url="http://test") as anon:
             page = await anon.get("/admin/audit")

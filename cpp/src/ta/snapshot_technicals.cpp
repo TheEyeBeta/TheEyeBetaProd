@@ -5,16 +5,16 @@
 
 #include "zinc/ta/snapshot_technicals.hpp"
 
-#include <cmath>
-#include <cstddef>
-#include <limits>
-#include <vector>
-
 #include "zinc/ta/adx.hpp"
 #include "zinc/ta/atr.hpp"
 #include "zinc/ta/bollinger.hpp"
 #include "zinc/ta/rsi.hpp"
 #include "zinc/ta/zscore.hpp"
+
+#include <cmath>
+#include <cstddef>
+#include <limits>
+#include <vector>
 
 namespace zinc::ta {
 
@@ -37,10 +37,10 @@ std::vector<double> closes_from_bars(std::span<const Bar> bars) {
     return closes;
 }
 
-}  // namespace
+} // namespace
 
-std::vector<TechnicalsLast> snapshot_technicals_last(
-    std::span<const std::span<const Bar>> ohlc_by_instrument) {
+std::vector<TechnicalsLast>
+snapshot_technicals_last(std::span<const std::span<const Bar>> ohlc_by_instrument) {
     std::vector<TechnicalsLast> results(ohlc_by_instrument.size());
     for (std::size_t index = 0; index < ohlc_by_instrument.size(); ++index) {
         const auto bars = ohlc_by_instrument[index];
@@ -61,4 +61,4 @@ std::vector<TechnicalsLast> snapshot_technicals_last(
     return results;
 }
 
-}  // namespace zinc::ta
+} // namespace zinc::ta

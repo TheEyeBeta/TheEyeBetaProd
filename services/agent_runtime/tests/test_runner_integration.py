@@ -227,6 +227,7 @@ async def test_macro_lead_run_guard_runtime_contract(
 
     subscriber = await nats.connect(integration_env.nats_url)
     sub = await subscriber.subscribe(NATS_SUBJECT, cb=on_message)
+    await subscriber.flush()
 
     try:
         summary = await AgentRunner().run(AGENT_ID, SNAPSHOT_ID)
