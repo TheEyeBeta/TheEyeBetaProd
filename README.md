@@ -82,16 +82,16 @@ make install-hooks
 | Service | Port | Status | Purpose |
 |---------|------|--------|---------|
 | `data-ingestion` | 7010 | deployed (docker-compose) | Market data ingestion from feeds; publishes to NATS |
-| `snapshot-packager` | 7011 | deployed (docker-compose) | Packages OHLCV + orderbook snapshots to MinIO |
+| `snapshot-packager` | 7011 | deployed (systemd, `theeye-snapshot-packager.service`) | Packages OHLCV + orderbook snapshots to MinIO |
 | `llm-gateway` | 4000 | deployed (docker-compose) | LiteLLM proxy to OpenAI (gpt-5 / gpt-4o-mini); rate-limiting and logging |
 | `admin-service` | 7200 | deployed (docker-compose, Tailscale ACL) | Jinja2 + htmx admin dashboard (JWT + MFA) |
 | `agent_runtime` | 8004 | deployed (systemd) | Executes research and trading agents; consumes NATS |
-| `master_orchestrator` | 7050 | code-complete, not deployed | Coordinates the two-loop cycle; routes proposals to execution or research |
+| `master_orchestrator` | 7050 | deployed (systemd, `theeye-master-orchestrator.service`) | Coordinates the two-loop cycle; routes proposals to execution or research |
 | `guard_service` | 7040 (gRPC) / 8005 | code-complete, not deployed | Pre-trade signal validation, position limits, circuit breakers |
 | `risk_service` | 7060 (gRPC) | unit staged, disabled | Real-time P&L, VaR, margin calculations — blocked on "0 portfolios", not the unit |
-| `compliance_service` | 7070 (gRPC) / 8008 | code-complete, not deployed | Regulatory rule checks; writes to audit_log |
-| `oms` | 7080 | code-complete, not deployed | Order management — lifecycle, fills, cancellations. **Live-trading-adjacent** |
-| `broker_adapter_alpaca` | 7090 | code-complete, not deployed | Alpaca Markets REST + WebSocket adapter. **Live-trading gated** |
+| `compliance_service` | 7070 (gRPC) / 8008 | deployed (systemd, `theeye-compliance-service.service`) | Regulatory rule checks; writes to audit_log |
+| `oms` | 7080 | deployed (systemd, `theeye-oms.service`) | Order management — lifecycle, fills, cancellations. Paper-mode; live trading gated separately (see `broker_adapter_alpaca.live_gate`) |
+| `broker_adapter_alpaca` | 7090 | deployed (systemd, `theeye-broker-adapter-alpaca.service`) | Alpaca Markets REST + WebSocket adapter. Running in paper mode; live mode requires DB + Redis approval (`live_gate.py`) |
 | `backtest_engine` | 7100 | code-complete, not deployed | Vectorised backtester; reads snapshots from MinIO |
 | `audit_service` | 7110 | code-complete, not deployed | Audit **verify**/export API — `audit_log` writes are already live via `BaseWorker`, independent of this service |
 | `rnd_agent` | 7120 | code-complete, not deployed | Research agent — generates proposals from historical data + LLM |
@@ -121,9 +121,10 @@ part of this repo.
 ## The Two-Loop Architecture
 
 > From [docs/architecture.md §3.3](docs/architecture.md#33-the-two-loop-cycle).
-> **This is the design, not current reality.** Today only `data-ingestion`, `snapshot-packager`,
-> `llm-gateway`, `admin-service` (docker-compose) and `agent_runtime` (systemd) are running — the
-> rest of both loops is real, tested code with no deploy unit yet. See the Service Map above.
+> **Most of this is now live.** `data-ingestion`, `llm-gateway`, `admin-service` (docker-compose),
+> `agent_runtime`, `snapshot-packager`, `master_orchestrator`, `compliance_service`, `oms`, and
+> `broker_adapter_alpaca` (systemd) are all running in paper mode. `guard_service`,
+> `backtest_engine`, and `rnd_agent` still have no deploy unit. See the Service Map above.
 
 ```mermaid
 flowchart LR

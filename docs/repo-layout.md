@@ -106,16 +106,16 @@ TheEyeBetaProd/
 │   ├── api/                     # EMPTY placeholder — real external API is the sibling TheEyeBetaDataAPI repo
 │   ├── audit_service/
 │   ├── backtest_engine/
-│   ├── broker_adapter_alpaca/
-│   ├── compliance_service/
+│   ├── broker_adapter_alpaca/   # deployed (systemd, theeye-broker-adapter-alpaca.service, :7090, paper mode)
+│   ├── compliance_service/     # deployed (systemd, theeye-compliance-service.service, :7070/:8008)
 │   ├── data_ingestion/          # deployed (docker-compose, :7010)
 │   ├── guard_service/
 │   ├── llm_gateway/              # config/scripts only — the running proxy is the LiteLLM container
-│   ├── master_orchestrator/
-│   ├── oms/
+│   ├── master_orchestrator/    # deployed (systemd, theeye-master-orchestrator.service, :7050)
+│   ├── oms/                     # deployed (systemd, theeye-oms.service, :7080, paper mode)
 │   ├── risk_service/             # unit staged but disabled
 │   ├── rnd_agent/
-│   ├── snapshot_packager/        # deployed (docker-compose, :7011)
+│   ├── snapshot_packager/        # deployed (systemd, theeye-snapshot-packager.service, :7011)
 │   └── worker/                   # EMPTY placeholder
 │
 ├── tb/                          # tb CLI (published as tb-theeyebeta-cli)
