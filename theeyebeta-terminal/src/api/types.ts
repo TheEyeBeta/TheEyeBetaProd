@@ -184,3 +184,20 @@ export type SignalRow = {
 export type SignalsLatestResponse = {
   signals?: SignalRow[];
 };
+
+export type WorkerRun = {
+  id?: string | number;
+  worker?: string;
+  worker_name?: string;
+  status?: string;
+  started_at?: string;
+  finished_at?: string;
+  exit_code?: number | null;
+  stdout_tail?: string;
+  stderr_tail?: string;
+};
+
+export type WorkerRunsResponse = {
+  runs?: WorkerRun[];
+  total?: number;
+};
