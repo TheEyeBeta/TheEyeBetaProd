@@ -38,8 +38,8 @@ TEST(OptMvoTest, HappyPathMinimumVarianceHandComputed) {
 
     const auto result = zinc::opt::mvo(expected_returns, covariance, 1.0);
     ASSERT_EQ(result.weights.size(), 2U);
-    EXPECT_NEAR(result.weights[0], 0.72726904, 1e-6);
-    EXPECT_NEAR(result.weights[1], 0.27273096, 1e-6);
+    EXPECT_NEAR(result.weights[0], 0.7272727272727273, 1e-6);
+    EXPECT_NEAR(result.weights[1], 0.2727272727272727, 1e-6);
     EXPECT_TRUE(WeightsValid(result.weights));
 }
 

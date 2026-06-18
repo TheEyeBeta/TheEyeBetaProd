@@ -46,7 +46,7 @@ def main() -> None:
             "macro-lead",
             "markets",
             "Macro lead — cross-asset stance from packaged snapshots",
-            "claude-sonnet-4-6",
+            "gpt-4o-mini",
             "gpt-5",
             "agents/markets/macro-lead.agent.md",
             True,

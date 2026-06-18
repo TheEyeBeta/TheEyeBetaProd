@@ -1,64 +1,67 @@
 # LLM & Agent Architecture
 
-> **Status:** Stub — expand as agent services are implemented.
-> See [architecture.md §5](architecture.md#5-llm--agent-layer).
+> See [architecture.md §5](architecture.md#5-llm--agent-layer) for where this fits in the system.
 
 ## Overview
 
-theeyebeta uses three LLM-assisted agent services:
+The trading-agent "AI staff" is a reports-to hierarchy defined declaratively in
+`config/agents/hierarchy.yaml`, rooted at `master-orchestrator` (reports to the human operator,
+`reports_to: null`). Eight departments, each with a `<dept>-lead` reporting directly to
+`master-orchestrator`, and specialist leaves reporting to their department lead:
 
-| Service | Role |
-|---------|------|
-| `agent-runtime` | Executes fast-loop trading signals; consumes live market data from NATS |
-| `rnd-agent` | Research agent; generates trading proposals from snapshots + backtests |
-| `llm-gateway` | Unified proxy to Anthropic (Claude) and OpenAI; rate-limiting, logging, cost tracking |
+| Department | Lead | Reports to |
+|------------|------|------------|
+| `top` | `master-orchestrator` | human operator |
+| `markets` | `markets-lead` | `master-orchestrator` |
+| `compliance` | `compliance-lead` | `master-orchestrator` |
+| `quant` | `quant-lead` | `master-orchestrator` |
+| `macro` | `macro-lead`* | `master-orchestrator` |
+| `fundamental` | (lead per `hierarchy.yaml`) | `master-orchestrator` |
+| `risk` | (lead per `hierarchy.yaml`) | `master-orchestrator` |
+| `audit` | (lead per `hierarchy.yaml`) | `master-orchestrator` |
 
-## llm-gateway
+\* don't hand-maintain the full leaf list here — `config/agents/hierarchy.yaml` is the source of
+truth and changes whenever an agent is added/removed; read it directly rather than trusting a
+copy in this doc.
 
-- Routes requests to Anthropic or OpenAI based on model name
-- Enforces per-model rate limits in Redis
-- Logs all requests/responses to `audit_log` (excluding PII)
-- Returns `std::expected`-style error envelopes for all non-2xx responses
+Each agent entry carries `reports_to`, `department`, `role`, `constitution_path` (a markdown file
+under `agents/<department>/`), `model_default`, and `model_fallback`. The `theeyebeta.agents` table
+(migration `0004`, `reports_to` self-FK added in `0033`) is the runtime mirror of this file, kept
+in sync by `db/seeds/agents.py` / `db/seeds/agent_hierarchy.py`.
 
-## agent-runtime
+## Model routing — OpenAI only
 
-- Subscribes to `market.tick.*` and `market.ohlcv.*` NATS subjects
-- Runs registered signal strategies (Python + optional C++ hot path)
-- Submits signals to `guard-service` before routing onward
-- Uses `opentelemetry-instrumentation-fastapi` for trace context propagation
+All agents route through the **LiteLLM proxy** (`config/litellm.yaml`), which exposes two model
+aliases, both OpenAI: `gpt-4o-mini` and `gpt-5`. The proxy is the `llm-gateway` docker-compose
+service (`:4000`). Migration `0035` explicitly retired the Claude model aliases
+(`claude-sonnet-4-6`, `claude-haiku-4-5`) from the `agents` table, replacing them with
+`gpt-4o-mini` — there is no Anthropic dependency left in the runtime path.
 
-## guard-service
+**Do not confuse this with Claude Code.** Claude Code (this assistant) is a *development* tool
+used to write and review code in this repo; it has no role in the live trading-agent pipeline.
+`CLAUDE.md` governs how Claude Code should behave as a contributor — it says nothing about the
+trading agents described in this file, and vice versa.
 
-Rules evaluated on every signal before it reaches `master-orchestrator`:
+## Agent runtime services
 
-1. Position limit check (against current positions in PostgreSQL)
-2. Daily loss limit check
-3. Symbol whitelist / blacklist
-4. Market hours check
-5. Circuit breaker state (Redis flag set by risk-service)
+| Service | Role | Deployment status |
+|---------|------|--------------------|
+| `agent_runtime` | Executes agent decision loops; consumes NATS market data | **deployed** (systemd, `:8004`) — see `architecture.md §3.1` |
+| `rnd_agent` | Slow-loop research agent — reads snapshots, runs backtests, drafts proposals via the LLM gateway | code-complete, not deployed |
+| `guard_service` | Pre-trade signal validation (position limits, daily loss limits, symbol allow/deny list, market hours, circuit breaker) before a signal reaches `master_orchestrator` | code-complete, not deployed |
+| `llm_gateway` (dir) | Config/scripts for the LiteLLM proxy — the running proxy itself is the `llm-gateway` container, not a FastAPI app in this directory | n/a |
 
-A signal that fails any rule is rejected with a structured reason code written to `audit_log`.
+A signal that fails a `guard_service` rule is rejected with a structured reason code, recorded via
+the `guard_violations` table (migration `0005`, resolution tracking added in `0017`).
 
-## rnd-agent
+## Memory & retrieval
 
-Slow-loop research workflow:
+`agent_memory` (migration `0004`) stores per-agent embeddings (`vector(1536)`, HNSW index) for
+retrieval-augmented context. `news_embeddings` (migration `0003`) does the same for ingested news
+articles.
 
-1. Reads parquet snapshots from MinIO
-2. Runs backtest via `backtest-engine` HTTP API
-3. Constructs a structured prompt for `llm-gateway`
-4. Parses the LLM response into a `Proposal` Pydantic model
-5. Submits to `master-orchestrator` for human or automated approval
+## Reporting chain
 
-## Prompt Templates
-
-_Location:_ `services/rnd-agent/src/rnd_agent/prompts/`
-
-Templates use Jinja2 with typed context objects — no f-string prompt construction.
-All prompts are versioned by filename (e.g. `v2_research_proposal.j2`).
-
-## Guard Rules
-
-_Location:_ `services/guard-service/src/guard_service/rules/`
-
-Each rule is a pure function `(Signal, Context) -> Result[Signal, RuleViolation]`.
-Rules are composable and independently testable.
+`agent_reports` (migration `0033`) stores operator-facing briefings/escalations/rollups/trade
+syntheses produced as agents roll results up the `reports_to` chain. The `theeye-reporting-chain`
+timer (`deploy/systemd/`) drives this in production.

@@ -167,8 +167,8 @@ class AgentRunner:
 
         try:
             constitution = load_constitution(_resolve_constitution(const_path))
-            constitution_model = constitution.model or model_default
-            fallback_model = constitution.fallback or model_fallback
+            constitution_model = model_default or constitution.model
+            fallback_model = model_fallback or constitution.fallback
 
             snapshot_data = await loader.load(snapshot_id)
 

@@ -11,13 +11,15 @@
 #include <cmath>
 #include <vector>
 
+#include <Eigen/Eigenvalues>
+
 namespace zinc::opt {
 
 namespace {
 
 constexpr int kMaxIterations = 2000;
 constexpr double kTolerance = 1e-10;
-constexpr double kInitialStep = 0.1;
+constexpr double kStepSafety = 0.9;
 
 } // namespace
 
@@ -38,7 +40,16 @@ PortfolioWeights mvo(const Eigen::Ref<const Eigen::VectorXd>& expected_returns,
 
     std::vector<double> weights(static_cast<std::size_t>(assets),
                                 1.0 / static_cast<double>(assets));
-    double step = kInitialStep;
+
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> solver(covariance);
+    if (solver.info() != Eigen::Success) {
+        return result;
+    }
+    const double largest_eigenvalue = solver.eigenvalues().maxCoeff();
+    if (!std::isfinite(largest_eigenvalue) || largest_eigenvalue <= 0.0) {
+        return result;
+    }
+    const double step = kStepSafety / (risk_aversion * largest_eigenvalue);
 
     for (int iteration = 0; iteration < kMaxIterations; ++iteration) {
         Eigen::Map<Eigen::VectorXd> weight_map(weights.data(), assets);
@@ -63,10 +74,6 @@ PortfolioWeights mvo(const Eigen::Ref<const Eigen::VectorXd>& expected_returns,
         weights = std::move(candidate);
         if (change < kTolerance) {
             break;
-        }
-
-        if (iteration % 50 == 49) {
-            step *= 0.9;
         }
     }
 

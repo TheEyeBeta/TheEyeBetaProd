@@ -9,15 +9,15 @@ agents:
     department: top
     role: Chief orchestrator — synthesizes department briefings for the operator
     constitution_path: agents/top/master-orchestrator.agent.md
-    model_default: claude-sonnet-4-6
-    model_fallback: gpt-5
+    model_default: gpt-5
+    model_fallback: gpt-4o-mini
 
   markets-lead:
     reports_to: master-orchestrator
     department: markets
     role: Markets department head
     constitution_path: agents/markets/markets-lead.agent.md
-    model_default: claude-sonnet-4-6
+    model_default: gpt-4o-mini
     model_fallback: gpt-5
 
   macro-lead:
@@ -32,8 +32,8 @@ agents:
     department: compliance
     role: Compliance department head
     constitution_path: agents/compliance/compliance-lead.agent.md
-    model_default: claude-haiku-4-5
-    model_fallback: claude-sonnet-4-6
+    model_default: gpt-4o-mini
+    model_fallback: gpt-5
 
   aml:
     reports_to: compliance-lead
@@ -55,7 +55,7 @@ agents:
     department: quant
     role: Quant department head
     constitution_path: agents/research/quant-lead.agent.md
-    model_default: claude-sonnet-4-6
+    model_default: gpt-4o-mini
     model_fallback: gpt-5
 
   execution-quant:
@@ -76,7 +76,7 @@ agents:
     department: macro
     role: Macro pod lead
     constitution_path: agents/macro/macro-regime.agent.md
-    model_default: claude-sonnet-4-6
+    model_default: gpt-4o-mini
     model_fallback: gpt-5
 
   cross-asset:
@@ -91,7 +91,7 @@ agents:
     department: fundamental
     role: Fundamental research lead
     constitution_path: agents/fundamental/fundamental-intelligence.agent.md
-    model_default: claude-sonnet-4-6
+    model_default: gpt-4o-mini
     model_fallback: gpt-5
 
   fundamental-intelligence:
@@ -108,8 +108,8 @@ agents:
     department: risk
     role: Risk pod lead
     constitution_path: agents/risk/portfolio-risk.agent.md
-    model_default: claude-haiku-4-5
-    model_fallback: claude-sonnet-4-6
+    model_default: gpt-4o-mini
+    model_fallback: gpt-5
 
   market-risk:
     reports_to: portfolio-risk
@@ -125,8 +125,8 @@ agents:
     department: audit
     role: Audit pod lead
     constitution_path: agents/audit/workflow-audit.agent.md
-    model_default: claude-haiku-4-5
-    model_fallback: claude-sonnet-4-6
+    model_default: gpt-4o-mini
+    model_fallback: gpt-5
 
   control-audit:
     reports_to: workflow-audit

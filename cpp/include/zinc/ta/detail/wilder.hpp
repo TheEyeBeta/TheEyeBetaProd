@@ -31,17 +31,34 @@ inline std::vector<double> wilder_rma(std::span<const double> values, int period
         return output;
     }
 
-    double seed = 0.0;
-    for (int index = 0; index < period; ++index) {
-        seed += values[static_cast<std::size_t>(index)];
-    }
-    seed /= static_cast<double>(period);
-    output[static_cast<std::size_t>(period - 1)] = seed;
+    for (std::size_t start = 0; start + static_cast<std::size_t>(period) <= length; ++start) {
+        double seed = 0.0;
+        bool finite_window = true;
+        for (int offset = 0; offset < period; ++offset) {
+            const double value = values[start + static_cast<std::size_t>(offset)];
+            if (!std::isfinite(value)) {
+                finite_window = false;
+                break;
+            }
+            seed += value;
+        }
+        if (!finite_window) {
+            continue;
+        }
 
-    for (std::size_t index = static_cast<std::size_t>(period); index < length; ++index) {
-        seed =
-            (seed * static_cast<double>(period - 1) + values[index]) / static_cast<double>(period);
-        output[index] = seed;
+        const std::size_t seed_index = start + static_cast<std::size_t>(period - 1);
+        seed /= static_cast<double>(period);
+        output[seed_index] = seed;
+
+        for (std::size_t index = seed_index + 1; index < length; ++index) {
+            if (!std::isfinite(values[index])) {
+                continue;
+            }
+            seed = (seed * static_cast<double>(period - 1) + values[index]) /
+                   static_cast<double>(period);
+            output[index] = seed;
+        }
+        break;
     }
 
     return output;

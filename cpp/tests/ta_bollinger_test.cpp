@@ -14,10 +14,6 @@
 
 namespace {
 
-bool IsNan(double value) {
-    return std::isnan(value);
-}
-
 constexpr int kPeriod = 3;
 
 } // namespace
@@ -68,6 +64,6 @@ TEST(TaBollingerTest, RandomSeriesUpperDominatesLower) {
 TEST(TaBollingerTest, NumericalStabilityLargeMagnitude) {
     const std::vector<double> series{1.0e6, 1.2e6, 0.9e6, 1.1e6};
     const auto bands = zinc::ta::bollinger(series, 3, 2.0);
-    EXPECT_NEAR(bands.middle[3], 1.1e6, 1.0);
+    EXPECT_NEAR(bands.middle[3], 1066666.6666666667, 1.0);
     EXPECT_NEAR(bands.upper[3] - bands.middle[3], bands.middle[3] - bands.lower[3], 1.0);
 }

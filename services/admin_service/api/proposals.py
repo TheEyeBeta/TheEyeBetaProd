@@ -450,7 +450,7 @@ async def fetch_backtest_status(
     """Return the ``status`` / ``started_at`` / ``completed_at`` of a backtest run."""
     row = await conn.fetchrow(
         """
-        SELECT id, status, started_at, completed_at
+        SELECT id, status, started_at, ended_at
           FROM theeyebeta.backtest_runs
          WHERE id = $1
         """,
@@ -463,7 +463,7 @@ async def fetch_backtest_status(
         "status": row["status"],
         "created_at": row["started_at"],
         "started_at": row["started_at"],
-        "completed_at": row["completed_at"],
+        "completed_at": row["ended_at"],
     }
 
 

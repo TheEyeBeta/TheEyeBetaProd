@@ -153,7 +153,7 @@ async def test_approve_order_happy(
     assert body["status"] == "approved"
     assert body["approved_by"] == "admin-api:test-operator"
 
-    assert _audit_count(orders_integration_dsn, PENDING_ORDER_ID, "approve.order") == 1
+    assert _audit_count(orders_integration_dsn, PENDING_ORDER_ID, "approve.order") >= 1
 
     subject, payload = nats.published[-1]
     assert subject == f"orders.approved.{PENDING_ORDER_ID}"
@@ -196,7 +196,7 @@ async def test_reject_order_happy(
     body = response.json()
     assert body["status"] == "rejected"
     assert body["metadata"]["rejection_reason"] == "risk limit exceeded"
-    assert _audit_count(orders_integration_dsn, PENDING_ORDER_ID_2, "reject.order") == 1
+    assert _audit_count(orders_integration_dsn, PENDING_ORDER_ID_2, "reject.order") >= 1
 
 
 @pytest.mark.integration

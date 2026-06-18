@@ -44,7 +44,7 @@ TEST(OptHrpTest, HappyPathEqualVarianceDiagonalHandComputed) {
 TEST(OptHrpTest, EmptyAndInvalidInputReturnsEmpty) {
     EXPECT_TRUE(zinc::opt::hrp(Eigen::MatrixXd{}).weights.empty());
 
-    Eigen::Matrix2d rectangular(2, 1);
+    Eigen::MatrixXd rectangular(2, 1);
     rectangular << 0.04, 0.01;
     EXPECT_TRUE(zinc::opt::hrp(rectangular).weights.empty());
 }
