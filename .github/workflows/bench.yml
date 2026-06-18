@@ -83,7 +83,7 @@ jobs:
           cmake --build --preset ${{ env.PRESET }} --parallel "$(nproc)"
 
       - name: Run benchmarks (JSON output)
-        working-directory: build/${{ env.PRESET }}/cpp/bench
+        working-directory: build/${{ env.PRESET }}/bench
         run: |
           mkdir -p results
           for bench in risk_bench ta_bench opt_bench bt_bench oms_bench; do
@@ -99,7 +99,7 @@ jobs:
         run: |
           python scripts/merge_benchmark_json.py \
             bench-results/merged.json \
-            build/${{ env.PRESET }}/cpp/bench/results/*.json
+            build/${{ env.PRESET }}/bench/results/*.json
 
       - name: Fetch baseline from main (PR)
         if: github.event_name == 'pull_request'
@@ -122,7 +122,7 @@ jobs:
           name: bench-results-${{ github.sha }}
           path: |
             bench-results/merged.json
-            build/${{ env.PRESET }}/cpp/bench/results/*.json
+            build/${{ env.PRESET }}/bench/results/*.json
           if-no-files-found: error
 
       - name: Update baseline on main

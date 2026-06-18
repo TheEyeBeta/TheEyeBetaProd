@@ -89,7 +89,11 @@ The [pull request template](.github/pull_request_template.md) is loaded automati
 - [ ] New behaviour has tests (unit or integration as appropriate).
 - [ ] If the PR changes the DB schema: migration reviewed, `downgrade()` implemented.
 - [ ] If the PR affects the service map or architecture: `docs/architecture.md` updated.
-- [ ] If the PR is an architectural decision: ADR added in `docs/adr/`.
+- [ ] If the PR is an architectural decision: ADR added in `docs/adr/` (check `ls docs/adr/ | tail -1`
+      for the next free number first — two ADRs have collided on the same number before).
+- [ ] If the PR touches `services/`, `db/migrations/`, `docker-compose.yml`, `deploy/systemd/`,
+      `config/`, or `.github/workflows/`: run the `doc-sync` skill
+      (`.claude/skills/doc-sync/SKILL.md`) before requesting review.
 
 **Required for UI changes (admin-service):**
 
