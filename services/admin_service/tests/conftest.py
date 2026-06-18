@@ -139,14 +139,26 @@ class _RecordingNats:
 
     def __init__(self) -> None:
         self.published: list[tuple[str, bytes]] = []
+        self.subscriptions: list[tuple[str, object | None]] = []
 
     async def publish(self, subject: str, payload: bytes) -> None:
         self.published.append((subject, payload))
+
+    async def subscribe(self, subject: str, cb: object | None = None) -> _RecordingSubscription:
+        self.subscriptions.append((subject, cb))
+        return _RecordingSubscription()
 
     async def drain(self) -> None:
         return None
 
     async def close(self) -> None:
+        return None
+
+
+class _RecordingSubscription:
+    """Minimal subscription handle returned by the NATS test stub."""
+
+    async def unsubscribe(self) -> None:
         return None
 
 
@@ -210,6 +222,7 @@ class _MockRedis:
 async def _init_test_resources(settings: object) -> None:
     """Start asyncpg pool, mock NATS, and in-memory Redis."""
     import deps  # noqa: PLC0415
+    from audit_log import configure_audit_dsn  # noqa: PLC0415
 
     deps._pool = await asyncpg.create_pool(  # noqa: SLF001
         dsn=settings.database_url,  # type: ignore[attr-defined]
@@ -221,6 +234,7 @@ async def _init_test_resources(settings: object) -> None:
     mock_redis = _MockRedis()
     deps._redis = mock_redis  # noqa: SLF001
     deps._redis_ops = mock_redis  # noqa: SLF001
+    configure_audit_dsn(settings.database_url)  # type: ignore[attr-defined]
 
 
 async def _close_test_resources() -> None:

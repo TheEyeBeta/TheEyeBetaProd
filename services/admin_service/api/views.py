@@ -201,6 +201,7 @@ def _proposal_card_response(
     flash_payload = json.dumps(
         {"flash": {"kind": "success", "message": flash}},
         separators=(",", ":"),
+        ensure_ascii=True,
     )
     return templates.TemplateResponse(
         request,
@@ -1218,10 +1219,9 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
                 "result": response,
             },
             headers={
-                "HX-Trigger": (
-                    f'{{"flash": {{"kind": "success", '
-                    f'"message": "Statement executed — rows affected: '
-                    f'{response.rows_affected}."}}}}'
+                "HX-Trigger": _flash_header(
+                    "success",
+                    f"Statement executed - rows affected: {response.rows_affected}.",
                 ),
             },
         )
@@ -1679,8 +1679,9 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
             "components/_violation_row.html",
             {"request": request, "row": refreshed},
         )
-        response.headers["HX-Trigger"] = (
-            f'{{"flash": {{"kind": "success", "message": "Violation {violation_id} resolved."}}}}'
+        response.headers["HX-Trigger"] = _flash_header(
+            "success",
+            f"Violation {violation_id} resolved.",
         )
         return response
 
@@ -1814,11 +1815,17 @@ def _flash_response(request: Request, *, kind: str, message: str) -> HTMLRespons
         "components/_flash.html",
         {"request": request, "kind": kind, "message": message},
     )
-    response.headers["HX-Trigger"] = '{"flash": {"kind": "%s", "message": %r}}' % (  # noqa: UP031
-        kind,
-        message,
-    )
+    response.headers["HX-Trigger"] = _flash_header(kind, message)
     return response
+
+
+def _flash_header(kind: str, message: str) -> str:
+    """Return an ASCII-safe HX-Trigger flash payload for HTTP headers."""
+    return json.dumps(
+        {"flash": {"kind": kind, "message": message}},
+        separators=(",", ":"),
+        ensure_ascii=True,
+    )
 
 
 def _short_error(exc: BaseException) -> str:

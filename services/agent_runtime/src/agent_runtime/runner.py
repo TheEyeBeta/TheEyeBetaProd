@@ -719,6 +719,7 @@ class AgentRunner:
         nc = await nats.connect(nats_url)
         try:
             await nc.publish(subject, payload)
+            await nc.flush()
             log.info("agent_decision_published", subject=subject, run_id=str(run_id))
         finally:
             await nc.close()

@@ -264,6 +264,8 @@ async def trigger_agent_run_impl(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="agent-runtime response missing run_id",
         )
+    data.setdefault("snapshot_id", str(body.snapshot_id))
+    data.setdefault("kind", body.kind)
 
     await write_audit_log(
         conn,

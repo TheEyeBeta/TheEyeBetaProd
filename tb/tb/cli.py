@@ -77,7 +77,6 @@ app.add_typer(secrets_app, name="secrets")
 app.add_typer(deploy_app, name="deploy")
 app.add_typer(config_app, name="config")
 app.add_typer(meta_app, name="meta")
-app.add_typer(account_app, name="account")
 
 
 @app.command("logs")
