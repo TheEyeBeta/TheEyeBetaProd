@@ -7,15 +7,19 @@ export type ApiError = Error & {
   payload?: unknown;
 };
 
-const ADMIN_BASE = import.meta.env.VITE_ADMIN_API_BASE ?? "http://127.0.0.1:7200";
-const DATA_BASE = import.meta.env.VITE_DATA_API_BASE ?? "http://127.0.0.1:7000";
+const ADMIN_BASE = import.meta.env.VITE_ADMIN_API_BASE ?? "/admin-api";
+const DATA_BASE = import.meta.env.VITE_DATA_API_BASE ?? "/data-api";
+
+function defaultAdminWsUrl(): string {
+  if (typeof window === "undefined") return "ws://127.0.0.1:7200/admin/events/stream";
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}/admin-ws/admin/events/stream`;
+}
 
 export const apiConfig = {
   adminBase: ADMIN_BASE,
   dataBase: DATA_BASE,
-  adminWs:
-    import.meta.env.VITE_ADMIN_WS_URL ??
-    ADMIN_BASE.replace(/^http/, "ws").replace(/\/$/, "") + "/admin/events/stream"
+  adminWs: import.meta.env.VITE_ADMIN_WS_URL ?? defaultAdminWsUrl()
 };
 
 export type AuthSnapshot = {
@@ -36,7 +40,11 @@ export function setAuthSnapshot(next: AuthSnapshot): void {
 
 function resolveUrl(surface: ApiSurface, path: string, query?: Record<string, unknown>): string {
   const base = surface === "admin" ? ADMIN_BASE : DATA_BASE;
-  const url = new URL(path, base);
+  const absoluteBase =
+    base.startsWith("http://") || base.startsWith("https://")
+      ? base
+      : `${window.location.origin}${base.startsWith("/") ? base : `/${base}`}`;
+  const url = new URL(`${absoluteBase.replace(/\/$/, "")}${path}`);
   if (query) {
     Object.entries(query).forEach(([key, value]) => {
       if (value === undefined || value === null || value === "") return;
