@@ -99,11 +99,7 @@ def _purge_admin_modules() -> None:
     """Drop top-level admin-service modules so dependency overrides bind correctly."""
     for name, module in list(sys.modules.items()):
         is_admin_namespace = (
-            name in _ADMIN_TOP_LEVEL_MODULES
-            or name == "api"
-            or name.startswith("api.")
-            or name == "lib"
-            or name.startswith("lib.")
+            name in _ADMIN_TOP_LEVEL_MODULES or name == "api" or name.startswith("api.")
         )
         if not is_admin_namespace:
             continue
