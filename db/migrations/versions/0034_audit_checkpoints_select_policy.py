@@ -1,6 +1,6 @@
 """audit_checkpoints_select_policy
 
-Revision ID: 0034_audit_checkpoints_select_policy
+Revision ID: 0034_audit_ckpt_select
 Revises: 0033_agent_reporting
 
 Allow application reads of append-only audit checkpoint metadata under RLS.
@@ -8,7 +8,7 @@ Allow application reads of append-only audit checkpoint metadata under RLS.
 
 from alembic import op
 
-revision = "0034_audit_checkpoints_select_policy"
+revision = "0034_audit_ckpt_select"
 down_revision = "0033_agent_reporting"
 
 SQL_UP = """
