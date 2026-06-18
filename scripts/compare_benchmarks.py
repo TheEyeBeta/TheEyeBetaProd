@@ -7,17 +7,26 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Literal
+
+BenchmarkRole = Literal["baseline", "current"]
 
 
-def load_benchmarks(path: Path) -> dict[str, float]:
+def load_benchmarks(path: Path, *, role: BenchmarkRole = "current") -> dict[str, float]:
     """Load benchmark name -> real_time (ns) from a JSON file or directory."""
     if path.is_dir():
         merged: dict[str, float] = {}
         for json_path in sorted(path.glob("*.json")):
-            merged.update(load_benchmarks(json_path))
+            merged.update(load_benchmarks(json_path, role=role))
         return merged
 
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        if role == "baseline":
+            print(f"Baseline {path} is not valid JSON — skipping regression gate")
+            return {}
+        raise
     timings: dict[str, float] = {}
     for entry in payload.get("benchmarks", []):
         name = str(entry.get("name", ""))
@@ -75,7 +84,7 @@ def main() -> int:
         print(f"No baseline at {args.baseline} — skipping regression gate", file=sys.stderr)
         return 0
 
-    baseline = load_benchmarks(args.baseline)
+    baseline = load_benchmarks(args.baseline, role="baseline")
     if not baseline:
         print(f"Baseline {args.baseline} has no benchmarks — skipping regression gate")
         return 0
@@ -84,7 +93,7 @@ def main() -> int:
         print(f"Current results missing: {args.current}", file=sys.stderr)
         return 1
 
-    current = load_benchmarks(args.current)
+    current = load_benchmarks(args.current, role="current")
     if not current:
         print(f"Current results at {args.current} have no benchmarks", file=sys.stderr)
         return 1
