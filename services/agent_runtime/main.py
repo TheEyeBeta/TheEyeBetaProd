@@ -85,6 +85,7 @@ class AgentRunResponse(BaseModel):
     market_stance: str
     regime_call: str
     kind: str = "run"
+    briefing: dict[str, Any] | None = None
 
 
 @lru_cache
@@ -158,6 +159,7 @@ def create_app() -> FastAPI:
             market_stance=summary["market_stance"],
             regime_call=summary["regime_call"],
             kind=body.kind,
+            briefing=summary.get("briefing"),
         )
 
     return app

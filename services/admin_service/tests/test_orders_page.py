@@ -300,7 +300,9 @@ async def test_orders_page_requires_auth(
     orders_page_integration_dsn: str,
 ) -> None:
     """Every orders route is JWT-gated."""
-    from main import create_app  # noqa: PLC0415
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings  # noqa: PLC0415
 
     from services.admin_service.tests.conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415

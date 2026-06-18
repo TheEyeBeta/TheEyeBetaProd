@@ -278,7 +278,10 @@ async def test_get_results_engine_409(
 async def test_backtest_auth_required(backtest_integration_dsn: str) -> None:
     """All backtest endpoints reject unauthenticated requests."""
     from httpx import ASGITransport  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings  # noqa: PLC0415
 
     _close = _admin_conf._close_test_resources

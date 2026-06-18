@@ -101,7 +101,10 @@ async def test_dashboard_requires_auth(
 ) -> None:
     """No auth override → 401 on every dashboard route."""
     from auth import get_current_user  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings  # noqa: PLC0415
 
     # Re-use the conftest helper without the dep override.

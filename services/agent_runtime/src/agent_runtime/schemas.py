@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -32,3 +33,12 @@ class AgentOutput(BaseModel):
     market_stance: Stance
     regime_call: Regime
     decisions: list[AgentDecision]
+
+
+@dataclass
+class ParsedRunOutput:
+    """Parsed LLM output — trading decisions or a free-form briefing."""
+
+    mode: Literal["trading", "briefing"]
+    trading: AgentOutput | None = None
+    briefing: dict[str, Any] | None = None

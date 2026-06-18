@@ -15,7 +15,10 @@ if str(_SERVICE_ROOT) not in sys.path:
     sys.path.insert(0, str(_SERVICE_ROOT))
 
 from auth import decode_access_token  # noqa: E402
-from main import create_app  # noqa: E402
+
+from services.admin_service.tests.conftest import _admin_create_app  # noqa: E402
+
+create_app = _admin_create_app()
 from settings import Settings  # noqa: E402
 
 

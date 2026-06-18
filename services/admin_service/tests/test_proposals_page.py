@@ -409,7 +409,9 @@ async def test_proposals_page_requires_auth(
     proposals_integration_dsn: str,
 ) -> None:
     """All proposals routes are JWT-gated."""
-    from main import create_app  # noqa: PLC0415
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings  # noqa: PLC0415
 
     from services.admin_service.tests.conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415

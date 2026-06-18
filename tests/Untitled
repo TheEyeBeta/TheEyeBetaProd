@@ -1,0 +1,650 @@
+That's actually one of the strongest architectural decisions you've made so far.
+
+Most people build systems like this:
+
+Raw data
+    ↓
+LLM
+    ↓
+Analysis
+
+The problem is the LLM becomes responsible for:
+
+finding data
+cleaning data
+validating data
+calculating metrics
+detecting anomalies
+generating conclusions
+
+That's expensive, slow, and inconsistent.
+
+Your approach is closer to:
+
+Raw data
+    ↓
+Deterministic ingestion
+    ↓
+Deterministic cleaning
+    ↓
+Deterministic calculations
+    ↓
+Feature store
+    ↓
+Argos
+    ↓
+Interpretation
+
+which is generally the architecture I'd expect in a serious research platform.
+
+For example, instead of giving Argos:
+
+{
+  "stock_prices": [...]
+}
+
+give it:
+
+{
+  "ticker": "NVDA",
+
+  "price_5d_return": 8.4,
+  "price_10d_return": 13.2,
+
+  "ma10_slope": 0.87,
+  "ma10_r2": 0.91,
+
+  "volume_zscore": 2.4,
+
+  "earnings_days_ago": 18,
+
+  "sector_return_10d": 9.1,
+
+  "fed_funds_change_30d": -0.25,
+  "ten_year_yield_change_30d": -0.18,
+
+  "cpi_surprise": -0.2,
+
+  "macro_confirmation_score": 0.74
+}
+
+Now Argos doesn't need to calculate anything.
+
+It only needs to reason.
+
+The biggest token savings won't come from shorter prompts.
+
+They come from moving computation out of the LLM.
+
+For example:
+
+Bad:
+
+Here are 750 daily prices.
+Calculate trend.
+Calculate volatility.
+Calculate drawdown.
+Calculate regression.
+Calculate momentum.
+
+Every stock requires thousands of tokens.
+
+Better:
+
+Trend score: 0.84
+Volatility percentile: 67
+Drawdown: -8%
+Momentum rank: 91
+
+Now Argos gets the answer, not the raw data.
+
+One thing I'd challenge you on, though:
+
+"they have everything they need"
+
+Be careful with that assumption.
+
+There are two different jobs:
+
+Job 1: Data processing
+
+Deterministic code should do this.
+
+Examples:
+
+Moving averages
+Regression
+Momentum
+Volatility
+Yield curve slope
+Credit spread changes
+Earnings growth
+
+100% deterministic.
+
+Job 2: Hypothesis generation
+
+This is where Argos can still be useful.
+
+Example:
+
+Tech rally
+Rates falling
+Inflation cooling
+Dollar weakening
+
+Argos can say:
+
+The rally appears consistent with a lower-rate environment.
+
+But sometimes:
+
+Tech rally
+Rates rising
+Inflation rising
+Dollar strengthening
+
+Argos might say:
+
+This move is inconsistent with the macro backdrop.
+
+Possible explanations:
+1. AI-related enthusiasm
+2. Earnings revisions
+3. Positioning squeeze
+4. Short covering
+
+That kind of reasoning is difficult to hard-code.
+
+If I were building The Eye and Argos today, I'd aim for something like:
+
+95% deterministic
+5% AI
+
+Not:
+
+60% deterministic
+40% AI
+
+The AI layer should be the final analyst.
+
+The deterministic layer should be doing almost all the arithmetic, data retrieval, feature engineering, scoring, ranking, and validation.
+
+One thing I think you'll discover over time:
+
+The most valuable output from Argos won't be:
+
+BUY
+SELL
+HOLD
+
+It'll be:
+
+What assumptions are currently supporting this position?
+
+What assumptions are being violated?
+
+What changed today?
+
+That's where an LLM can add value while consuming relatively few tokens, because it's analyzing a compact feature set rather than millions of rows of raw market data.
+
+No, that is the idea. Like this, the trade engine is data, right? We are analyzing, we are analyzing so much data, right? Then we feed the JSONs to the, our, to the workers, which are AI agents. So these workers are given specific things, specific like data to look into. Well, what we're gonna do is, now, there are thousands of companies, right? But what we are looking for is companies with certain things, because like, there's no point of me analyzing with AI thousands of companies. That is a waste of resources. Some companies have grown maybe in the last 5, 10 years, 30%, 40%. If there's been a growth in the last four, five years, I, maybe this has been talking too loosely, but you're kind of not worth our time. Like, let's be so for real. Are you really worth my time if in 10 years, you've only added 40% to your market cap? I don't really think I'm gonna, you're gonna be worth my time because how much could I make from you, theoretically? Not much. But maybe that's been talking loosely, but like, we are not exactly looking for this kind of companies.
+
+I think you're converging on something important, but there's a subtle trap here.
+
+The good idea is:
+
+Universe (1000-1500 stocks)
+        ↓
+Deterministic filters
+        ↓
+Top 50-100 candidates
+        ↓
+AI analysis
+        ↓
+Top 10-20 opportunities
+
+That architecture makes sense.
+
+The part I'd challenge is:
+
+"If a company only grew 40% in 10 years, it's probably not worth our time."
+
+That sounds reasonable until you look at how many market leaders would have been excluded at various points in their lives.
+
+The question isn't:
+
+How much did it grow?
+
+The question is:
+
+How likely is it to outperform from today?
+
+Those are very different.
+
+What AI should not analyze
+
+I agree with you here.
+
+If you have:
+
+1500 companies
+
+there is no reason to send 1500 JSONs to an LLM every day.
+
+That's burning money.
+
+Instead:
+
+Stage 1 — deterministic screening
+
+Calculate:
+
+Momentum score
+Trend score
+Volume score
+Earnings growth
+Relative strength
+Macro alignment
+Volatility
+Liquidity
+
+for every stock.
+
+Then rank.
+
+Example:
+
+1500 stocks
+↓
+Top 200 momentum
+↓
+Top 100 after liquidity filters
+↓
+Top 50 after macro filters
+↓
+Send to AI
+
+Now the AI is working on 50 stocks instead of 1500.
+
+The more dangerous filter
+
+I would not filter on:
+
+10-year appreciation
+
+alone.
+
+Because that can accidentally eliminate:
+
+Turnaround stories
+
+Company:
+
+2015-2024: flat
+2025: major business transformation
+
+Your filter says:
+
+past decade weak
+
+but the opportunity might be starting now.
+
+What I'd filter on instead
+
+Something like:
+
+5-day momentum
+10-day momentum
+15-day momentum
+
+3-month momentum
+6-month momentum
+12-month momentum
+
+Revenue growth
+EPS growth
+
+Trend quality
+
+Macro alignment
+
+Those are forward-looking.
+
+For The Eye specifically
+
+I'd create something like:
+
+screening_scores
+
+with:
+
+ticker
+
+momentum_score
+trend_score
+quality_score
+macro_score
+earnings_score
+liquidity_score
+
+overall_score
+
+Then:
+
+overall_score > threshold
+
+gets passed to Argos.
+
+Everything else gets ignored.
+
+Where AI becomes useful
+
+Not:
+
+Analyze 1500 stocks.
+
+Instead:
+
+These are the 30 highest-scoring stocks.
+
+Why are they here?
+
+What's common among them?
+
+Are there hidden risks?
+
+Are there contradictions?
+
+That is a much better use of tokens.
+
+One thing I suspect you'll eventually build
+
+Right now you're thinking:
+
+The Eye finds opportunities.
+Argos validates them.
+
+But I suspect you'll eventually add a middle layer:
+
+Universe
+↓
+The Eye
+↓
+Candidate list
+↓
+Risk engine
+↓
+Argos
+↓
+Portfolio decisions
+
+Because once you have 50 good stocks, the real problem isn't finding them.
+
+It's deciding:
+
+Which 10 deserve capital?
+How much capital?
+How correlated are they?
+What happens if tech drops 20%?
+What happens if rates rise?
+
+That's portfolio construction.
+
+Many funds discover that finding opportunities is easier than allocating capital correctly.
+
+So your current instinct—use deterministic code to narrow the universe aggressively before involving AI—is sound. The only thing I'd be careful about is using long-term historical appreciation as a hard exclusion rule. You risk throwing away future winners because you're screening for past winners.
+
+Okay, well, say I have, you know, 8,000 companies just running through every single day, right? And is it better to use C++ as the quant or as a calculation? Like, I don't really know the calculator, but then. Because, like, we're dealing with, or I think, like, I should shift to market cap $500 million and above. I think maybe I should redesign that so there are obviously different workers, right? Because I want a worker for each, more or less each task. Like, I guess they could microservices, but like, I want a lot of them so I know what features we have and what is happening. I just feel like it's easier for me if I label them as workers. I can know what they're doing. So I need a worker that's checking, oh, when is one going to be moved to over cross the $500 million mark by, you know, market cap? When does it cross, right, that $500 million? And once it crosses, it checks, right? Because if it, if it's like $499 million, right, but it's crossed to $500 million, it doesn't make sense for us to, like, disconnect it from the testing pool. So if it even drops to $450 million, let's say it drops to $400 million, we'll be disconnected from the testing pool. So we know that, okay, that was just a fluke. So I want a worker for each possible task, like, so each worker is listed so I know every single feature of the system. That's like the idea I have in mind. Like, I want this to be an advanced system.
+
+I’ll map this as an engineering design problem: language choice, universe admission rules, worker architecture, and the specific market-cap lifecycle logic.
+
+Thought for a couple of seconds
+
+Yes — this is the right direction, but do not make every tiny thing an AI agent. Make most of them deterministic workers.
+
+1. C++ or Python?
+
+For 8,000 companies daily, Python is enough for most calculations.
+
+Use:
+
+Python + Pandas/Polars + PostgreSQL
+
+But use C++ for:
+
+heavy backtesting
+large matrix calculations
+portfolio optimization
+simulation
+high-volume feature generation
+
+Best architecture:
+
+Python = orchestration, APIs, workers, database logic
+C++ = calculation engine for expensive numerical workloads
+PostgreSQL = storage
+Redis/queue = job control
+AI agents = final interpretation only
+
+Do not build the whole system in C++. You’ll slow yourself down.
+
+2. Market cap threshold: $500M+
+
+That is reasonable if you want a wider universe.
+
+But use hysteresis, not a hard cutoff.
+
+Meaning:
+
+Enter universe: market cap >= $500M
+Stay in universe unless market cap < $400M
+
+So your logic becomes:
+
+Status	Rule
+Not tracked	Below $500M
+Candidate	Crosses $500M
+Active universe	Stays above $500M for X days
+Watchlist	Drops below $500M but above $400M
+Removed	Drops below $400M or fails liquidity rules
+
+This avoids flukes.
+
+Example:
+
+Company crosses $500M for 1 day → candidate
+Company stays above $500M for 20 trading days → active
+Company drops to $470M → still tracked
+Company drops to $390M → removed / archived
+
+That is clean.
+
+3. Worker architecture
+
+Think of workers as named system responsibilities.
+
+Example:
+
+UniverseWorker
+PriceIngestionWorker
+MarketCapWorker
+LiquidityWorker
+CorporateActionsWorker
+MomentumWorker
+TrendWorker
+VolumeWorker
+MacroWorker
+NewsWorker
+FundamentalsWorker
+CandidateSelectionWorker
+RiskWorker
+ArgosWorker
+ReportWorker
+
+That is a good mental model.
+
+But technically, these workers can be:
+
+Python services
+scheduled jobs
+queue consumers
+microservices
+containers
+
+They do not all need to be separate servers at first.
+
+4. MarketCapWorker design
+
+Its job:
+
+Track which companies enter, stay in, or leave the research universe.
+
+Database table:
+
+CREATE TABLE universe_membership (
+    id BIGSERIAL PRIMARY KEY,
+    company_id BIGINT NOT NULL,
+    universe_name TEXT NOT NULL, -- us_equities_500m_plus
+
+    status TEXT NOT NULL,        -- candidate, active, watchlist, removed
+    first_crossed_at DATE,
+    activated_at DATE,
+    removed_at DATE,
+
+    entry_market_cap NUMERIC,
+    latest_market_cap NUMERIC,
+
+    days_above_entry_threshold INT DEFAULT 0,
+    days_below_exit_threshold INT DEFAULT 0,
+
+    reason TEXT,
+
+    UNIQUE(company_id, universe_name)
+);
+
+Rules:
+
+entry_threshold = 500_000_000
+exit_threshold = 400_000_000
+activation_days = 20
+removal_days = 10
+
+Pseudo-logic:
+
+if company not in universe:
+    if market_cap >= 500_000_000:
+        add status = "candidate"
+
+elif status == "candidate":
+    if market_cap >= 500_000_000 for 20 trading days:
+        status = "active"
+    elif market_cap < 400_000_000:
+        status = "removed"
+
+elif status == "active":
+    if market_cap < 500_000_000:
+        status = "watchlist"
+
+elif status == "watchlist":
+    if market_cap >= 500_000_000:
+        status = "active"
+    elif market_cap < 400_000_000 for 10 trading days:
+        status = "removed"
+
+That prevents noisy entry/exit.
+
+5. Do not just use market cap
+
+For $500M companies, liquidity matters more.
+
+Add these rules:
+
+Minimum market cap: $500M
+Minimum average dollar volume: $5M/day
+Minimum price: $3 or $5
+Minimum listed history: 2-5 years
+Exclude OTC/pink sheets
+Exclude SPAC shells
+Exclude bankrupt/distressed names
+
+A $700M company with terrible liquidity is useless.
+
+Use:
+
+average_dollar_volume = avg(close_price × volume over 30 days)
+
+Minimum:
+
+$5M/day
+
+Better:
+
+$10M/day
+6. Worker registry table
+
+Since you want to see every feature clearly, create a registry.
+
+CREATE TABLE system_workers (
+    id SERIAL PRIMARY KEY,
+    worker_name TEXT UNIQUE NOT NULL,
+    worker_type TEXT NOT NULL,       -- ingestion, calculation, scoring, ai, reporting
+    description TEXT,
+    input_tables TEXT[],
+    output_tables TEXT[],
+    schedule TEXT,
+    is_active BOOLEAN DEFAULT true
+);
+
+Worker logs:
+
+CREATE TABLE worker_runs (
+    id BIGSERIAL PRIMARY KEY,
+    worker_name TEXT NOT NULL,
+    started_at TIMESTAMPTZ DEFAULT now(),
+    finished_at TIMESTAMPTZ,
+    status TEXT NOT NULL,            -- running, success, failed
+    rows_processed INT,
+    error_message TEXT
+);
+
+This gives you full observability.
+
+7. Clean system flow
+Raw universe: 8,000 companies
+        ↓
+UniverseWorker
+        ↓
+MarketCapWorker
+        ↓
+LiquidityWorker
+        ↓
+Active research universe
+        ↓
+PriceWorker
+        ↓
+MomentumWorker
+        ↓
+TrendWorker
+        ↓
+MacroWorker
+        ↓
+CandidateSelectionWorker
+        ↓
+Top 50-100 companies
+        ↓
+Argos AI analysis
+
+That is the right pattern.
+
+My strongest recommendation
+
+Build it as:
+
+many named workers
+one shared database
+one job queue
+one orchestration layer
+few actual microservices at first
+
+Do not prematurely split everything into 40 microservices. Label everything as workers, yes. But keep deployment simple until scale forces separation.

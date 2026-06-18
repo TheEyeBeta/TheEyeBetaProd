@@ -22,7 +22,8 @@ from .guard import GuardViolation
 from .guard_client import GuardRejectedError, validate_agent_output
 from .math_tool import MathTool, openai_tool_definition
 from .observability import record_run_failure, record_run_success
-from .schemas import AgentDecision, AgentOutput
+from .schemas import AgentDecision, AgentOutput, ParsedRunOutput
+from .snapshot_context import snapshot_for_llm
 from .snapshot_loader import SnapshotLoader
 
 log = structlog.get_logger()
@@ -181,7 +182,7 @@ class AgentRunner:
                 run_id=run_id,
             ) as llm:
                 math_tool = MathTool(llm_client=llm)
-                parsed, totals, raw_text, tool_calls = await self._llm_loop(
+                parsed_run, totals, raw_text, tool_calls = await self._llm_loop(
                     llm=llm,
                     constitution=constitution,
                     snapshot_id=snapshot_id,
@@ -194,7 +195,39 @@ class AgentRunner:
                     subordinate_reports=subordinate_reports or [],
                 )
 
-                # Step 6: guard-service ValidateAgentOutput before persisting decisions.
+                if parsed_run.mode == "briefing":
+                    assert parsed_run.briefing is not None
+                    await self._persist_briefing_success(
+                        run_id=run_id,
+                        totals=totals,
+                    )
+                    stance, regime = _briefing_summary_fields(parsed_run.briefing)
+                    duration = time.perf_counter() - started
+                    record_run_success(
+                        agent_id,
+                        duration_seconds=duration,
+                        input_tokens=totals.input_tokens,
+                        output_tokens=totals.output_tokens,
+                    )
+                    log.info(
+                        "agent_briefing_succeeded",
+                        run_id=str(run_id),
+                        agent_id=agent_id,
+                        cost_usd=totals.cost_usd,
+                    )
+                    return {
+                        "run_id": str(run_id),
+                        "snapshot_id": str(snapshot_id),
+                        "decisions": [],
+                        "decision_rows": [],
+                        "cost_usd": totals.cost_usd,
+                        "market_stance": stance,
+                        "regime_call": regime,
+                        "briefing": parsed_run.briefing,
+                        "kind": kind,
+                    }
+
+                assert parsed_run.trading is not None
                 parsed = await self._guard_until_pass(
                     agent_id=agent_id,
                     run_id=str(run_id),
@@ -203,7 +236,7 @@ class AgentRunner:
                     math_tool=math_tool,
                     snapshot_id=snapshot_id,
                     snapshot_data=snapshot_data,
-                    parsed=parsed,
+                    parsed=parsed_run.trading,
                     raw_text=raw_text,
                     tool_calls=tool_calls,
                     valid_symbols=valid_symbols,
@@ -295,7 +328,7 @@ class AgentRunner:
         agent_messages: list[dict[str, Any]] | None = None,
         operator_context: dict[str, Any] | None = None,
         subordinate_reports: list[dict[str, Any]] | None = None,
-    ) -> tuple[AgentOutput, _TokenTotals, str, list[dict[str, str]]]:
+    ) -> tuple[ParsedRunOutput, _TokenTotals, str, list[dict[str, str]]]:
         """Chat with optional tool calls, then return validated output."""
         is_rebuttal = kind == "rebuttal"
         is_rollup = kind == "rollup"
@@ -306,9 +339,10 @@ class AgentRunner:
             else ([openai_tool_definition()] if "compute_stat" in allowed else None)
         )
         tool_calls_log: list[dict[str, str]] = []
+        llm_snapshot = snapshot_for_llm(snapshot_data, kind=kind)
         user_payload: dict[str, Any] = {
             "snapshot_id": str(snapshot_id),
-            "snapshot": snapshot_data,
+            "snapshot": llm_snapshot,
         }
         if operator_context:
             user_payload["operator_context"] = operator_context
@@ -332,7 +366,9 @@ class AgentRunner:
             {"role": "system", "content": constitution.system_prompt},
             {
                 "role": "user",
-                "content": f"{user_intro}```json\n{json.dumps(user_payload, indent=2)}\n```",
+                "content": (
+                    f"{user_intro}```json\n{json.dumps(user_payload, separators=(',', ':'))}\n```"
+                ),
             },
         ]
         totals = _TokenTotals()
@@ -347,7 +383,7 @@ class AgentRunner:
                 tools=None if is_final else tools,
                 tool_choice="auto" if tools and not is_final else None,
                 response_format={"type": "json_object"} if is_final else None,
-                max_tokens=4096,
+                max_tokens=8192 if is_rollup else 4096,
                 temperature=0.0,
                 prompt_cache_key=f"agent-{constitution.agent_id}",
             )
@@ -382,8 +418,12 @@ class AgentRunner:
                 continue
 
             raw_text = _content_as_text(response.content)
-            parsed = _parse_output(raw_text, constitution.output_schema_version)
-            return parsed, totals, raw_text, tool_calls_log
+            parsed_run = _parse_run_output(
+                raw_text,
+                constitution,
+                kind=kind,
+            )
+            return parsed_run, totals, raw_text, tool_calls_log
 
         msg = "LLM loop exhausted max_turns without final JSON"
         raise RuntimeError(msg)
@@ -441,10 +481,14 @@ class AgentRunner:
                     strict_prefix=result.sanitized_output,
                     totals=totals,
                 )
-                current_parsed = _parse_output(
+                current_parsed_run = _parse_run_output(
                     current_raw,
-                    constitution.output_schema_version,
+                    constitution,
+                    kind="run",
                 )
+                if current_parsed_run.mode != "trading" or current_parsed_run.trading is None:
+                    raise GuardRejectedError(["guard_retry_produced_non_trading_output"])
+                current_parsed = current_parsed_run.trading
                 continue
 
             if result.outcome == "ESCALATE":
@@ -464,10 +508,14 @@ class AgentRunner:
                     strict_prefix=result.sanitized_output,
                     totals=totals,
                 )
-                current_parsed = _parse_output(
+                current_parsed_run = _parse_run_output(
                     current_raw,
-                    constitution.output_schema_version,
+                    constitution,
+                    kind="run",
                 )
+                if current_parsed_run.mode != "trading" or current_parsed_run.trading is None:
+                    raise GuardRejectedError(["guard_retry_produced_non_trading_output"])
+                current_parsed = current_parsed_run.trading
                 continue
 
             log.warning("guard_unknown_outcome", outcome=result.outcome)
@@ -582,6 +630,33 @@ class AgentRunner:
 
         return decision_ids
 
+    async def _persist_briefing_success(
+        self,
+        *,
+        run_id: UUID,
+        totals: _TokenTotals,
+    ) -> None:
+        """Close a briefing run without inserting instrument decisions."""
+        async with await psycopg.AsyncConnection.connect(self.database_url) as conn:
+            await conn.execute(
+                """
+                UPDATE theeyebeta.agent_runs
+                   SET status = 'succeeded',
+                       ended_at = now(),
+                       total_input_tokens = %s,
+                       total_output_tokens = %s,
+                       total_cost_usd = %s
+                 WHERE id = %s
+                """,
+                (
+                    totals.input_tokens,
+                    totals.output_tokens,
+                    totals.cost_usd,
+                    run_id,
+                ),
+            )
+            await conn.commit()
+
     async def _finalize_guard_reject(
         self,
         run_id: UUID,
@@ -655,6 +730,68 @@ def _content_as_text(content: str | dict[str, Any] | list[Any] | None) -> str:
     if isinstance(content, str):
         return content
     return json.dumps(content)
+
+
+def _expects_trading_output(constitution: AgentConstitution, kind: str) -> bool:
+    """Return True when the agent must emit market_stance/regime_call/decisions."""
+    if kind == "rollup":
+        return False
+    body = constitution.system_prompt
+    if "Same contract as other market agents" in body:
+        return True
+    return (
+        "market_stance" in body
+        and "regime_call" in body
+        and "decisions" in body
+        and "instrument_symbol" in body
+    )
+
+
+def _briefing_summary_fields(briefing: dict[str, Any]) -> tuple[str, str]:
+    """Map heterogeneous briefing JSON to API stance/regime fields."""
+    stance_raw = (
+        briefing.get("market_stance")
+        or briefing.get("outcome")
+        or briefing.get("decision")
+        or briefing.get("verdict")
+        or "neutral"
+    )
+    regime_raw = briefing.get("regime_call") or briefing.get("regime") or "ranging"
+    stance = str(stance_raw).lower()
+    regime = str(regime_raw).lower()
+    if stance not in {"bullish", "bearish", "neutral"}:
+        stance = "neutral"
+    if regime not in {"trending", "ranging", "volatile", "calm"}:
+        regime = "ranging"
+    return stance, regime
+
+
+def _parse_run_output(
+    raw_text: str,
+    constitution: AgentConstitution,
+    *,
+    kind: str,
+) -> ParsedRunOutput:
+    """Parse LLM JSON as trading decisions or a department briefing."""
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise GuardViolation("schema_invalid_json", str(exc)) from exc
+    if not isinstance(payload, dict):
+        raise GuardViolation("schema_invalid_json", "Output must be a JSON object")
+
+    if _expects_trading_output(constitution, kind):
+        try:
+            trading = AgentOutput.model_validate(payload)
+        except ValidationError as exc:
+            log.warning(
+                "trading_schema_fallback_to_briefing",
+                agent_id=constitution.agent_id,
+                error=str(exc),
+            )
+            return ParsedRunOutput(mode="briefing", briefing=payload)
+        return ParsedRunOutput(mode="trading", trading=trading)
+    return ParsedRunOutput(mode="briefing", briefing=payload)
 
 
 def _parse_output(raw_text: str, schema_version: int) -> AgentOutput:

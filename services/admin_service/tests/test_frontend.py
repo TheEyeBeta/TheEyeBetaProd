@@ -215,7 +215,10 @@ def frontend_app_server(frontend_seeded_dsn: str) -> Iterator[dict[str, str]]:
     """
     import bcrypt
     import uvicorn
-    from main import create_app
+
+    from services.admin_service.tests.conftest import _admin_create_app
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings
 
     private_pem, public_pem = _rsa_keypair_pem()

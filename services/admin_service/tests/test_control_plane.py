@@ -36,7 +36,10 @@ async def _client_with_role(
     from unittest.mock import patch
 
     from auth import get_current_user  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings  # noqa: PLC0415
 
     spec = importlib.util.spec_from_file_location(
@@ -217,7 +220,10 @@ async def test_login_page_renders() -> None:
     from unittest.mock import patch
 
     from fastapi.testclient import TestClient
-    from main import create_app  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings  # noqa: PLC0415
 
     async def _init_noop(settings: object) -> None:  # noqa: ARG001

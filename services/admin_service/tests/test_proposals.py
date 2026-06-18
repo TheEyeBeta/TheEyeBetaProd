@@ -386,7 +386,10 @@ async def test_reject_validation(
 async def test_proposals_auth_required(proposals_integration_dsn: str) -> None:
     """All proposal endpoints reject unauthenticated requests."""
     from httpx import ASGITransport  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings  # noqa: PLC0415
 
     _close = _admin_conf._close_test_resources

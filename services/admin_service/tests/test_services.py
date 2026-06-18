@@ -98,7 +98,10 @@ async def test_status_inactive_unit_is_unhealthy(
 async def test_status_requires_auth(admin_integration_dsn: str) -> None:
     """GET /admin/services/status rejects unauthenticated requests."""
     from httpx import ASGITransport  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings  # noqa: PLC0415
 
     from services.admin_service.tests.conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415
@@ -231,7 +234,10 @@ async def test_restart_systemctl_failure_returns_409(
 async def test_restart_requires_auth(admin_integration_dsn: str) -> None:
     """POST /admin/services/{name}/restart rejects unauthenticated requests."""
     from httpx import ASGITransport  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
+
+    from services.admin_service.tests.conftest import _admin_create_app  # noqa: PLC0415
+
+    create_app = _admin_create_app()
     from settings import Settings, get_settings  # noqa: PLC0415
 
     from services.admin_service.tests.conftest import (  # type: ignore[import-not-found]  # noqa: PLC0415

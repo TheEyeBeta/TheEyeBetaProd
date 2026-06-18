@@ -27,7 +27,7 @@ load_dotenv()
 log = structlog.get_logger()
 
 LATEST_SNAPSHOT_SQL = """
-SELECT id, market, trade_date
+SELECT snapshot_id, market, trade_date
   FROM theeyebeta.data_snapshots_packaged
  WHERE ($1::text IS NULL OR market = $1)
  ORDER BY packaged_at DESC
@@ -53,6 +53,27 @@ async def _agent_active(conn: asyncpg.Connection, agent_id: str) -> bool:
         agent_id,
     )
     return row is not None
+
+
+def _slim_briefing(briefing: object) -> dict[str, Any] | None:
+    """Keep rollup inputs token-small while preserving operator-relevant fields."""
+    if not isinstance(briefing, dict):
+        return None
+    slim: dict[str, Any] = {}
+    for key in (
+        "verdict",
+        "outcome",
+        "decision",
+        "market_stance",
+        "regime_call",
+        "summary",
+        "department",
+    ):
+        if key in briefing:
+            slim[key] = briefing[key]
+    if briefing.get("rationale"):
+        slim["rationale"] = str(briefing["rationale"])[:400]
+    return slim or None
 
 
 async def _run_agent(
@@ -107,18 +128,19 @@ async def run_reporting_chain(
     conn = await asyncpg.connect(_pg_dsn())
     try:
         snap = await conn.fetchrow(LATEST_SNAPSHOT_SQL, market)
-        if snap is None and not dry_run:
-            msg = f"No packaged snapshot found for market={market!r}"
-            raise ValueError(msg)
-
-        if dry_run:
-            stats["dry_run"] = True
-            stats["rollup_order"] = hierarchy.rollup_order()
-            stats["snapshot_id"] = str(snap["id"]) if snap else None
-            stats["market"] = snap["market"] if snap else market
+        if snap is None:
+            if dry_run:
+                stats["dry_run"] = True
+                stats["rollup_order"] = hierarchy.rollup_order()
+                stats["snapshot_id"] = None
+                stats["market"] = market
+                stats["skipped_reason"] = "no_packaged_snapshot"
+                return stats
+            log.warning("reporting_chain_no_snapshot", market=market)
+            stats["skipped_reason"] = "no_packaged_snapshot"
             return stats
 
-        snapshot_id = snap["id"]
+        snapshot_id = snap["snapshot_id"]
         log.info(
             "reporting_chain_snapshot",
             snapshot_id=str(snapshot_id),
@@ -139,8 +161,10 @@ async def run_reporting_chain(
                 subordinate_payload = [
                     {
                         "agent_id": row.agent_id,
-                        "summary": row.summary,
-                        "payload": row.payload,
+                        "summary": row.summary[:300],
+                        "market_stance": row.payload.get("market_stance"),
+                        "regime_call": row.payload.get("regime_call"),
+                        "briefing": _slim_briefing(row.payload.get("briefing")),
                     }
                     for row in child_reports
                 ]

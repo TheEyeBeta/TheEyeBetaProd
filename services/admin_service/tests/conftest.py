@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from collections.abc import AsyncIterator
+from importlib import import_module
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -79,6 +80,22 @@ class ASGITransport(_BaseASGITransport):
 
 
 httpx.ASGITransport = ASGITransport
+
+
+def _admin_create_app() -> Any:
+    """Return admin-service create_app even after other tests mutate sys.path."""
+    service_root = str(_SERVICE_ROOT)
+    if service_root in sys.path:
+        sys.path.remove(service_root)
+    sys.path.insert(0, service_root)
+    loaded_main = sys.modules.get("main")
+    expected = (_SERVICE_ROOT / "main.py").resolve()
+    if loaded_main is not None:
+        loaded_path = Path(getattr(loaded_main, "__file__", "")).resolve()
+        if loaded_path != expected:
+            del sys.modules["main"]
+    return import_module("main").create_app
+
 
 PENDING_ORDER_ID = "cc0e8400-e29b-41d4-a716-446655440001"
 APPROVED_ORDER_ID = "cc0e8400-e29b-41d4-a716-446655440002"
@@ -273,9 +290,9 @@ async def _admin_client_for_dsn(
 ) -> AsyncIterator[tuple[AsyncClient, _RecordingNats]]:
     """Yield httpx client + NATS stub for a bootstrapped DSN."""
     from auth import get_current_user  # noqa: PLC0415
-    from main import create_app  # noqa: PLC0415
     from settings import Settings, get_settings  # noqa: PLC0415
 
+    create_app = _admin_create_app()
     get_settings.cache_clear()
     settings = Settings(
         database_url=dsn,

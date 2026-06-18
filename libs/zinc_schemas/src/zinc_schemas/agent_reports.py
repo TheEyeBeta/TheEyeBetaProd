@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Any, Protocol, cast
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from zinc_schemas.agent_hierarchy import OPERATOR_AUDIENCE
 
@@ -43,6 +43,16 @@ class AgentReportRow(BaseModel):
     status: ReportStatus
     created_at: datetime
 
+    @field_validator("payload", mode="before")
+    @classmethod
+    def _coerce_payload(cls, value: object) -> dict[str, Any]:
+        """asyncpg may return jsonb as str depending on driver settings."""
+        if isinstance(value, str):
+            return json.loads(value)
+        if isinstance(value, dict):
+            return value
+        return {}
+
 
 class AgentReportCreate(BaseModel):
     """Input for inserting a new agent report."""
@@ -62,6 +72,22 @@ class AgentReportCreate(BaseModel):
 
 def build_report_summary(run_body: dict[str, Any]) -> str:
     """Derive a one-line operator summary from an agent-runtime response."""
+    briefing = run_body.get("briefing")
+    if isinstance(briefing, dict):
+        for key in (
+            "summary",
+            "rationale",
+            "verdict",
+            "outcome",
+            "decision",
+            "thesis",
+            "counter_thesis",
+            "market_stance",
+        ):
+            value = briefing.get(key)
+            if value:
+                return str(value)[:500]
+
     stance = str(run_body.get("market_stance") or "").strip()
     regime = str(run_body.get("regime_call") or "").strip()
     parts = [p for p in (stance, regime) if p]
