@@ -10,6 +10,7 @@ import { SignalsPanel } from "./panels/SignalsPanel";
 import { RiskPanel } from "./panels/RiskPanel";
 import { AuditPanel } from "./panels/AuditPanel";
 import { PipelinesPanel } from "./panels/PipelinesPanel";
+import { DataPanel } from "./panels/DataPanel";
 import { StatusDot } from "./components/StatusDot";
 import { OPENAPI_PATHS } from "./api/openapi-schema";
 
@@ -184,7 +185,7 @@ function TerminalShell() {
             <Route path="/risk" element={<RiskPanel />} />
             <Route path="/audit" element={<AuditPanel />} />
             <Route path="/pipelines" element={<PipelinesPanel />} />
-            <Route path="/data" element={<PlaceholderPanel title="DATA" />} />
+            <Route path="/data" element={<DataPanel />} />
             <Route path="/admin" element={<PlaceholderPanel title="ADMIN" />} />
             <Route path="*" element={<Navigate to="/overview" replace />} />
           </Routes>

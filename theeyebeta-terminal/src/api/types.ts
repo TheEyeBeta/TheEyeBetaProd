@@ -201,3 +201,14 @@ export type WorkerRunsResponse = {
   runs?: WorkerRun[];
   total?: number;
 };
+
+export type DataTableRow = {
+  name?: string;
+  table_type?: string;
+  row_count_estimate?: number;
+  basic_access?: boolean;
+};
+
+export type DataTablesResponse = {
+  tables?: DataTableRow[];
+};
