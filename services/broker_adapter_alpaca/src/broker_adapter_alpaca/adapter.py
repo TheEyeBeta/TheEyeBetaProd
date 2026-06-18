@@ -186,6 +186,21 @@ class AlpacaAdapter:
             for p in positions
         ]
 
+    def get_account(self, account: str = "zinc") -> dict[str, Any]:
+        """Return cash/equity/buying_power for the named sub-account (read-only)."""
+        acct = self._client(account).get_account()
+        return {
+            "account": account,
+            "cash": float(acct.cash or 0),
+            "equity": float(acct.equity or 0),
+            "buying_power": float(acct.buying_power or 0),
+            "portfolio_value": float(acct.portfolio_value or 0),
+        }
+
+    def list_all_accounts(self) -> list[dict[str, Any]]:
+        """Return cash/equity/buying_power across all three sub-accounts."""
+        return [self.get_account(acct) for acct in sorted(_KNOWN_ACCOUNTS)]
+
     def list_all_positions(self) -> list[dict[str, Any]]:
         """Return open positions across all three sub-accounts."""
         result: list[dict[str, Any]] = []

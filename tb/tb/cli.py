@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typer
 
+from tb.commands.account import app as account_app
 from tb.commands.backtest import app as backtest_app
 from tb.commands.canonical import app as canonical_app
 from tb.commands.config import app as config_app
@@ -67,12 +68,16 @@ app.add_typer(strategies_app, name="strategies")
 app.add_typer(signals_app, name="signals")
 app.add_typer(sql_app, name="sql")
 
+# Trading
+app.add_typer(account_app, name="account")
+
 # Infra
 app.add_typer(db_app, name="db")
 app.add_typer(secrets_app, name="secrets")
 app.add_typer(deploy_app, name="deploy")
 app.add_typer(config_app, name="config")
 app.add_typer(meta_app, name="meta")
+app.add_typer(account_app, name="account")
 
 
 @app.command("logs")

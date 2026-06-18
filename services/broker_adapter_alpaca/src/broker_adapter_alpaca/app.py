@@ -176,6 +176,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=503, detail="Alpaca credentials not configured")
         return {"positions": adapter.list_all_positions()}
 
+    @app.get("/v1/account")
+    async def get_account(account: str = "zinc") -> dict[str, object]:
+        """Cash/equity/buying_power for one sub-account (?account=zinc|nyse|nasdaq)."""
+        if not cfg.credentials_configured():
+            raise HTTPException(status_code=503, detail="Alpaca credentials not configured")
+        return adapter.get_account(account)
+
+    @app.get("/v1/account/all")
+    async def list_all_accounts() -> dict[str, object]:
+        """Cash/equity/buying_power across all three sub-accounts."""
+        if not cfg.credentials_configured():
+            raise HTTPException(status_code=503, detail="Alpaca credentials not configured")
+        return {"accounts": adapter.list_all_accounts()}
+
     @app.get("/v1/orders")
     async def list_orders(account: str = "zinc") -> dict[str, object]:
         """List recent Alpaca orders for one sub-account (?account=zinc|nyse|nasdaq)."""
