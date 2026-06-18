@@ -205,7 +205,7 @@ async def test_execute_requires_confirm_header(
         },
     )
     assert response.status_code == 422
-    assert "X-Confirm" in response.json()["detail"]
+    assert "X-Confirm" in response.json()["error"]["message"]
 
 
 @pytest.mark.integration
@@ -224,7 +224,7 @@ async def test_execute_requires_idempotency_key(
         },
     )
     assert response.status_code == 422
-    assert "Idempotency-Key" in response.json()["detail"]
+    assert "Idempotency-Key" in response.json()["error"]["message"]
 
 
 @pytest.mark.integration

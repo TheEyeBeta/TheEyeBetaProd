@@ -199,7 +199,7 @@ async def test_restart_unknown_service_returns_422(
         headers=auth_headers,
     )
     assert resp.status_code == 422
-    assert "whitelist" in resp.json()["detail"]
+    assert "whitelist" in resp.json()["error"]["message"]
 
 
 @pytest.mark.integration
@@ -226,7 +226,7 @@ async def test_restart_systemctl_failure_returns_409(
         )
 
     assert resp.status_code == 409
-    assert "systemctl refused" in resp.json()["detail"]
+    assert "systemctl refused" in resp.json()["error"]["message"]
 
 
 @pytest.mark.integration

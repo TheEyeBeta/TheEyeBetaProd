@@ -97,7 +97,10 @@ async def test_list_happy(
 ) -> None:
     """GET /admin/proposals returns seeded rows newest first."""
     client, _ = proposals_admin_client
-    response = await client.get("/admin/proposals", headers=auth_headers)
+    response = await client.get(
+        "/admin/proposals",
+        headers={**auth_headers, "Accept": "application/json"},
+    )
     assert response.status_code == 200
     body = response.json()
     ids = {row["id"] for row in body["proposals"]}
@@ -117,7 +120,7 @@ async def test_list_filters(
     response = await client.get(
         "/admin/proposals",
         params={"status": "pending", "category": "strategy_param"},
-        headers=auth_headers,
+        headers={**auth_headers, "Accept": "application/json"},
     )
     assert response.status_code == 200
     body = response.json()
@@ -136,7 +139,7 @@ async def test_list_invalid_status(
     response = await client.get(
         "/admin/proposals",
         params={"status": "unknown"},
-        headers=auth_headers,
+        headers={**auth_headers, "Accept": "application/json"},
     )
     assert response.status_code == 422
 

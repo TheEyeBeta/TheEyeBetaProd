@@ -37,7 +37,10 @@ from zinc_test._infra import (  # noqa: E402
 # admin conftest module without depending on ``zinc_test`` internals directly.
 __all__ = ["_normalize_psycopg_dsn", "_run_sql_file", "app_dsn_from_admin"]
 
-_BaseASGITransport = httpx.ASGITransport
+if not hasattr(httpx, "_theeye_original_asgi_transport"):
+    httpx._theeye_original_asgi_transport = httpx.ASGITransport  # type: ignore[attr-defined]
+
+_BaseASGITransport = httpx._theeye_original_asgi_transport  # type: ignore[attr-defined]
 
 
 class ASGITransport(_BaseASGITransport):
@@ -247,8 +250,9 @@ def orders_integration_dsn(admin_integration_dsn: str) -> str:
 @pytest.fixture(scope="session")
 def audit_integration_dsn(alembic_upgraded: str) -> str:
     """Postgres with audit log + checkpoint seed data."""
-    _run_sql_file(alembic_upgraded, _SQL_DIR / "seed_audit.sql")
-    return app_dsn_from_admin(alembic_upgraded)
+    app_dsn = app_dsn_from_admin(alembic_upgraded)
+    _run_sql_file(app_dsn, _SQL_DIR / "seed_audit.sql")
+    return app_dsn
 
 
 @pytest.fixture(scope="session")
@@ -296,8 +300,9 @@ def proposals_integration_dsn(admin_integration_dsn: str) -> str:
 @pytest.fixture(scope="session")
 def dashboard_integration_dsn(alembic_upgraded: str) -> str:
     """Postgres seeded for the dashboard's four stat-card queries."""
-    _run_sql_file(alembic_upgraded, _SQL_DIR / "seed_dashboard.sql")
-    return app_dsn_from_admin(alembic_upgraded)
+    app_dsn = app_dsn_from_admin(alembic_upgraded)
+    _run_sql_file(app_dsn, _SQL_DIR / "seed_dashboard.sql")
+    return app_dsn
 
 
 @pytest.fixture(scope="session")
@@ -319,6 +324,7 @@ async def _admin_client_for_dsn(
 ) -> AsyncIterator[tuple[AsyncClient, _RecordingNats]]:
     """Yield httpx client + NATS stub for a bootstrapped DSN."""
     create_app = _admin_create_app()
+    from audit_log import configure_audit_dsn  # noqa: PLC0415
     from auth import get_current_user  # noqa: PLC0415
     from rbac import get_authenticated_user  # noqa: PLC0415
     from settings import Settings, get_settings  # noqa: PLC0415
@@ -343,6 +349,7 @@ async def _admin_client_for_dsn(
         import deps  # noqa: PLC0415
 
         deps.bind_app_state(app, settings)
+        configure_audit_dsn(settings.database_url)
 
         async def _fake_user() -> dict[str, str]:
             return {"sub": "test-operator", "role": "MASTER_ADMIN"}

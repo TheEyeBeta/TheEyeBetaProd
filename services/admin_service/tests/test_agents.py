@@ -305,6 +305,9 @@ async def test_run_agent_rate_limit(
             return ""
 
     class _StubClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            return None
+
         async def __aenter__(self) -> _StubClient:
             return self
 

@@ -149,6 +149,9 @@ VALUES (
     digest('dash-seed-row-1', 'sha256')
 );
 
+DELETE FROM theeyebeta.audit_checkpoints
+ WHERE checkpoint_id = 'dash-2026-05-25';
+
 INSERT INTO theeyebeta.audit_checkpoints (
     checkpoint_id, last_row_id, last_row_hash, signature, signing_ts, row_count, s3_uri
 )
@@ -160,5 +163,4 @@ VALUES (
     now() - interval '5 minutes',
     1,
     's3://theeyebeta-snapshots/checkpoints/dash-2026-05-25.json'
-)
-ON CONFLICT (checkpoint_id) DO NOTHING;
+);

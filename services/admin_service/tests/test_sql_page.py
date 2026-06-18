@@ -184,7 +184,7 @@ async def test_sql_query_fragment_rejects_bad_parameters_json(
     sql_admin_client: tuple[AsyncClient, Any],
     auth_headers: dict[str, str],
 ) -> None:
-    """Malformed JSON in ``parameters`` returns the error card."""
+    """Malformed JSON in ``parameters`` returns the normalized 422 envelope."""
     client, _ = sql_admin_client
     response = await client.post(
         "/admin/sql/fragments/query",
@@ -194,9 +194,8 @@ async def test_sql_query_fragment_rejects_bad_parameters_json(
             "parameters": "{not-json}",
         },
     )
-    assert response.status_code == 200
-    assert 'data-test-id="sql-error"' in response.text
-    assert "invalid JSON" in response.text
+    assert response.status_code == 422
+    assert "invalid JSON" in response.json()["error"]["message"]
 
 
 # ---------------------------------------------------------------- Fragment: confirm

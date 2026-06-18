@@ -68,7 +68,8 @@ from audit_log import write_audit_log
 from auth import CurrentUser
 from deps import DbConn, NatsClient, SettingsDep
 from fastapi import APIRouter, Form, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from rbac import Role, require_role
 from slowapi import Limiter
 from web import page_context, templates
@@ -102,6 +103,7 @@ from api.orders import (
 )
 from api.proposals import (
     PROPOSALS_DEFAULT_LIMIT,
+    PROPOSALS_MAX_LIMIT,
     VALID_PROPOSAL_CATEGORIES,
     approve_proposal_impl,
     fetch_backtest_status,
@@ -1232,16 +1234,35 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
         user: CurrentUser,
         conn: DbConn,
         category: str = "",
-    ) -> HTMLResponse:
-        """Render the proposals page with three tabs (pending/approved/rejected)."""
-        active_status = "pending"
+        proposal_status: str | None = Query(default=None, alias="status"),
+        proposed_by: str | None = Query(default=None),
+        target: str | None = Query(default=None),
+        limit: int = Query(default=PROPOSALS_DEFAULT_LIMIT, ge=1, le=PROPOSALS_MAX_LIMIT),
+        cursor: datetime | None = Query(default=None),
+    ) -> Response:
+        """Render the proposals page, or preserve the JSON list contract via Accept."""
+        wants_json = "application/json" in request.headers.get("accept", "").lower()
+        active_status = proposal_status if wants_json else proposal_status or "pending"
         active_category = _proposals_category_or_none(category)
         page = await fetch_proposals_page(
             conn,
             proposal_status=active_status,
             category=active_category,
-            limit=PROPOSALS_DEFAULT_LIMIT,
+            proposed_by=proposed_by,
+            target=target,
+            limit=limit,
+            cursor=cursor,
         )
+        if wants_json:
+            log.info(
+                "admin_proposals_listed",
+                count=len(page.proposals),
+                status=active_status,
+                category=active_category,
+                sub=user["sub"],
+            )
+            return JSONResponse(jsonable_encoder(page))
+
         # Fetch detail rows for cards so jsonb fields (estimated_impact, evidence)
         # are available without an N+1 follow-up; for an MVP the proposal lists
         # are short (<=100 rows), so this stays inside the same hot path.

@@ -10,6 +10,7 @@ import json
 from typing import Any
 from unittest.mock import patch
 
+import asyncpg
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -77,18 +78,39 @@ async def test_orders_empty_state(
     auth_headers: dict[str, str],
 ) -> None:
     """When there are no pending orders the table renders the empty-state row."""
-    # Use the *admin* DSN (migrations only — no seed) so the table is empty.
     from services.admin_service.tests.conftest import (
         _admin_client_for_dsn,  # type: ignore[import-not-found]  # noqa: PLC0415
     )
 
-    async for tup in _admin_client_for_dsn(admin_integration_dsn, auth_headers):
-        client, _ = tup
-        response = await client.get("/admin/orders", headers=auth_headers)
-        assert response.status_code == 200
-        body = response.text
-        assert "Nothing pending" in body
-        assert 'data-empty="true"' in body
+    conn = await asyncpg.connect(dsn=admin_integration_dsn)
+    pending_ids = await conn.fetch(
+        """
+        UPDATE theeyebeta.orders
+           SET status = 'approved'
+         WHERE status = 'pending_approval'
+         RETURNING id
+        """,
+    )
+    try:
+        async for tup in _admin_client_for_dsn(admin_integration_dsn, auth_headers):
+            client, _ = tup
+            response = await client.get("/admin/orders", headers=auth_headers)
+            assert response.status_code == 200
+            body = response.text
+            assert "Nothing pending" in body
+            assert 'data-empty="true"' in body
+    finally:
+        ids = [row["id"] for row in pending_ids]
+        if ids:
+            await conn.execute(
+                """
+                UPDATE theeyebeta.orders
+                   SET status = 'pending_approval'
+                 WHERE id = ANY($1::uuid[])
+                """,
+                ids,
+            )
+        await conn.close()
 
 
 @pytest.mark.integration
