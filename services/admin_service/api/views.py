@@ -68,9 +68,10 @@ from audit_log import write_audit_log
 from auth import CurrentUser
 from deps import DbConn, NatsClient, SettingsDep
 from fastapi import APIRouter, Form, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from rbac import MasterAdminUser
 from slowapi import Limiter
-from web import page_context, templates
+from web import TERMINAL_DIR, page_context, templates
 
 from api.agents import (
     fetch_agent_runs,
@@ -94,7 +95,6 @@ from api.guard import (
     validate_severity,
 )
 from api.orders import (
-    _SELECT_ORDER,
     _fetch_order,
     approve_pending_order,
     reject_pending_order,
@@ -263,13 +263,18 @@ def _new_uuid7() -> str:
 
 
 def _prefers_html(request: Request) -> bool:
-    """Return ``True`` when the client's Accept header prefers HTML over JSON.
+    """Return True for UI navigation, False for explicit JSON clients.
 
     Browsers send ``text/html,application/xhtml+xml,…``; the httpx-based
     integration tests send no ``Accept`` header (defaults to ``*/*``) — so
     the rule is: HTML iff ``text/html`` appears explicitly.
     """
-    return "text/html" in request.headers.get("accept", "").lower()
+    accept = request.headers.get("accept", "").lower()
+    if request.headers.get("hx-request", "").lower() == "true":
+        return True
+    if "application/json" in accept and "text/html" not in accept:
+        return False
+    return True
 
 
 def _clamp_limit(value: int) -> int:
@@ -364,14 +369,18 @@ async def _fetch_dashboard_stats(conn: asyncpg.Connection) -> DashboardStats:
         """,
         today,
     )
-    checkpoint_row = await conn.fetchrow(
-        """
-        SELECT checkpoint_id, signing_ts, row_count
-          FROM theeyebeta.audit_checkpoints
-         ORDER BY signing_ts DESC
-         LIMIT 1
-        """,
-    )
+    checkpoint_row = None
+    try:
+        checkpoint_row = await conn.fetchrow(
+            """
+            SELECT checkpoint_id, signing_ts, row_count
+              FROM theeyebeta.audit_checkpoints
+             ORDER BY signing_ts DESC
+             LIMIT 1
+            """,
+        )
+    except asyncpg.PostgresError:
+        checkpoint_row = None
 
     model_cost = _to_decimal(cost_row["model_cost_usd"]) if cost_row else Decimal("0")
     api_cost = _to_decimal(cost_row["api_cost_usd"]) if cost_row else Decimal("0")
@@ -418,35 +427,41 @@ async def _find_agent(conn: asyncpg.Connection, agent_id: str) -> AgentSummary:
 def register_views_routes(limiter: Limiter) -> APIRouter:
     """Attach dashboard page + htmx fragment / action routes."""
 
-    @router.get("/", response_class=HTMLResponse)
-    async def view_dashboard(
-        request: Request,
+    @router.get("/", response_class=RedirectResponse)
+    async def view_terminal_home(
         user: CurrentUser,
-        conn: DbConn,
-        settings: SettingsDep,
-    ) -> HTMLResponse:
-        """Render the operator dashboard at ``/admin/``."""
-        stats = await _fetch_dashboard_stats(conn)
-        log.info("admin_dashboard_rendered", sub=user["sub"])
-        return templates.TemplateResponse(
-            request,
-            "dashboard.html",
-            page_context(
-                request,
-                active="dashboard",
-                title="Dashboard",
-                extra={
-                    "stats": stats,
-                    "grafana_overview_url": settings.grafana_overview_url,
-                    "daily_backtest_configured": bool(
-                        settings.daily_backtest_strategy_id,
-                    ),
-                    "daily_backtest_strategy_id": settings.daily_backtest_strategy_id,
-                    "daily_backtest_days": settings.daily_backtest_days,
-                    "audit_verify_hours": settings.audit_verify_hours,
-                },
-            ),
-        )
+    ) -> RedirectResponse:
+        """Redirect operator home to the Terminal Echo SPA."""
+        _ = user
+        return RedirectResponse(url="/admin/terminal/", status_code=307)
+
+    @router.get("/terminal", include_in_schema=False)
+    @router.get("/terminal/", include_in_schema=False, response_class=HTMLResponse)
+    async def terminal_spa_index(
+        user: CurrentUser,
+    ) -> FileResponse:
+        """Serve the built Terminal Echo market dashboard."""
+        _ = user
+        index = TERMINAL_DIR / "index.html"
+        if not index.is_file():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Terminal Echo not built — run npm run build in terminal/",
+            )
+        return FileResponse(index)
+
+    @router.get("/terminal/assets/{asset_path:path}", include_in_schema=False)
+    async def terminal_spa_assets(
+        user: CurrentUser,
+        asset_path: str,
+    ) -> FileResponse:
+        """Serve Vite-built JS/CSS assets for Terminal Echo."""
+        _ = user
+        target = (TERMINAL_DIR / "assets" / asset_path).resolve()
+        root = (TERMINAL_DIR / "assets").resolve()
+        if not str(target).startswith(str(root)) or not target.is_file():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+        return FileResponse(target)
 
     @router.get("/fragments/stats", response_class=HTMLResponse)
     async def fragment_stats(
@@ -596,33 +611,6 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
             message=f"Backtest {run_id[:8]}… queued for {start_d}→{end_d}.",
         )
 
-    @router.get("/orders", response_class=HTMLResponse)
-    async def view_orders(
-        request: Request,
-        user: CurrentUser,
-        conn: DbConn,
-    ) -> HTMLResponse:
-        """Render the pending-orders queue at ``/admin/orders``."""
-        rows = await conn.fetch(
-            f"""
-            {_SELECT_ORDER}
-             WHERE o.status = 'pending_approval'
-             ORDER BY o.created_at DESC
-            """,
-        )
-        orders = [_row_to_order_view(row) for row in rows]
-        log.info("admin_orders_page_rendered", count=len(orders), sub=user["sub"])
-        return templates.TemplateResponse(
-            request,
-            "orders.html",
-            page_context(
-                request,
-                active="orders",
-                title="Pending orders",
-                extra={"orders": orders, "pending_total": len(orders)},
-            ),
-        )
-
     @router.get(
         "/orders/fragments/{order_id}/rationale",
         response_class=HTMLResponse,
@@ -695,17 +683,20 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
     async def fragment_order_approve(
         request: Request,  # noqa: ARG001 — required by slowapi
         order_id: UUID,
-        user: CurrentUser,
+        user: MasterAdminUser,
         conn: DbConn,
         nats: NatsClient,
+        settings: SettingsDep,
         note: Annotated[str | None, Form()] = None,
     ) -> HTMLResponse:
         """Approve a pending order and return the updated row HTML."""
         await approve_pending_order(
             conn,
             nats,
+            settings,
             order_id=order_id,
             actor=_actor(user),
+            reason=note or "approved via orders UI",
             note=note,
         )
         return await _render_order_row_response(request, conn, order_id)
@@ -718,7 +709,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
     async def fragment_order_reject(
         request: Request,  # noqa: ARG001 — required by slowapi
         order_id: UUID,
-        user: CurrentUser,
+        user: MasterAdminUser,
         conn: DbConn,
         rejection_reason: Annotated[str, Form(min_length=1, max_length=2000)],
     ) -> HTMLResponse:
@@ -761,6 +752,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
             "audit.html",
             page_context(
                 request,
+                user=user,
                 active="audit",
                 title="Audit log",
                 extra={
@@ -842,6 +834,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
             "agents.html",
             page_context(
                 request,
+                user=user,
                 active="agents",
                 title="Agents",
                 extra={"agents": agents},
@@ -969,6 +962,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
             "costs.html",
             page_context(
                 request,
+                user=user,
                 active="costs",
                 title="Costs",
                 extra={
@@ -1083,7 +1077,8 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
             "sql.html",
             page_context(
                 request,
-                active="sql",
+                user=user,
+                active="database",
                 title="SQL",
                 extra={
                     "query_max_rows": QUERY_MAX_ROWS,
@@ -1257,6 +1252,7 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
             "proposals.html",
             page_context(
                 request,
+                user=user,
                 active="proposals",
                 title="Proposals",
                 extra={
@@ -1529,7 +1525,8 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
             "violations.html",
             page_context(
                 request,
-                active="violations",
+                user=user,
+                active="compliance",
                 title="Guard violations",
                 extra={
                     "rows": entries,

@@ -47,6 +47,8 @@ async def test_approve_endpoint_returns_submitted() -> None:
         patch("oms.state.fetch_order_row", AsyncMock(return_value=row)),
         patch("oms.state.persist_order_state", AsyncMock()),
         patch("oms.app.insert_audit_log", AsyncMock()),
+        patch("oms.app.check_risk", AsyncMock(return_value={"approved": True})),
+        patch("oms.app.check_compliance", AsyncMock(return_value={"approved": True})),
         patch("oms.reconciliation.ReconciliationLoop.start", AsyncMock()),
         patch("oms.reconciliation.ReconciliationLoop.stop", AsyncMock()),
         patch("oms.consumer.OmsEventConsumer.start", AsyncMock()),

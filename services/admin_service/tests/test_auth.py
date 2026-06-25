@@ -88,3 +88,59 @@ def test_health_route_builds() -> None:
     app = create_app()
     paths = [getattr(r, "path", None) for r in app.routes]
     assert "/admin/health" in paths
+
+
+@pytest.mark.unit
+def test_mfa_challenge_token_round_trips(test_settings: Settings) -> None:
+    """A challenge token issued by /login decodes back with the right claims."""
+    from datetime import timedelta  # noqa: E402
+
+    from auth import _decode_mfa_challenge_token, _encode_token  # noqa: E402
+
+    token = _encode_token(
+        settings=test_settings,
+        subject="operator-one",
+        token_type="mfa_challenge",
+        ttl=timedelta(minutes=5),
+    )
+    payload = _decode_mfa_challenge_token(token, test_settings)
+    assert payload["sub"] == "operator-one"
+    assert payload["typ"] == "mfa_challenge"
+
+
+@pytest.mark.unit
+def test_mfa_challenge_token_rejects_wrong_type(test_settings: Settings) -> None:
+    """An access token must not be accepted as an MFA challenge."""
+    from datetime import timedelta  # noqa: E402
+
+    from auth import _decode_mfa_challenge_token, _encode_token  # noqa: E402
+    from fastapi import HTTPException  # noqa: E402
+
+    access_token = _encode_token(
+        settings=test_settings,
+        subject="operator-one",
+        token_type="access",
+        ttl=timedelta(minutes=5),
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        _decode_mfa_challenge_token(access_token, test_settings)
+    assert exc_info.value.status_code == 401
+
+
+@pytest.mark.unit
+def test_new_routes_registered() -> None:
+    """MFA, kill-run, and the NAV-02 redirect aliases are all wired into the app."""
+    app = create_app()
+    paths = {getattr(r, "path", None) for r in app.routes}
+    assert "/admin/auth/mfa/verify" in paths
+    assert "/admin/users/{user_id}/mfa/enroll" in paths
+    assert "/admin/users/{user_id}/mfa/confirm" in paths
+    assert "/admin/agents/{agent_id}/runs/{run_id}/kill" in paths
+    for legacy_path in (
+        "/admin/emergency-trading",
+        "/admin/oms",
+        "/admin/portfolio",
+        "/admin/database",
+        "/admin/command-center",
+    ):
+        assert legacy_path in paths

@@ -141,6 +141,68 @@ def _count_day_trades(order_rows: list[tuple[Any, ...]]) -> int:
     return sum(1 for sides in by_inst.values() if "buy" in sides and "sell" in sides)
 
 
+async def load_active_holds_and_overrides(
+    dsn: str,
+    *,
+    portfolio_id: str,
+    account_id: str,
+    symbol: str,
+    instrument_id: int,
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Load active legal holds and non-expired compliance overrides for this order."""
+    async with await psycopg.AsyncConnection.connect(dsn) as conn:
+        cur = await conn.execute(
+            """
+            SELECT entity_type, entity_id, reason, placed_by, placed_at
+              FROM theeyebeta.admin_legal_holds
+             WHERE active
+               AND (
+                     (entity_type = 'portfolio' AND entity_id = %s)
+                  OR (entity_type = 'account' AND entity_id = %s)
+                  OR (entity_type = 'instrument' AND entity_id IN (%s, %s))
+                   )
+            """,
+            (portfolio_id, account_id, symbol, str(instrument_id)),
+        )
+        hold_rows = await cur.fetchall()
+
+        cur = await conn.execute(
+            """
+            SELECT portfolio_id, rule_id, reason, actor, expires_at
+              FROM theeyebeta.admin_compliance_overrides
+             WHERE active
+               AND (expires_at IS NULL OR expires_at > now())
+               AND (portfolio_id IS NULL OR portfolio_id = %s)
+             ORDER BY portfolio_id NULLS FIRST
+            """,
+            (UUID(portfolio_id),),
+        )
+        override_rows = await cur.fetchall()
+
+    holds = [
+        {
+            "entity_type": str(r[0]),
+            "entity_id": str(r[1]),
+            "reason": str(r[2]),
+            "placed_by": str(r[3]),
+            "placed_at": r[4],
+        }
+        for r in hold_rows
+    ]
+    # Portfolio-scoped overrides are ordered last so they win over a global
+    # (portfolio_id IS NULL) override for the same rule_id.
+    overrides_by_rule: dict[str, dict[str, Any]] = {}
+    for r in override_rows:
+        overrides_by_rule[str(r[1])] = {
+            "portfolio_id": str(r[0]) if r[0] else None,
+            "rule_id": str(r[1]),
+            "reason": str(r[2]),
+            "actor": str(r[3]),
+            "expires_at": r[4],
+        }
+    return holds, overrides_by_rule
+
+
 async def persist_compliance_checks(
     dsn: str,
     *,

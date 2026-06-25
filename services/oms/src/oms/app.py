@@ -12,11 +12,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from oms.audit import insert_audit_log
 from oms.consumer import OmsEventConsumer
-from oms.db import fetch_order_row
+from oms.db import fetch_order_row, persist_order_rejection
 from oms.reconciliation import ReconciliationLoop
 from oms.settings import Settings
 from oms.state import OrderManager
 from oms.submission_gate import SubmissionGate
+from oms.validation_gate import check_compliance, check_risk
 
 log = structlog.get_logger()
 
@@ -87,6 +88,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         approved_by = (body or ApproveBody()).approved_by
         try:
             row = await fetch_order_row(cfg.pg_dsn(), str(order_id))
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        limit_price = row["limit_price"] if row["limit_price"] is not None else 100.0
+        gate_calls = (
+            ("risk_service", cfg.risk_service_http_url, check_risk),
+            ("compliance_service", cfg.compliance_service_http_url, check_compliance),
+        )
+        for source, base_url, gate_fn in gate_calls:
+            result = await gate_fn(
+                base_url,
+                portfolio_id=row["portfolio_id"],
+                instrument_id=row["instrument_id"],
+                side=row["side"],
+                qty=row["qty"],
+                limit_price=limit_price,
+            )
+            if not result.get("approved", True):
+                reason = str(result.get("reason") or f"{source} rejected order")
+                await persist_order_rejection(cfg.pg_dsn(), order_id=str(order_id), reason=reason)
+                await insert_audit_log(
+                    cfg.pg_dsn(),
+                    actor=approved_by,
+                    action="order.reject",
+                    entity_type="order",
+                    entity_id=str(order_id),
+                    payload={"source": source, "reason": reason},
+                )
+                raise HTTPException(status_code=422, detail=reason)
+
+        try:
             snapshots = await manager.approve(str(order_id), approved_by=approved_by)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -6,24 +6,41 @@ from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from uuid import UUID
+
 import asyncpg
 import httpx
 import structlog
 from audit_log import write_audit_log
 from auth import CurrentUser
 from deps import DbConn, SettingsDep
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, Header, HTTPException, Query, Request, status
+from rbac import (
+    DangerousActionRequest,
+    MasterAdminUser,
+    actor_from_user,
+    require_dangerous_confirm,
+)
 from slowapi import Limiter
 
 if TYPE_CHECKING:
     from settings import Settings
 
 from zinc_schemas.admin_dto import (
+    AgentConfigPatchRequest,
+    AgentConfigPatchResponse,
     AgentConstitutionResponse,
+    AgentDetailResponse,
+    AgentDisableResponse,
+    AgentPauseResponse,
+    AgentRollbackRequest,
+    AgentRollbackResponse,
     AgentRunRow,
     AgentRunsResponse,
     AgentsListResponse,
     AgentSummary,
+    AgentVersionsResponse,
+    RunAgentDangerousRequest,
     RunAgentRequest,
     RunAgentResponse,
 )
@@ -35,6 +52,12 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 _DEFAULT_RUNS_LIMIT = 50
 _MAX_RUNS_LIMIT = 200
 _RUNTIME_TIMEOUT_SECONDS = 120.0
+
+
+def _intel(conn: DbConn, settings: SettingsDep):
+    from intelligence_control.service import IntelligenceControlService
+
+    return IntelligenceControlService(conn, settings)
 
 
 def _actor(user: dict[str, str]) -> str:
@@ -319,6 +342,115 @@ def register_agents_routes(limiter: Limiter) -> APIRouter:
         log.info("admin_agents_listed", count=len(agents), sub=user["sub"])
         return AgentsListResponse(agents=agents)
 
+    @router.get("/{agent_id}", response_model=AgentDetailResponse)
+    async def get_agent(
+        agent_id: str,
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+    ) -> AgentDetailResponse:
+        try:
+            return await _intel(conn, settings).get_agent_detail(agent_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    @router.post("/{agent_id}/pause", response_model=AgentPauseResponse)
+    @limiter.limit("10/minute")
+    async def pause_agent(
+        request: Request,  # noqa: ARG001
+        agent_id: str,
+        body: DangerousActionRequest,
+        user: MasterAdminUser,
+        conn: DbConn,
+        settings: SettingsDep,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
+    ) -> AgentPauseResponse:
+        require_dangerous_confirm(body, x_confirm)
+        try:
+            return await _intel(conn, settings).pause_agent(
+                agent_id,
+                actor=_actor(user),
+                reason=body.reason,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    @router.post("/{agent_id}/disable", response_model=AgentDisableResponse)
+    @limiter.limit("10/minute")
+    async def disable_agent(
+        request: Request,  # noqa: ARG001
+        agent_id: str,
+        body: DangerousActionRequest,
+        user: MasterAdminUser,
+        conn: DbConn,
+        settings: SettingsDep,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
+    ) -> AgentDisableResponse:
+        require_dangerous_confirm(body, x_confirm)
+        try:
+            return await _intel(conn, settings).disable_agent(
+                agent_id,
+                actor=_actor(user),
+                reason=body.reason,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    @router.patch("/{agent_id}/config", response_model=AgentConfigPatchResponse)
+    @limiter.limit("10/minute")
+    async def patch_agent_config(
+        request: Request,  # noqa: ARG001
+        agent_id: str,
+        body: AgentConfigPatchRequest,
+        user: MasterAdminUser,
+        conn: DbConn,
+        settings: SettingsDep,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
+    ) -> AgentConfigPatchResponse:
+        require_dangerous_confirm(body, x_confirm)
+        try:
+            return await _intel(conn, settings).patch_agent_config(
+                agent_id,
+                body,
+                actor=_actor(user),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    @router.get("/{agent_id}/versions", response_model=AgentVersionsResponse)
+    async def list_agent_versions(
+        agent_id: str,
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+    ) -> AgentVersionsResponse:
+        try:
+            return await _intel(conn, settings).list_agent_versions(agent_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    @router.post("/{agent_id}/rollback", response_model=AgentRollbackResponse)
+    @limiter.limit("5/minute")
+    async def rollback_agent_version(
+        request: Request,  # noqa: ARG001
+        agent_id: str,
+        body: AgentRollbackRequest,
+        user: MasterAdminUser,
+        conn: DbConn,
+        settings: SettingsDep,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
+    ) -> AgentRollbackResponse:
+        require_dangerous_confirm(body, x_confirm)
+        try:
+            return await _intel(conn, settings).rollback_agent_version(
+                agent_id,
+                body.version_id,
+                actor=_actor(user),
+                reason=body.reason,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
     @router.get("/{agent_id}/runs", response_model=AgentRunsResponse)
     async def list_agent_runs(
         agent_id: str,
@@ -336,22 +468,73 @@ def register_agents_routes(limiter: Limiter) -> APIRouter:
         )
         return result
 
+    @router.post("/{agent_id}/runs/{run_id}/kill")
+    @limiter.limit("10/minute")
+    async def kill_agent_run(
+        request: Request,  # noqa: ARG001 — required by slowapi
+        agent_id: str,
+        run_id: UUID,
+        body: DangerousActionRequest,
+        user: MasterAdminUser,
+        conn: DbConn,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
+    ) -> dict[str, object]:
+        """Force-fail a run stuck in RUNNING (e.g. a hung LLM gateway call)."""
+        require_dangerous_confirm(body, x_confirm)
+        row = await conn.fetchrow(
+            """
+            UPDATE theeyebeta.agent_runs
+               SET status = 'failed', ended_at = now(), error = $1
+             WHERE id = $2 AND agent_id = $3 AND status = 'running'
+            RETURNING id, status
+            """,
+            f"killed by operator: {body.reason}",
+            run_id,
+            agent_id,
+        )
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Run is not in RUNNING state (already finished or not found)",
+            )
+        await write_audit_log(
+            conn,
+            actor=_actor(user),
+            action="agents.run.kill",
+            entity_type="agent_run",
+            entity_id=str(run_id),
+            payload={"agent_id": agent_id, "reason": body.reason},
+        )
+        log.info("admin_agent_run_killed", agent_id=agent_id, run_id=str(run_id), sub=user["sub"])
+        return {"id": str(row["id"]), "status": row["status"]}
+
     @router.post("/{agent_id}/run", response_model=RunAgentResponse)
     @limiter.limit("20/minute")
     async def trigger_agent_run(
         request: Request,  # noqa: ARG001 — required by slowapi
         agent_id: str,
-        body: RunAgentRequest,
-        user: CurrentUser,
+        body: RunAgentDangerousRequest,
+        user: MasterAdminUser,
         conn: DbConn,
         settings: SettingsDep,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
     ) -> RunAgentResponse:
         """Forward to ``agent-runtime`` and audit log the trigger."""
+        require_dangerous_confirm(body, x_confirm)
+        try:
+            await _intel(conn, settings).ensure_agent_not_blocked(agent_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        run_body = RunAgentRequest(
+            snapshot_id=body.snapshot_id,
+            kind=body.kind,
+            agent_messages=body.agent_messages,
+        )
         result = await trigger_agent_run_impl(
             conn,
             settings,
             agent_id=agent_id,
-            body=body,
+            body=run_body,
             actor=_actor(user),
         )
         log.info(

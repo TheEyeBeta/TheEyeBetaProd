@@ -50,7 +50,10 @@ async def test_list_agents_happy(
 ) -> None:
     """GET /admin/agents returns seeded agents with run aggregates."""
     client, _ = agents_admin_client
-    response = await client.get("/admin/agents", headers=auth_headers)
+    response = await client.get(
+        "/admin/agents",
+        headers={**auth_headers, "Accept": "application/json"},
+    )
     assert response.status_code == 200
     body = response.json()
     ids = {row["id"] for row in body["agents"]}
@@ -186,8 +189,13 @@ async def test_run_agent_happy_writes_audit(
     with patch("api.agents.httpx.AsyncClient", _StubClient):
         response = await client.post(
             f"/admin/agents/{AGENT_ID}/run",
-            headers=auth_headers,
-            json={"snapshot_id": SNAPSHOT_ID, "kind": "run"},
+            headers={**auth_headers, "X-Confirm": "true"},
+            json={
+                "snapshot_id": SNAPSHOT_ID,
+                "kind": "run",
+                "reason": "integration test run",
+                "confirm": True,
+            },
         )
 
     assert response.status_code == 200
@@ -265,7 +273,12 @@ async def test_agents_auth_required(agents_integration_dsn: str) -> None:
             assert (
                 await client.post(
                     f"/admin/agents/{AGENT_ID}/run",
-                    json={"snapshot_id": SNAPSHOT_ID},
+                    json={
+                        "snapshot_id": SNAPSHOT_ID,
+                        "reason": "rate limit test",
+                        "confirm": True,
+                    },
+                    headers={**auth_headers, "X-Confirm": "true"},
                 )
             ).status_code == 401
             assert (await client.get(f"/admin/agents/{AGENT_ID}/constitution")).status_code == 401

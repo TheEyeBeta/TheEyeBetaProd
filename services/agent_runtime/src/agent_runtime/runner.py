@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -26,6 +27,11 @@ from .schemas import AgentDecision, AgentOutput
 from .snapshot_loader import SnapshotLoader
 
 log = structlog.get_logger()
+
+# Bounds each LLM-loop / guard-retry stage so a hung gateway call can never
+# leave a run stuck in 'running' forever — TimeoutError falls into the
+# existing broad `except Exception` below, which marks the run failed.
+_AGENT_RUN_TIMEOUT_SECONDS = 300.0
 
 
 def _db_url() -> str:
@@ -169,33 +175,39 @@ class AgentRunner:
                 run_id=run_id,
             ) as llm:
                 math_tool = MathTool(llm_client=llm)
-                parsed, totals, raw_text, tool_calls = await self._llm_loop(
-                    llm=llm,
-                    constitution=constitution,
-                    snapshot_id=snapshot_id,
-                    snapshot_data=snapshot_data,
-                    math_tool=math_tool,
-                    model=constitution_model,
-                    kind=kind,
-                    agent_messages=agent_messages or [],
+                parsed, totals, raw_text, tool_calls = await asyncio.wait_for(
+                    self._llm_loop(
+                        llm=llm,
+                        constitution=constitution,
+                        snapshot_id=snapshot_id,
+                        snapshot_data=snapshot_data,
+                        math_tool=math_tool,
+                        model=constitution_model,
+                        kind=kind,
+                        agent_messages=agent_messages or [],
+                    ),
+                    timeout=_AGENT_RUN_TIMEOUT_SECONDS,
                 )
 
                 # Step 6: guard-service ValidateAgentOutput before persisting decisions.
-                parsed = await self._guard_until_pass(
-                    agent_id=agent_id,
-                    run_id=str(run_id),
-                    constitution=constitution,
-                    llm=llm,
-                    math_tool=math_tool,
-                    snapshot_id=snapshot_id,
-                    snapshot_data=snapshot_data,
-                    parsed=parsed,
-                    raw_text=raw_text,
-                    tool_calls=tool_calls,
-                    valid_symbols=valid_symbols,
-                    primary_model=constitution_model,
-                    fallback_model=fallback_model,
-                    totals=totals,
+                parsed = await asyncio.wait_for(
+                    self._guard_until_pass(
+                        agent_id=agent_id,
+                        run_id=str(run_id),
+                        constitution=constitution,
+                        llm=llm,
+                        math_tool=math_tool,
+                        snapshot_id=snapshot_id,
+                        snapshot_data=snapshot_data,
+                        parsed=parsed,
+                        raw_text=raw_text,
+                        tool_calls=tool_calls,
+                        valid_symbols=valid_symbols,
+                        primary_model=constitution_model,
+                        fallback_model=fallback_model,
+                        totals=totals,
+                    ),
+                    timeout=_AGENT_RUN_TIMEOUT_SECONDS,
                 )
 
             decision_ids = await self._persist_success(

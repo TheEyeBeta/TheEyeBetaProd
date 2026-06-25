@@ -13,11 +13,12 @@ from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict
 
 from compliance_service.db import (
+    load_active_holds_and_overrides,
     load_check_context,
     persist_compliance_checks,
     reject_order_if_blocked,
 )
-from compliance_service.engine import ComplianceEngine
+from compliance_service.engine import ComplianceEngine, apply_admin_overrides_and_holds
 from compliance_service.models import (
     ComplianceCheckResult,
     ComplianceOutcome,
@@ -83,6 +84,18 @@ async def check_order_request(
         order_id=request.order_id or None,
     )
     result = engine.check(order, portfolio, mandate)
+    holds, overrides_by_rule = await load_active_holds_and_overrides(
+        dsn,
+        portfolio_id=request.portfolio_id,
+        account_id=portfolio.account_id,
+        symbol=order.symbol,
+        instrument_id=order.instrument_id,
+    )
+    result = apply_admin_overrides_and_holds(
+        result,
+        holds=holds,
+        overrides_by_rule=overrides_by_rule,
+    )
     await persist_compliance_checks(
         dsn,
         portfolio_id=request.portfolio_id,

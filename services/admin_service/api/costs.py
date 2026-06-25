@@ -10,12 +10,18 @@ from decimal import Decimal
 import asyncpg
 import structlog
 from auth import CurrentUser
-from deps import DbConn
-from fastapi import APIRouter, HTTPException, Query, status
+from deps import DbConn, SettingsDep
+from fastapi import APIRouter, Header, HTTPException, Query, status
+from rbac import MasterAdminUser, require_dangerous_confirm
 
 from zinc_schemas.admin_dto import (
     AgentCostEntry,
+    CostsBudgetPatchRequest,
+    CostsBudgetsResponse,
     CostsByAgentResponse,
+    CostsKillSwitchRequest,
+    CostsKillSwitchResponse,
+    CostsOverviewResponse,
     DailyCostEntry,
     DailyCostsResponse,
 )
@@ -145,16 +151,16 @@ async def fetch_costs_by_agent(
     rows: list[asyncpg.Record] = await conn.fetch(
         """
         SELECT
-            ar.agent_id                              AS agent_id,
-            COUNT(DISTINCT ar.id)::int               AS runs,
-            COUNT(mr.id)::int                        AS model_runs,
-            COALESCE(SUM(mr.input_tokens), 0)::int   AS input_tokens,
-            COALESCE(SUM(mr.output_tokens), 0)::int  AS output_tokens,
-            COALESCE(SUM(mr.cost_usd), 0)            AS cost_usd
+            ar.agent_id                                    AS agent_id,
+            COUNT(DISTINCT ar.id)::int                     AS runs,
+            COUNT(mr.id)::int                              AS model_runs,
+            COALESCE(SUM(ar.total_input_tokens), 0)::int   AS input_tokens,
+            COALESCE(SUM(ar.total_output_tokens), 0)::int  AS output_tokens,
+            COALESCE(SUM(ar.total_cost_usd), 0)            AS cost_usd
           FROM theeyebeta.agent_runs ar
-          JOIN theeyebeta.model_runs mr ON mr.run_id = ar.id
-         WHERE mr.created_at >= $1::timestamptz
-           AND mr.created_at <  $2::timestamptz
+          LEFT JOIN theeyebeta.model_runs mr ON mr.run_id = ar.id
+         WHERE ar.started_at >= $1::timestamptz
+           AND ar.started_at <  $2::timestamptz
          GROUP BY ar.agent_id
          ORDER BY cost_usd DESC, ar.agent_id ASC
         """,
@@ -231,7 +237,55 @@ async def fetch_costs_by_vendor(
 
 
 def register_costs_routes() -> APIRouter:
-    """Attach cost read handlers (GET only — default rate limits apply)."""
+    """Attach cost read and control handlers."""
+
+    def _intel(conn: DbConn, settings: SettingsDep):
+        from intelligence_control.service import IntelligenceControlService
+
+        return IntelligenceControlService(conn, settings)
+
+    @router.get("", response_model=CostsOverviewResponse)
+    async def get_costs_overview(
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+        days: int = Query(default=_DEFAULT_DAYS, ge=1, le=_MAX_DAYS),
+    ) -> CostsOverviewResponse:
+        return await _intel(conn, settings).costs_overview(days=days)
+
+    @router.get("/budgets", response_model=CostsBudgetsResponse)
+    async def get_cost_budgets(
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+    ) -> CostsBudgetsResponse:
+        return await _intel(conn, settings).get_budgets()
+
+    @router.patch("/budgets", response_model=CostsBudgetsResponse)
+    async def patch_cost_budgets(
+        body: CostsBudgetPatchRequest,
+        user: MasterAdminUser,
+        conn: DbConn,
+        settings: SettingsDep,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
+    ) -> CostsBudgetsResponse:
+        require_dangerous_confirm(body, x_confirm)
+        await _intel(conn, settings).patch_budgets(body, actor=f"admin-api:{user['sub']}")
+        return await _intel(conn, settings).get_budgets()
+
+    @router.post("/kill-switch", response_model=CostsKillSwitchResponse)
+    async def costs_kill_switch(
+        body: CostsKillSwitchRequest,
+        user: MasterAdminUser,
+        conn: DbConn,
+        settings: SettingsDep,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
+    ) -> CostsKillSwitchResponse:
+        require_dangerous_confirm(body, x_confirm)
+        return await _intel(conn, settings).kill_switch(
+            body,
+            actor=f"admin-api:{user['sub']}",
+        )
 
     @router.get("/daily", response_model=DailyCostsResponse)
     async def get_daily_costs(

@@ -1,0 +1,19 @@
+[Unit]
+Description=theeyebeta LiteLLM Gateway
+After=network-online.target postgresql.service redis.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=the-eye-beta
+Group=the-eye-beta
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
+EnvironmentFile=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+ExecStart=/usr/bin/bash -lc 'cd /home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd && exec /home/the-eye-beta/.local/bin/uv run litellm --config services/llm_gateway/config.yaml --port 7020 --host 0.0.0.0'
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

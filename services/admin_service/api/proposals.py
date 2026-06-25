@@ -12,13 +12,16 @@ import nats as nats_module
 import structlog
 from audit_log import write_audit_log
 from auth import CurrentUser
-from deps import DbConn, NatsClient
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from deps import DbConn, NatsClient, SettingsDep
+from fastapi import APIRouter, Header, HTTPException, Query, Request, status
+from rbac import MasterAdminUser, actor_from_user, require_dangerous_confirm
 from slowapi import Limiter
 
 from zinc_schemas.admin_dto import (
     ApproveProposalRequest,
     ApproveProposalResponse,
+    ProposalActionResponse,
+    ProposalDangerousActionRequest,
     ProposalDetail,
     ProposalsListResponse,
     ProposalSummary,
@@ -32,6 +35,12 @@ router = APIRouter(prefix="/proposals", tags=["proposals"])
 
 _DEFAULT_LIMIT = 100
 _MAX_LIMIT = 500
+
+
+def _intel(conn: DbConn, settings: SettingsDep):
+    from intelligence_control.service import IntelligenceControlService
+
+    return IntelligenceControlService(conn, settings)
 _VALID_STATUSES = ("pending", "approved", "rejected", "superseded", "applied")
 _VALID_CATEGORIES = (
     "strategy_param",
@@ -524,11 +533,14 @@ def register_proposals_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         proposal_id: UUID,
         body: ApproveProposalRequest,
-        user: CurrentUser,
+        user: MasterAdminUser,
         conn: DbConn,
+        settings: SettingsDep,
         nats: NatsClient,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
     ) -> ApproveProposalResponse:
         """Transition a proposal to ``approved`` and request a validation backtest."""
+        require_dangerous_confirm(body, x_confirm)
         actor = _actor(user)
         response = await approve_proposal_impl(
             conn,
@@ -570,5 +582,68 @@ def register_proposals_routes(limiter: Limiter) -> APIRouter:
             sub=user["sub"],
         )
         return response
+
+    @router.post("/{proposal_id}/defer", response_model=ProposalActionResponse)
+    @limiter.limit("20/minute")
+    async def defer_proposal(
+        request: Request,  # noqa: ARG001
+        proposal_id: UUID,
+        body: ProposalDangerousActionRequest,
+        user: MasterAdminUser,
+        conn: DbConn,
+        settings: SettingsDep,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
+    ) -> ProposalActionResponse:
+        require_dangerous_confirm(body, x_confirm)
+        try:
+            return await _intel(conn, settings).defer_proposal(
+                proposal_id,
+                actor=actor_from_user(user),
+                reason=body.reason,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    @router.post("/{proposal_id}/supersede", response_model=ProposalActionResponse)
+    @limiter.limit("20/minute")
+    async def supersede_proposal(
+        request: Request,  # noqa: ARG001
+        proposal_id: UUID,
+        body: ProposalDangerousActionRequest,
+        user: MasterAdminUser,
+        conn: DbConn,
+        settings: SettingsDep,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
+    ) -> ProposalActionResponse:
+        require_dangerous_confirm(body, x_confirm)
+        try:
+            return await _intel(conn, settings).supersede_proposal(
+                proposal_id,
+                actor=actor_from_user(user),
+                reason=body.reason,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    @router.post("/{proposal_id}/rollback", response_model=ProposalActionResponse)
+    @limiter.limit("5/minute")
+    async def rollback_proposal(
+        request: Request,  # noqa: ARG001
+        proposal_id: UUID,
+        body: ProposalDangerousActionRequest,
+        user: MasterAdminUser,
+        conn: DbConn,
+        settings: SettingsDep,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
+    ) -> ProposalActionResponse:
+        require_dangerous_confirm(body, x_confirm)
+        try:
+            return await _intel(conn, settings).rollback_proposal(
+                proposal_id,
+                actor=actor_from_user(user),
+                reason=body.reason,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
     return router

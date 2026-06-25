@@ -16,35 +16,15 @@ from httpx import AsyncClient
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_dashboard_renders_with_seeded_stats(
+async def test_dashboard_redirects_to_terminal(
     dashboard_admin_client: tuple[AsyncClient, Any],
     auth_headers: dict[str, str],
 ) -> None:
-    """``GET /admin/`` renders the four cards, action buttons, and iframe."""
+    """``GET /admin/`` redirects to the Terminal Echo SPA."""
     client, _ = dashboard_admin_client
-    response = await client.get("/admin/", headers=auth_headers)
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/html")
-    body = response.text
-
-    assert "Operator dashboard" in body
-    assert 'id="stat-cards"' in body
-    assert 'data-stat="pending-orders"' in body
-    assert 'data-stat="active-agents"' in body
-    assert 'data-stat="today-cost"' in body
-    assert 'data-stat="audit-verify"' in body
-
-    assert 'id="action-run-backtest"' in body
-    assert 'id="action-verify-audit"' in body
-    assert 'hx-post="/admin/actions/run-daily-backtest"' in body
-    assert 'hx-post="/admin/actions/verify-audit-chain"' in body
-
-    assert 'id="grafana-overview"' in body
-    assert "<iframe" in body
-    assert 'src="http://grafana:3000/d/overview' in body
-
-    assert 'hx-get="/admin/fragments/stats"' in body
-    assert 'hx-trigger="every 30s"' in body
+    response = await client.get("/admin/", headers=auth_headers, follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/admin/terminal/"
 
 
 @pytest.mark.integration
@@ -53,9 +33,9 @@ async def test_dashboard_stat_values_reflect_seed_data(
     dashboard_admin_client: tuple[AsyncClient, Any],
     auth_headers: dict[str, str],
 ) -> None:
-    """Counters in the response body match the dashboard seed."""
+    """Stat fragment still reflects seeded dashboard data."""
     client, _ = dashboard_admin_client
-    response = await client.get("/admin/", headers=auth_headers)
+    response = await client.get("/admin/fragments/stats", headers=auth_headers)
     body = response.text
 
     pending_card = _slice_card(body, "pending-orders")

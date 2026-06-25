@@ -7,6 +7,7 @@
 
 ## Table of Contents
 
+0. [The Eye Terminal (official direction)](#0-the-eye-terminal-official-direction)
 1. [Overview](#1-overview)
 2. [Production Host](#2-production-host)
    - [2.1 Hardware](#21-hardware)
@@ -30,6 +31,16 @@
 14. [Repository Layout](#14-repository-layout)
     - [14.1 Directory Tree](#141-directory-tree)
 15. [Operations Runbook](#15-operations-runbook)
+
+---
+
+## 0. The Eye Terminal (official direction)
+
+The **operator command terminal** — what operators use to see and safely control the stack — is defined in **[the-eye-terminal-architecture.md](the-eye-terminal-architecture.md)**.
+
+That document is the authoritative direction for: Control Plane Law, Edge Route Law, MASTER_ADMIN, the Edge Route Registry, Cloudflare/Data API routing (`:7000`), the `dataapiprod` `:9500` incident, and frontend/backend parity. The living service inventory below remains the engine-room reference; Terminal coverage gaps are tracked in §23 of the direction doc.
+
+**Implemented today:** `services/admin_service/` on port **7200** at `https://admin.theeyebeta.store/admin/*`.
 
 ---
 

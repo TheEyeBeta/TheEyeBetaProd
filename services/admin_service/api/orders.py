@@ -8,23 +8,40 @@ from typing import Any
 from uuid import UUID
 
 import asyncpg
+import httpx
 import nats
 import structlog
 from audit_log import write_audit_log
 from auth import CurrentUser
-from deps import DbConn, NatsClient
-from fastapi import APIRouter, HTTPException, Request, status
+from blotter_control.service import BlotterService
+from compliance_control.client import check_order as check_compliance_order
+from deps import DbConn, NatsClient, RedisOptionalDep, SettingsDep
+from fastapi import APIRouter, Header, HTTPException, Query, Request, status
+from fastapi.responses import HTMLResponse
+from rbac import (
+    DangerousActionRequest,
+    MasterAdminUser,
+    actor_from_user,
+    require_dangerous_confirm,
+)
+from risk_control.client import validate_order as check_risk_order
+from settings import Settings
 from slowapi import Limiter
+from web import page_context, prefers_html, templates
 
 from zinc_schemas.admin_dto import (
     ApproveOrderRequest,
     ApproveOrderResponse,
     InstrumentSummary,
     OrderDetailResponse,
+    OrderEventsResponse,
+    OrderListResponse,
+    OrderReplaceRequest,
     OrderSummary,
     PendingOrdersResponse,
     RejectOrderRequest,
     RejectOrderResponse,
+    ReplaceOrderResponse,
 )
 
 log = structlog.get_logger()
@@ -115,12 +132,54 @@ def _actor(user: dict[str, str]) -> str:
     return f"admin-api:{user['sub']}"
 
 
+async def _run_pre_submission_gate(
+    conn: asyncpg.Connection,
+    settings: Settings,
+    *,
+    order_id: UUID,
+    existing: asyncpg.Record,
+    actor: str,
+) -> None:
+    """Block approval and auto-reject when risk or compliance rejects the order.
+
+    This is the only point in the admin-UI approve path where an order is
+    checked against risk/compliance before ``orders.approved.{id}`` is
+    published for the broker adapter to pick up — there is no other gate
+    between this function and a live broker submission.
+    """
+    limit_price = float(existing["limit_price"]) if existing["limit_price"] is not None else 100.0
+    gate_calls = (
+        ("risk_service", check_risk_order),
+        ("compliance_service", check_compliance_order),
+    )
+    for source, gate_fn in gate_calls:
+        try:
+            result = await gate_fn(
+                settings,
+                portfolio_id=str(existing["portfolio_id"]),
+                instrument_id=int(existing["instrument_id"]),
+                side=existing["side"],
+                qty=float(existing["qty"]),
+                limit_price=limit_price,
+            )
+        except (httpx.HTTPError, OSError) as exc:
+            reason_text = f"{source} unreachable; approval blocked: {exc}"
+            await reject_pending_order(conn, order_id=order_id, actor=actor, reason=reason_text)
+            raise HTTPException(status_code=422, detail=reason_text) from exc
+        if not result.get("approved", True):
+            reason_text = f"{source}: {result.get('reason') or 'rejected'}"
+            await reject_pending_order(conn, order_id=order_id, actor=actor, reason=reason_text)
+            raise HTTPException(status_code=422, detail=reason_text)
+
+
 async def approve_pending_order(
     conn: asyncpg.Connection,
     nats_client: nats.NATS,
+    settings: Settings,
     *,
     order_id: UUID,
     actor: str,
+    reason: str,
     note: str | None,
 ) -> ApproveOrderResponse:
     """Approve one pending order and publish ``orders.approved.{id}``.
@@ -131,17 +190,27 @@ async def approve_pending_order(
 
     Raises:
         HTTPException: 404 if the order doesn't exist; 409 if it's not
-            currently ``pending_approval``.
+            currently ``pending_approval``; 422 if risk or compliance
+            rejects it (the order is auto-rejected in that case).
     """
+    existing = await _fetch_order(conn, order_id)
+    if existing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    if existing["status"] != "pending_approval":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Order status is {existing['status']}, expected pending_approval",
+        )
+
+    await _run_pre_submission_gate(
+        conn,
+        settings,
+        order_id=order_id,
+        existing=existing,
+        actor=actor,
+    )
+
     async with conn.transaction():
-        existing = await _fetch_order(conn, order_id)
-        if existing is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
-        if existing["status"] != "pending_approval":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Order status is {existing['status']}, expected pending_approval",
-            )
         row = await conn.fetchrow(
             """
             UPDATE theeyebeta.orders
@@ -167,7 +236,7 @@ async def approve_pending_order(
             action="approve.order",
             entity_type="order",
             entity_id=str(order_id),
-            payload={"note": note} if note else {},
+            payload={"reason": reason, "note": note} if note else {"reason": reason},
         )
 
     nats_payload: dict[str, Any] = {
@@ -247,8 +316,46 @@ async def reject_pending_order(
     return RejectOrderResponse(id=row["id"], status=row["status"], metadata=metadata)
 
 
+def _blotter(conn: DbConn, settings: SettingsDep, redis: RedisOptionalDep) -> BlotterService:
+    return BlotterService(conn, settings, redis=redis)
+
+
 def register_orders_routes(limiter: Limiter) -> APIRouter:
     """Attach rate-limited order handlers to the shared router."""
+
+    @router.get("", response_model=None)
+    async def list_orders_or_page(
+        request: Request,
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+        redis: RedisOptionalDep,
+        status: str | None = Query(default=None),
+        limit: int = Query(default=100, ge=1, le=500),
+    ) -> HTMLResponse | OrderListResponse:
+        payload = await _blotter(conn, settings, redis).list_orders(status=status, limit=limit)
+        if not prefers_html(request):
+            return payload
+        pending = await _blotter(conn, settings, redis).list_orders(
+            status="pending_approval",
+            limit=50,
+        )
+        return templates.TemplateResponse(
+            request,
+            "orders_blotter.html",
+            page_context(
+                request,
+                user=user,
+                active="orders",
+                title="Orders / OMS",
+                extra={
+                    "orders": payload,
+                    "pending_orders": pending.orders,
+                    "pending_total": pending.total,
+                    "is_master_admin": "MASTER_ADMIN" in (user.get("roles") or []),
+                },
+            ),
+        )
 
     @router.get("/pending", response_model=PendingOrdersResponse)
     async def list_pending_orders(
@@ -266,6 +373,16 @@ def register_orders_routes(limiter: Limiter) -> APIRouter:
         orders = [_row_to_summary(row) for row in rows]
         log.info("admin_orders_pending_listed", count=len(orders), sub=user["sub"])
         return PendingOrdersResponse(orders=orders, total=len(orders))
+
+    @router.get("/{order_id}/events", response_model=OrderEventsResponse)
+    async def get_order_events(
+        order_id: UUID,
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+        redis: RedisOptionalDep,
+    ) -> OrderEventsResponse:
+        return await _blotter(conn, settings, redis).order_events(order_id)
 
     @router.get("/{order_id}", response_model=OrderDetailResponse)
     async def get_order(
@@ -286,16 +403,24 @@ def register_orders_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         order_id: UUID,
         body: ApproveOrderRequest,
-        user: CurrentUser,
+        user: MasterAdminUser,
         conn: DbConn,
         nats: NatsClient,
+        settings: SettingsDep,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
     ) -> ApproveOrderResponse:
         """Transition ``pending_approval`` → ``approved`` and publish NATS event."""
+        require_dangerous_confirm(
+            DangerousActionRequest(reason=body.reason, confirm=body.confirm),
+            x_confirm,
+        )
         return await approve_pending_order(
             conn,
             nats,
+            settings,
             order_id=order_id,
             actor=_actor(user),
+            reason=body.reason,
             note=body.note,
         )
 
@@ -305,15 +430,70 @@ def register_orders_routes(limiter: Limiter) -> APIRouter:
         request: Request,  # noqa: ARG001 — required by slowapi
         order_id: UUID,
         body: RejectOrderRequest,
-        user: CurrentUser,
+        user: MasterAdminUser,
         conn: DbConn,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
     ) -> RejectOrderResponse:
         """Transition ``pending_approval`` → ``rejected`` with reason in metadata."""
+        require_dangerous_confirm(
+            DangerousActionRequest(reason=body.rejection_reason, confirm=body.confirm),
+            x_confirm,
+        )
         return await reject_pending_order(
             conn,
             order_id=order_id,
             actor=_actor(user),
             reason=body.rejection_reason,
         )
+
+    @router.post("/{order_id}/cancel", response_model=OrderDetailResponse)
+    @limiter.limit("20/minute")
+    async def cancel_order(
+        request: Request,  # noqa: ARG001
+        order_id: UUID,
+        body: DangerousActionRequest,
+        user: MasterAdminUser,
+        conn: DbConn,
+        settings: SettingsDep,
+        redis: RedisOptionalDep,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
+    ) -> OrderDetailResponse:
+        require_dangerous_confirm(body, x_confirm)
+        try:
+            await _blotter(conn, settings, redis).cancel_order(
+                order_id,
+                actor=actor_from_user(user),
+                reason=body.reason,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        row = await _fetch_order(conn, order_id)
+        assert row is not None
+        return _row_to_detail(row)
+
+    @router.post("/{order_id}/replace", response_model=ReplaceOrderResponse)
+    @limiter.limit("20/minute")
+    async def replace_order(
+        request: Request,  # noqa: ARG001
+        order_id: UUID,
+        body: OrderReplaceRequest,
+        user: MasterAdminUser,
+        conn: DbConn,
+        settings: SettingsDep,
+        redis: RedisOptionalDep,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
+    ) -> ReplaceOrderResponse:
+        require_dangerous_confirm(
+            DangerousActionRequest(reason=body.reason, confirm=body.confirm),
+            x_confirm,
+        )
+        try:
+            return await _blotter(conn, settings, redis).replace_order(
+                order_id,
+                body,
+                actor=actor_from_user(user),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     return router

@@ -40,6 +40,32 @@ def _load_system_prompt() -> str:
     )
 
 
+def _decision_id_for_ticket(
+    agent_results: list[AgentRunResult],
+    ticket: TradeTicket,
+) -> UUID | None:
+    """Match a synthesized ticket back to the agent decision it came from.
+
+    The LLM synthesis prompt never asks for ``decision_id`` (only market,
+    instrument_id, side, qty, horizon_days, rationale_summary), so the real
+    LLM path always returns it as None. Backfill it here from the underlying
+    agent decisions so ``theeyebeta.orders.decision_id`` stays traceable.
+    """
+    from master_orchestrator.disagreement import decision_rank
+
+    wants_buy = ticket.side == "buy"
+    for result in agent_results:
+        for decision in result.decisions:
+            if decision.instrument_id != ticket.instrument_id or not decision.decision_id:
+                continue
+            rank = decision_rank(decision.decision)
+            if rank == 0:
+                continue
+            if (rank > 0) == wants_buy:
+                return UUID(decision.decision_id)
+    return None
+
+
 class TicketSynthesizer:
     """Call the master orchestrator LLM to produce a validated ticket."""
 
@@ -76,6 +102,10 @@ class TicketSynthesizer:
         else:
             log.warning("synthesis_fallback_heuristic", reason="missing LITELLM key")
             ticket = self._synthesize_heuristic(market, agent_results, default_instrument_id)
+        if ticket.decision_id is None:
+            matched = _decision_id_for_ticket(agent_results, ticket)
+            if matched is not None:
+                ticket = ticket.model_copy(update={"decision_id": matched})
         return ticket
 
     async def _synthesize_llm(self, payload: dict[str, Any]) -> TradeTicket:

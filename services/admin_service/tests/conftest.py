@@ -19,9 +19,12 @@ from httpx import ASGITransport, AsyncClient
 
 _SERVICE_ROOT = Path(__file__).resolve().parents[1]
 _SQL_DIR = Path(__file__).resolve().parent / "sql"
-
 if str(_SERVICE_ROOT) not in sys.path:
     sys.path.insert(0, str(_SERVICE_ROOT))
+
+from frontend_paths import ensure_frontend_on_path, resolve_frontend_root
+
+ensure_frontend_on_path(resolve_frontend_root())
 
 from zinc_test._infra import (  # noqa: E402
     _normalize_psycopg_dsn,
@@ -142,6 +145,13 @@ def proposals_integration_dsn(admin_integration_dsn: str) -> str:
 
 
 @pytest.fixture(scope="session")
+def workers_integration_dsn(admin_integration_dsn: str) -> str:
+    """Postgres with worker audit runs + heartbeats seed data."""
+    _run_sql_file(admin_integration_dsn, _SQL_DIR / "seed_workers.sql")
+    return admin_integration_dsn
+
+
+@pytest.fixture(scope="session")
 def dashboard_integration_dsn(admin_integration_dsn: str) -> str:
     """Postgres seeded for the dashboard's four stat-card queries."""
     _run_sql_file(admin_integration_dsn, _SQL_DIR / "seed_dashboard.sql")
@@ -188,7 +198,7 @@ async def _admin_client_for_dsn(
         app = create_app(settings)
 
         async def _fake_user() -> dict[str, str]:
-            return {"sub": "test-operator"}
+            return {"sub": "test-operator", "roles": ["MASTER_ADMIN", "operator"]}
 
         app.dependency_overrides[get_current_user] = _fake_user
         transport = ASGITransport(app=app, lifespan="on")

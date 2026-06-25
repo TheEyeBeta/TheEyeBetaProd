@@ -21,6 +21,54 @@ from zinc_native import risk
 
 log = structlog.get_logger()
 
+# All current PortfolioMandate fields are upper-bound ("max_*") limits, where
+# a smaller value is stricter. The admin cockpit overlay exists to let an
+# operator tighten a limit in an emergency, not to relax one below what the
+# portfolio's own mandate already allows.
+_MANDATE_LIMIT_FIELDS = (
+    "max_position_pct",
+    "max_sector_pct",
+    "max_correlation_cluster_pct",
+    "max_var",
+    "max_drawdown_pct",
+    "max_hhi",
+)
+
+
+def _merge_mandate_with_admin_overlay(
+    mandate_raw: dict[str, Any],
+    admin_limits: dict[str, Any],
+    *,
+    portfolio_id: str,
+) -> dict[str, Any]:
+    """Layer the admin overlay onto the mandate without ever loosening a limit.
+
+    Any overlay value that would raise a "max_*" ceiling above the mandate's
+    own value (or its model default, if the mandate doesn't set the field)
+    is rejected and logged instead of silently winning.
+    """
+    merged = dict(mandate_raw)
+    for field_name in _MANDATE_LIMIT_FIELDS:
+        if field_name not in admin_limits:
+            continue
+        override_value = admin_limits[field_name]
+        default_value = PortfolioMandate.model_fields[field_name].default
+        mandate_value = mandate_raw.get(field_name, default_value)
+        if override_value <= mandate_value:
+            merged[field_name] = override_value
+        else:
+            log.warning(
+                "admin_risk_overlay_loosen_blocked",
+                portfolio_id=portfolio_id,
+                field=field_name,
+                mandate_value=mandate_value,
+                attempted_override=override_value,
+            )
+    for key, value in admin_limits.items():
+        if key not in _MANDATE_LIMIT_FIELDS:
+            merged[key] = value
+    return merged
+
 
 def _compute_hhi(weights: np.ndarray) -> float:
     if weights.size == 0:
@@ -114,7 +162,28 @@ async def load_portfolio_context(
         if row is None:
             msg = f"portfolio {portfolio_id} not found"
             raise ValueError(msg)
-        mandate = PortfolioMandate.model_validate(row[0] or {})
+        mandate_raw = row[0] or {}
+        if isinstance(mandate_raw, str):
+            mandate_raw = json.loads(mandate_raw)
+
+        cur = await conn.execute(
+            """
+            SELECT limits
+              FROM theeyebeta.admin_risk_limits
+             WHERE id = 1
+            """,
+        )
+        limits_row = await cur.fetchone()
+        admin_limits = limits_row[0] if limits_row else {}
+        if isinstance(admin_limits, str):
+            admin_limits = json.loads(admin_limits)
+
+        merged_mandate_raw = _merge_mandate_with_admin_overlay(
+            mandate_raw,
+            admin_limits or {},
+            portfolio_id=portfolio_id,
+        )
+        mandate = PortfolioMandate.model_validate(merged_mandate_raw)
 
         cur = await conn.execute(
             """

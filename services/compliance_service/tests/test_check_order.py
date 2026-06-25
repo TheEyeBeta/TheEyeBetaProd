@@ -83,6 +83,10 @@ async def test_check_order_persists_rows_and_rejects_order() -> None:
             "compliance_service.app.load_check_context",
             AsyncMock(return_value=(portfolio, mandate, "BLOCKME")),
         ),
+        patch(
+            "compliance_service.app.load_active_holds_and_overrides",
+            AsyncMock(return_value=([], {})),
+        ),
         patch("compliance_service.app.persist_compliance_checks", mock_persist),
         patch("compliance_service.app.reject_order_if_blocked", mock_reject),
         patch.dict(
@@ -97,6 +101,142 @@ async def test_check_order_persists_rows_and_rejects_order() -> None:
     assert len(mock_persist.await_args.kwargs["results"]) == 1
     mock_reject.assert_awaited_once()
     assert mock_reject.await_args.kwargs["rule_id"] == "restricted_list"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_check_order_override_downgrades_block_to_pass() -> None:
+    """An active admin override on the failing rule approves the order."""
+    from compliance_service.app import check_order_request
+
+    portfolio = PortfolioContext(
+        portfolio_id="660e8400-e29b-41d4-a716-446655440099",
+        account_id="acct",
+        broker="alpaca",
+        account_mode="paper",
+        base_currency="USD",
+        equity_usd=50_000.0,
+        day_trades_5d=0,
+    )
+    mandate = ComplianceMandate()
+    doc = RestrictedListDocument(
+        sanctions=[RestrictedEntry(symbol="BLOCKME", list_type="blacklist", reason="test")],
+    )
+    engine = ComplianceEngine(rules=[RestrictedListRule(doc)])
+
+    request = compliance_pb2.ComplianceCheckRequest(
+        order_id="990e8400-e29b-41d4-a716-446655440099",
+        portfolio_id="660e8400-e29b-41d4-a716-446655440099",
+        instrument_id=1,
+        symbol="BLOCKME",
+        side="buy",
+        qty=10,
+        limit_price=100,
+        market="US",
+    )
+
+    with (
+        patch(
+            "compliance_service.app.load_check_context",
+            AsyncMock(return_value=(portfolio, mandate, "BLOCKME")),
+        ),
+        patch(
+            "compliance_service.app.load_active_holds_and_overrides",
+            AsyncMock(
+                return_value=(
+                    [],
+                    {
+                        "restricted_list": {
+                            "portfolio_id": portfolio.portfolio_id,
+                            "rule_id": "restricted_list",
+                            "reason": "manual clearance",
+                            "actor": "ops@theeyebeta.com",
+                            "expires_at": None,
+                        },
+                    },
+                ),
+            ),
+        ),
+        patch("compliance_service.app.persist_compliance_checks", AsyncMock()),
+        patch("compliance_service.app.reject_order_if_blocked", AsyncMock()),
+        patch.dict(
+            "os.environ", {"DATABASE_URL": "postgresql://test:test@localhost/db"}, clear=False
+        ),
+    ):
+        result = await check_order_request(engine, request)
+
+    assert result.outcome == ComplianceOutcome.PASS
+    assert result.approved is True
+    assert result.failed_rules == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_check_order_legal_hold_blocks_even_when_rules_pass() -> None:
+    """An active legal hold blocks the order regardless of rule outcomes."""
+    from compliance_service.app import check_order_request
+
+    portfolio = PortfolioContext(
+        portfolio_id="660e8400-e29b-41d4-a716-446655440099",
+        account_id="acct",
+        broker="alpaca",
+        account_mode="paper",
+        base_currency="USD",
+        equity_usd=50_000.0,
+        day_trades_5d=0,
+    )
+    mandate = ComplianceMandate()
+    doc = RestrictedListDocument(sanctions=[])
+    engine = ComplianceEngine(rules=[RestrictedListRule(doc)])
+
+    request = compliance_pb2.ComplianceCheckRequest(
+        order_id="990e8400-e29b-41d4-a716-446655440099",
+        portfolio_id="660e8400-e29b-41d4-a716-446655440099",
+        instrument_id=1,
+        symbol="CLEAN",
+        side="buy",
+        qty=10,
+        limit_price=100,
+        market="US",
+    )
+
+    mock_reject = AsyncMock()
+
+    with (
+        patch(
+            "compliance_service.app.load_check_context",
+            AsyncMock(return_value=(portfolio, mandate, "CLEAN")),
+        ),
+        patch(
+            "compliance_service.app.load_active_holds_and_overrides",
+            AsyncMock(
+                return_value=(
+                    [
+                        {
+                            "entity_type": "portfolio",
+                            "entity_id": portfolio.portfolio_id,
+                            "reason": "pending litigation",
+                            "placed_by": "legal@theeyebeta.com",
+                            "placed_at": None,
+                        },
+                    ],
+                    {},
+                ),
+            ),
+        ),
+        patch("compliance_service.app.persist_compliance_checks", AsyncMock()),
+        patch("compliance_service.app.reject_order_if_blocked", mock_reject),
+        patch.dict(
+            "os.environ", {"DATABASE_URL": "postgresql://test:test@localhost/db"}, clear=False
+        ),
+    ):
+        result = await check_order_request(engine, request)
+
+    assert result.outcome == ComplianceOutcome.BLOCK
+    assert result.approved is False
+    assert "legal_hold" in result.failed_rules
+    mock_reject.assert_awaited_once()
+    assert mock_reject.await_args.kwargs["rule_id"] == "legal_hold"
 
 
 @pytest.mark.unit

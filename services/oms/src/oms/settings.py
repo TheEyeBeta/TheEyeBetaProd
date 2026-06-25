@@ -13,6 +13,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         populate_by_name=True,
+        extra="ignore",
     )
 
     service_name: str = "oms"
@@ -24,6 +25,14 @@ class Settings(BaseSettings):
     broker_adapter_url: str = Field(
         default="http://127.0.0.1:7090",
         validation_alias="BROKER_ADAPTER_URL",
+    )
+    risk_service_http_url: str = Field(
+        default="http://127.0.0.1:8007",
+        validation_alias="RISK_SERVICE_HTTP_URL",
+    )
+    compliance_service_http_url: str = Field(
+        default="http://127.0.0.1:8008",
+        validation_alias="COMPLIANCE_SERVICE_HTTP_URL",
     )
     reconciliation_interval_seconds: int = Field(
         default=180,

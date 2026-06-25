@@ -31,6 +31,12 @@ PENDING_CONSTITUTION_PROPOSAL = "ff222222-2222-2222-2222-222222222222"
 REJECTED_PROPOSAL = "ff333333-3333-3333-3333-333333333333"
 STRATEGY_ID = "momentum-v1"
 
+_CONFIRM = {"reason": "operator approval", "confirm": True}
+
+
+def _confirm_headers(auth_headers: dict[str, str]) -> dict[str, str]:
+    return {**auth_headers, "X-Confirm": "true"}
+
 _SEED_FILE = _TESTS_DIR / "sql" / "seed_proposals.sql"
 
 
@@ -189,8 +195,9 @@ async def test_approve_with_backtest_publishes_nats(
     client, nats = proposals_admin_client
     response = await client.post(
         f"/admin/proposals/{PENDING_STRATEGY_PROPOSAL}/approve",
-        headers=auth_headers,
+        headers=_confirm_headers(auth_headers),
         json={
+            **_CONFIRM,
             "review_notes": "looks compelling",
             "strategy_id": STRATEGY_ID,
             "start_date": "2024-01-01",
@@ -250,8 +257,8 @@ async def test_approve_skip_backtest(
 
     response = await client.post(
         f"/admin/proposals/{PENDING_CONSTITUTION_PROPOSAL}/approve",
-        headers=auth_headers,
-        json={"skip_backtest": True, "review_notes": "n/a — non-strategy"},
+        headers=_confirm_headers(auth_headers),
+        json={**_CONFIRM, "skip_backtest": True, "review_notes": "n/a — non-strategy"},
     )
     assert response.status_code == 200
     body = response.json()
@@ -274,8 +281,8 @@ async def test_approve_missing_backtest_fields(
     client, _ = proposals_admin_client
     response = await client.post(
         f"/admin/proposals/{PENDING_STRATEGY_PROPOSAL}/approve",
-        headers=auth_headers,
-        json={"review_notes": "missing fields"},
+        headers=_confirm_headers(auth_headers),
+        json={**_CONFIRM, "review_notes": "missing fields"},
     )
     assert response.status_code == 422
 
@@ -292,8 +299,9 @@ async def test_approve_unknown_strategy(
     client, _ = proposals_admin_client
     response = await client.post(
         f"/admin/proposals/{PENDING_STRATEGY_PROPOSAL}/approve",
-        headers=auth_headers,
+        headers=_confirm_headers(auth_headers),
         json={
+            **_CONFIRM,
             "strategy_id": "does-not-exist",
             "start_date": "2024-01-01",
             "end_date": "2024-03-31",
@@ -313,8 +321,8 @@ async def test_approve_conflict(
     client, _ = proposals_admin_client
     response = await client.post(
         f"/admin/proposals/{REJECTED_PROPOSAL}/approve",
-        headers=auth_headers,
-        json={"skip_backtest": True},
+        headers=_confirm_headers(auth_headers),
+        json={**_CONFIRM, "skip_backtest": True},
     )
     assert response.status_code == 409
 
@@ -329,8 +337,8 @@ async def test_approve_not_found(
     client, _ = proposals_admin_client
     response = await client.post(
         "/admin/proposals/00000000-0000-0000-0000-000000000099/approve",
-        headers=auth_headers,
-        json={"skip_backtest": True},
+        headers=_confirm_headers(auth_headers),
+        json={**_CONFIRM, "skip_backtest": True},
     )
     assert response.status_code == 404
 

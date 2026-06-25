@@ -1,5 +1,7 @@
 # Admin Service
 
+> **The Eye Terminal:** Official architecture direction — [the-eye-terminal-architecture.md](the-eye-terminal-architecture.md)
+>
 > Port **7200** — Tailscale (`0.0.0.0`) and Cloudflare (`https://admin.theeyebeta.store`).
 > JWT RS256 auth (`POST /admin/auth/login`); refresh token in httpOnly cookie.
 > See [architecture.md §9](architecture.md#9-admin-service) and
@@ -8,17 +10,56 @@
 ## Stack
 
 - **Jinja2** templates rendered server-side by FastAPI
-- **htmx** for all interactive elements (no raw JavaScript)
+- **htmx** for most interactive elements (forms, fragments, polling)
+- **Minimal page-scoped JavaScript** on Command Console (`/admin/console`) for preview/run `fetch` calls only
 - **Tailwind CSS** via CDN (no build step)
 - **Chart.js** for data visualisation (loaded from CDN, initialised via `data-chart` attributes)
+
+### Local development (admin-service)
+
+Requires **PostgreSQL**, **Redis**, and **NATS** on startup.
+
+**UI source:** `TheEyeBetaAdminFrontend/` (templates, static, `frontend_ia`). Override with `ADMIN_FRONTEND_ROOT` in `.env`.
+
+```powershell
+# From repo root — start Docker Desktop first, then:
+cd TheEyeProd
+docker compose --env-file .env up postgres redis nats -d
+
+# Run migrations if needed (from repo root with venv active):
+.venv\Scripts\python.exe -m alembic -c db/alembic.ini upgrade head
+
+# Start admin-service (port 7200):
+cd services\admin_service
+..\..\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 7200
+```
+
+Health check: `GET http://127.0.0.1:7200/admin/health` → `{"status":"ok",...}`.
 
 ## Pages
 
 | Page | Route | Purpose |
 |------|-------|---------|
-| Dashboard | `/` | System health, P&L summary, active positions |
-| Market data | `/market` | Live tick feed status, feed health indicators |
-| Orders | `/orders` | Order blotter, approve/reject pending orders |
+| Command Center | `/admin/` | Dashboard, quick actions |
+| MASTER_ADMIN | `/admin/master-admin` | Control matrix + drift/staleness alerts |
+| Cloudflare / Edge | `/admin/edge` | Tunnel status, DNS routes, drift |
+| Edge Routes | `/admin/edge/routes` | Canonical route registry + probes |
+| Data API | `/admin/data-api` | Public hostnames, ports, trusted hosts |
+| Command Console | `/admin/console` | Allowlisted CLI parity (MASTER_ADMIN) |
+| Workers | `/admin/workers` | Worker/timer registry and control |
+| Services | `/admin/services` | systemd allowlist, port ownership |
+| Emergency Trading | `/admin/emergency` | Halt, resume, live approval |
+| Orders | `/admin/orders` | OMS blotter |
+| Users/Permissions | `/admin/users` | MASTER_ADMIN RBAC |
+
+### Information architecture (P-FE-IA)
+
+Navigation is generated from `frontend_ia/modules.py` (26 modules) and validated against the MASTER_ADMIN control matrix. Sidebar groups: **Ops**, **Edge**, **Trading**, **Compliance**, **Data**, **Platform**.
+
+- **Shipped pages** show a module status strip (role, API route, completeness, matrix row count).
+- **Shell pages** (`/admin/integrations`, `/admin/observability`) surface planned work from the matrix; all other modules are shipped cockpits.
+- **Role filtering**: JWT `roles` claim (default `operator`); `MASTER_ADMIN` sees Users/Permissions, Emergency Trading, CLI/Console.
+- **Keyboard**: `g` then `c` (Command Center), `m` (MASTER_ADMIN), `e` (Edge), `o` (Orders).
 
 ### Orders API (P-AD-R-orders)
 
@@ -59,6 +100,72 @@
 |--------|------|------|-------------|
 | `GET` | `/admin/services/status` | Bearer JWT | Lists Docker containers attached to `theeyebeta-net` (name, image, state, health, uptime) |
 | `POST` | `/admin/services/{name}/restart` | Bearer JWT (20/min) | Restarts a whitelisted service container; audit logs `restart.service` |
+
+### Cloudflare / Edge API
+
+Read-only edge control plane. Never returns raw `.env`, Cloudflare tokens, or secret values — only `credentials_present: true/false`. Uses **local/dummy mode** when `CLOUDFLARE_API_TOKEN` is absent (`EDGE_MODE=auto|local|live`).
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/admin/cloudflare/status` | Bearer JWT | Aggregate CF/tunnel/WAF/DNS status + missing setup steps |
+| `GET` | `/admin/cloudflare/tunnels` | Bearer JWT | Tunnel health summary |
+| `GET` | `/admin/cloudflare/access/apps` | Bearer JWT | Access policy presence (local stub when no token) |
+| `GET` | `/admin/cloudflare/dns/routes` | Bearer JWT | Public hostnames from cloudflared config |
+| `GET` | `/admin/cloudflare/waf/events` | Bearer JWT | WAF/rate-limit status (local stub when no token) |
+| `POST` | `/admin/cloudflare/test` | Bearer JWT | Non-mutating connectivity probe; audit logged |
+| `GET` | `/admin/cloudflare/routes` | Bearer JWT | Alias of edge route list |
+| `GET` | `/admin/cloudflare/routes/drift` | Bearer JWT | Alias of edge drift report |
+| `GET` | `/admin/edge/routes` | Bearer JWT | Edge Route Registry — canonical rows + live probes |
+| `GET` | `/admin/edge/routes/{hostname}` | Bearer JWT | Single route detail |
+| `GET` | `/admin/edge/routes/drift` | Bearer JWT | Drift alerts (tunnel port, trusted host, health) |
+| `POST` | `/admin/edge/routes/check` | Bearer JWT | Refresh probes; audit logged |
+| `GET` | `/admin/edge/ports` | Bearer JWT | Registered vs listening ports |
+| `GET` | `/admin/edge/trusted-hosts` | Bearer JWT | Hostname allowlist presence (hostnames only) |
+
+Known Data API routes (shared backend on `:7000` until split):
+
+- `dataapi.theeyebeta.store` → `127.0.0.1:7000` `/health`
+- `dataapiprod.theeyebeta.store` → `127.0.0.1:7000` `/health` (same service — intentional shared backend)
+
+Port **9500** is flagged as unregistered incident sentinel if seen in tunnel config.
+
+### Command Console API (allowlisted CLI parity)
+
+No arbitrary shell — commands map to existing control-plane APIs only. Dangerous commands require `{reason, confirm: true}` and `X-Confirm: true`.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/admin/commands` | Bearer JWT | Allowlisted command registry |
+| `POST` | `/admin/commands/preview` | Bearer JWT | Consequence preview (audited preview row) |
+| `POST` | `/admin/commands/run` | Bearer JWT | Execute mapped backend API |
+| `GET` | `/admin/commands/runs` | Bearer JWT | Run history |
+| `GET` | `/admin/commands/runs/{id}` | Bearer JWT | Run detail + audit link |
+| `GET` | `/admin/console` | Bearer JWT | HTML command palette (minimal JS for preview/run) |
+
+### Control matrix staleness (CI guard)
+
+`control_matrix/staleness.py` compares workers, services, timers, commands, nav modules, and canonical edge routes against `GET /admin/master-admin/control-matrix`. Violations surface as `STALENESS:` drift alerts and fail unit tests (`tests/test_control_matrix.py`). Dynamic FastAPI route discovery is planned; static `expected_registry.py` is the guard today.
+
+### Users / Permissions API (MASTER_ADMIN)
+
+DB-backed operator RBAC. Never returns `password`, `password_hash`, or MFA secrets. Dangerous mutations require JSON `{reason, confirm: true}` and header `X-Confirm: true`.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/admin/users` | MASTER_ADMIN | List users (JSON) or HTML page (`Accept: text/html`) |
+| `GET` | `/admin/users/{id}` | MASTER_ADMIN | User detail + audit history (redacted payloads) |
+| `POST` | `/admin/users` | MASTER_ADMIN | Create user with bcrypt password + initial roles |
+| `PATCH` | `/admin/users/{id}` | MASTER_ADMIN | Update display name / email |
+| `POST` | `/admin/users/{id}/disable` | MASTER_ADMIN | Disable user + revoke sessions (dangerous) |
+| `POST` | `/admin/users/{id}/enable` | MASTER_ADMIN | Re-enable user (dangerous) |
+| `GET` | `/admin/users/{id}/roles` | MASTER_ADMIN | List role names |
+| `POST` | `/admin/users/{id}/roles` | MASTER_ADMIN | Grant role (dangerous; MASTER_ADMIN grant requires MASTER_ADMIN) |
+| `DELETE` | `/admin/users/{id}/roles/{role}` | MASTER_ADMIN | Revoke role (dangerous; blocks last MASTER_ADMIN unless `allow_final_master_removal`) |
+| `GET` | `/admin/users/{id}/sessions` | MASTER_ADMIN | Active/revoked session metadata (no tokens) |
+| `POST` | `/admin/users/{id}/sessions/revoke` | MASTER_ADMIN | Revoke all sessions (dangerous) |
+| `POST` | `/admin/users/{id}/mfa/reset` | MASTER_ADMIN | Reset MFA enrollment (dangerous) |
+
+Login (`POST /admin/auth/login`) loads roles from DB when the user exists and embeds them in the JWT `roles` claim.
 
 ### Backtest API (P-AD-R-backtest)
 

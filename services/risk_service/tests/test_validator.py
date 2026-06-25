@@ -149,6 +149,76 @@ async def test_validate_order_inserts_risk_metrics_row(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_load_portfolio_context_admin_overlay_cannot_loosen_mandate() -> None:
+    """admin_risk_limits may not raise a max_* ceiling above the mandate's own value."""
+    from risk_service.metrics import load_portfolio_context
+
+    mandate_cursor = AsyncMock()
+    mandate_cursor.fetchone = AsyncMock(return_value=({"max_var": 0.03},))
+
+    limits_cursor = AsyncMock()
+    limits_cursor.fetchone = AsyncMock(return_value=({"max_var": 0.05},))
+
+    positions_cursor = AsyncMock()
+    positions_cursor.fetchall = AsyncMock(return_value=[])
+
+    metrics_cursor = AsyncMock()
+    metrics_cursor.fetchone = AsyncMock(return_value=None)
+
+    mock_conn = AsyncMock()
+    mock_conn.execute = AsyncMock(
+        side_effect=[mandate_cursor, limits_cursor, positions_cursor, metrics_cursor],
+    )
+    cm = AsyncMock()
+    cm.__aenter__ = AsyncMock(return_value=mock_conn)
+    cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("risk_service.metrics.psycopg.AsyncConnection.connect", AsyncMock(return_value=cm)):
+        ctx = await load_portfolio_context(
+            "postgresql://test:test@localhost/db",
+            "660e8400-e29b-41d4-a716-446655440001",
+        )
+
+    assert ctx.mandate.max_var == 0.03
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_load_portfolio_context_admin_overlay_can_tighten_mandate() -> None:
+    """admin_risk_limits may still lower a max_* ceiling below the mandate's own value."""
+    from risk_service.metrics import load_portfolio_context
+
+    mandate_cursor = AsyncMock()
+    mandate_cursor.fetchone = AsyncMock(return_value=({"max_var": 0.05},))
+
+    limits_cursor = AsyncMock()
+    limits_cursor.fetchone = AsyncMock(return_value=({"max_var": 0.02},))
+
+    positions_cursor = AsyncMock()
+    positions_cursor.fetchall = AsyncMock(return_value=[])
+
+    metrics_cursor = AsyncMock()
+    metrics_cursor.fetchone = AsyncMock(return_value=None)
+
+    mock_conn = AsyncMock()
+    mock_conn.execute = AsyncMock(
+        side_effect=[mandate_cursor, limits_cursor, positions_cursor, metrics_cursor],
+    )
+    cm = AsyncMock()
+    cm.__aenter__ = AsyncMock(return_value=mock_conn)
+    cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("risk_service.metrics.psycopg.AsyncConnection.connect", AsyncMock(return_value=cm)):
+        ctx = await load_portfolio_context(
+            "postgresql://test:test@localhost/db",
+            "660e8400-e29b-41d4-a716-446655440001",
+        )
+
+    assert ctx.mandate.max_var == 0.02
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_insert_risk_metrics_sql(base_context: PortfolioRiskContext) -> None:
     """Direct insert writes to theeyebeta.risk_metrics."""
     from risk_service.models import ComputedPortfolioMetrics

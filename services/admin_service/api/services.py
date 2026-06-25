@@ -1,21 +1,30 @@
-"""Admin services API — systemd unit status + whitelisted restart."""
+"""Admin services API — allowlisted systemd control plane."""
 
 from __future__ import annotations
 
-import asyncio
-from datetime import UTC, datetime
-
 import structlog
-from audit_log import write_audit_log
 from auth import CurrentUser
-from deps import DbConn
-from fastapi import APIRouter, HTTPException, Request, status
+from deps import DbConn, SettingsDep
+from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi.responses import HTMLResponse
+from rbac import (
+    DangerousActionRequest,
+    MasterAdminUser,
+    actor_from_user,
+    require_dangerous_confirm,
+)
+from services_control.registry import is_critical_service, service_by_key
+from services_control.service import ServicesControlService
 from slowapi import Limiter
-
+from web import page_context, prefers_html, templates
 from zinc_schemas.admin_dto import (
-    RestartServiceRequest,
-    RestartServiceResponse,
-    ServiceStatusEntry,
+    ServiceActionRequest,
+    ServiceActionResponse,
+    ServiceDetailResponse,
+    ServiceHistoryResponse,
+    ServiceListResponse,
+    ServiceLogsResponse,
+    ServicePortRegistryResponse,
     ServiceStatusResponse,
 )
 
@@ -23,158 +32,238 @@ log = structlog.get_logger()
 
 router = APIRouter(prefix="/services", tags=["services"])
 
-# Maps logical service name (API key) → systemd unit name.
-# Expand as more services gain systemd units.
-RESTARTABLE_SERVICES: dict[str, str] = {
-    "admin-service": "theeyebeta-admin",
-    "llm-gateway": "theeyebeta-litellm",
-}
 
-# Full set reported by /status — superset of RESTARTABLE_SERVICES.
-ALL_UNITS: dict[str, str] = {
-    **RESTARTABLE_SERVICES,
-    "nats": "nats",
-    "redis": "redis-server",
-}
+def _svc(conn: DbConn, settings: SettingsDep) -> ServicesControlService:
+    return ServicesControlService(conn, settings)
 
 
-def _actor(user: dict[str, str]) -> str:
-    """Build audit actor string from JWT subject."""
-    return f"admin-api:{user['sub']}"
-
-
-async def _systemctl_show(unit: str) -> dict[str, str]:
-    """Query ``systemctl show`` for a unit's active state and timestamps."""
-    proc = await asyncio.create_subprocess_exec(
-        "systemctl",
-        "show",
-        unit,
-        "--property=ActiveState,SubState,ActiveEnterTimestamp",
-        "--no-pager",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, _ = await proc.communicate()
-    props: dict[str, str] = {}
-    for line in stdout.decode().splitlines():
-        if "=" in line:
-            k, _, v = line.partition("=")
-            props[k.strip()] = v.strip()
-    return props
-
-
-def _parse_systemd_ts(raw: str) -> datetime | None:
-    """Parse systemd's ``ActiveEnterTimestamp`` into a UTC datetime.
-
-    systemd emits: ``Thu 2026-06-12 14:23:45 UTC``
-    Strip the day-of-week prefix and parse the remainder.
-    """
-    if not raw or raw.startswith("0") or raw == "n/a":
-        return None
-    parts = raw.split()
-    # Last three tokens are always: YYYY-MM-DD HH:MM:SS TZ
-    clean = " ".join(parts[-3:]) if len(parts) >= 3 else raw
-    try:
-        dt = datetime.strptime(clean, "%Y-%m-%d %H:%M:%S %Z")
-        return dt.replace(tzinfo=UTC)
-    except ValueError:
-        return None
-
-
-async def _unit_to_entry(name: str, unit: str) -> ServiceStatusEntry:
-    """Map a systemd unit to :class:`ServiceStatusEntry`."""
-    props = await _systemctl_show(unit)
-    active_state = props.get("ActiveState", "unknown")
-    sub_state = props.get("SubState", "unknown")
-
-    started_at: datetime | None = _parse_systemd_ts(props.get("ActiveEnterTimestamp", ""))
-    uptime_seconds: int | None = None
-    if started_at is not None:
-        uptime_seconds = max(0, int((datetime.now(tz=UTC) - started_at).total_seconds()))
-
-    return ServiceStatusEntry(
-        name=name,
-        image=unit,  # repurposes Docker field — holds unit name
-        state=f"{active_state} ({sub_state})",
-        health="healthy" if active_state == "active" else "unhealthy",
-        started_at=started_at,
-        uptime_seconds=uptime_seconds,
-        container_id=unit,  # repurposes Docker field — holds unit name
-    )
+def _reject_unknown(name: str) -> None:
+    if service_by_key(name) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown service")
 
 
 def register_services_routes(limiter: Limiter) -> APIRouter:
-    """Attach systemd status + restart handlers."""
+    """Attach allowlisted systemd status and mutation handlers."""
 
-    @router.get("/status", response_model=ServiceStatusResponse)
-    async def list_service_status(
-        user: CurrentUser,
-    ) -> ServiceStatusResponse:
-        """Return systemd unit status for all known TheEyeBeta services."""
-        entries = list(
-            await asyncio.gather(
-                *[_unit_to_entry(name, unit) for name, unit in ALL_UNITS.items()]
-            )
-        )
-        log.info("admin_services_status_listed", count=len(entries), sub=user["sub"])
-        return ServiceStatusResponse(services=entries, network="systemd")
-
-    @router.post("/{name}/restart", response_model=RestartServiceResponse)
-    @limiter.limit("20/minute")
-    async def restart_service(
-        request: Request,  # noqa: ARG001 — required by slowapi
-        name: str,
-        body: RestartServiceRequest,
+    @router.get("", response_model=None)
+    async def list_services_or_page(
+        request: Request,
         user: CurrentUser,
         conn: DbConn,
-    ) -> RestartServiceResponse:
-        """Restart a whitelisted systemd unit and audit-log the action."""
-        if name not in RESTARTABLE_SERVICES:
+        settings: SettingsDep,
+    ) -> HTMLResponse | ServiceListResponse:
+        payload = await _svc(conn, settings).list_services()
+        log.info("services_listed", sub=user["sub"], count=len(payload.services))
+        if not prefers_html(request):
+            return payload
+        return templates.TemplateResponse(
+            request,
+            "services.html",
+            page_context(
+                request,
+                user=user,
+                active="services",
+                title="Services/systemd",
+                extra={
+                    "registry": payload,
+                    "is_master_admin": "MASTER_ADMIN" in (user.get("roles") or []),
+                },
+            ),
+        )
+
+    @router.get("/ports", response_model=ServicePortRegistryResponse)
+    async def service_port_registry(
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+    ) -> ServicePortRegistryResponse:
+        return await _svc(conn, settings).port_registry()
+
+    @router.get("/status", response_model=ServiceStatusResponse)
+    async def list_service_status_legacy(
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+    ) -> ServiceStatusResponse:
+        """Legacy JSON shape for existing integrations."""
+        return await _svc(conn, settings).legacy_status_response()
+
+    @router.get("/fragments/{name}", response_class=HTMLResponse, include_in_schema=False)
+    async def service_detail_fragment(
+        request: Request,
+        name: str,
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+    ) -> HTMLResponse:
+        _reject_unknown(name)
+        detail = await _svc(conn, settings).get_service(name)
+        assert detail is not None
+        return templates.TemplateResponse(
+            request,
+            "components/_service_detail.html",
+            {
+                "request": request,
+                "service": detail,
+                "is_master_admin": "MASTER_ADMIN" in (user.get("roles") or []),
+            },
+        )
+
+    @router.get("/{name}", response_model=ServiceDetailResponse)
+    async def get_service(
+        name: str,
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+    ) -> ServiceDetailResponse:
+        detail = await _svc(conn, settings).get_service(name)
+        if detail is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown service")
+        return detail
+
+    @router.get("/{name}/logs", response_model=ServiceLogsResponse)
+    async def get_service_logs(
+        name: str,
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+    ) -> ServiceLogsResponse:
+        logs = await _svc(conn, settings).get_logs(name)
+        if logs is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown service")
+        return logs
+
+    @router.get("/{name}/history", response_model=ServiceHistoryResponse)
+    async def get_service_history(
+        name: str,
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+    ) -> ServiceHistoryResponse:
+        history = await _svc(conn, settings).get_history(name)
+        if history is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown service")
+        return history
+
+    @router.post("/{name}/restart", response_model=ServiceActionResponse)
+    @limiter.limit("20/minute")
+    async def restart_service(
+        request: Request,  # noqa: ARG001
+        name: str,
+        body: ServiceActionRequest,
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+    ) -> ServiceActionResponse:
+        _reject_unknown(name)
+        service = service_by_key(name)
+        assert service is not None
+        if not service.supports_restart:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Service '{name}' is not in the restart whitelist",
+                detail="Restart not supported for this service",
             )
-
-        unit = RESTARTABLE_SERVICES[name]
-        actor = _actor(user)
-
-        proc = await asyncio.create_subprocess_exec(
-            "sudo",
-            "systemctl",
-            "restart",
-            unit,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        result = await _svc(conn, settings).restart(
+            name,
+            actor=actor_from_user(user),
+            reason=body.reason,
         )
-        _, stderr = await proc.communicate()
+        assert result is not None
+        return result
 
-        if proc.returncode != 0:
-            err = stderr.decode().strip()
-            log.error("admin_service_restart_failed", service=name, unit=unit, error=err)
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"systemctl refused to restart '{unit}': {err}",
-            )
-
-        await asyncio.sleep(1)
-        props = await _systemctl_show(unit)
-        new_state = props.get("ActiveState", "unknown")
-
-        await write_audit_log(
-            conn,
-            actor=actor,
-            action="restart.service",
-            entity_type="service",
-            entity_id=name,
-            payload={**body.model_dump(mode="json"), "unit": unit},
+    @router.post("/{name}/start", response_model=ServiceActionResponse)
+    @limiter.limit("20/minute")
+    async def start_service(
+        request: Request,  # noqa: ARG001
+        name: str,
+        body: ServiceActionRequest,
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+    ) -> ServiceActionResponse:
+        _reject_unknown(name)
+        result = await _svc(conn, settings).start(
+            name,
+            actor=actor_from_user(user),
+            reason=body.reason,
         )
+        if result is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown service")
+        return result
 
-        log.info("admin_service_restarted", service=name, unit=unit, sub=user["sub"])
-        return RestartServiceResponse(
-            name=name,
-            container_id=unit,  # repurposes Docker field — holds unit name
-            restarted=True,
-            state=new_state,
+    @router.post("/{name}/stop", response_model=ServiceActionResponse)
+    @limiter.limit("10/minute")
+    async def stop_service(
+        request: Request,
+        name: str,
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+    ) -> ServiceActionResponse:
+        _reject_unknown(name)
+        payload = await request.json()
+        if is_critical_service(name):
+            roles = user.get("roles") or []
+            if "MASTER_ADMIN" not in roles:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Critical service stop requires MASTER_ADMIN",
+                )
+            body = DangerousActionRequest.model_validate(payload)
+            require_dangerous_confirm(body, request.headers.get("X-Confirm"))
+            reason = body.reason
+        else:
+            body = ServiceActionRequest.model_validate(payload)
+            reason = body.reason
+        result = await _svc(conn, settings).stop(
+            name,
+            actor=actor_from_user(user),
+            reason=reason,
         )
+        if result is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown service")
+        return result
+
+    @router.post("/{name}/enable", response_model=ServiceActionResponse)
+    @limiter.limit("20/minute")
+    async def enable_service(
+        request: Request,  # noqa: ARG001
+        name: str,
+        body: ServiceActionRequest,
+        user: CurrentUser,
+        conn: DbConn,
+        settings: SettingsDep,
+    ) -> ServiceActionResponse:
+        _reject_unknown(name)
+        result = await _svc(conn, settings).enable(
+            name,
+            actor=actor_from_user(user),
+            reason=body.reason,
+        )
+        if result is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown service")
+        return result
+
+    @router.post("/{name}/disable", response_model=ServiceActionResponse)
+    @limiter.limit("10/minute")
+    async def disable_service(
+        request: Request,  # noqa: ARG001
+        name: str,
+        body: DangerousActionRequest,
+        user: MasterAdminUser,
+        conn: DbConn,
+        settings: SettingsDep,
+        x_confirm: str | None = Header(default=None, alias="X-Confirm"),
+    ) -> ServiceActionResponse:
+        _reject_unknown(name)
+        require_dangerous_confirm(body, x_confirm)
+        result = await _svc(conn, settings).disable(
+            name,
+            actor=actor_from_user(user),
+            reason=body.reason,
+        )
+        if result is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown service")
+        return result
 
     return router

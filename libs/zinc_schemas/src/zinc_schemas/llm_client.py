@@ -271,7 +271,17 @@ class LLMClient:
         ):
             with attempt:
                 response = await self._http.post("/v1/chat/completions", json=body)
-                response.raise_for_status()
+                if response.is_error:
+                    detail = response.text
+                    try:
+                        detail = response.json()["error"]["message"]
+                    except (ValueError, KeyError, TypeError):
+                        pass
+                    raise httpx.HTTPStatusError(
+                        f"HTTP {response.status_code} from LiteLLM proxy: {detail}",
+                        request=response.request,
+                        response=response,
+                    )
                 return response.json(), response.headers
         msg = "chat completion failed without response"
         raise RuntimeError(msg)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 import psycopg
 import pytest
@@ -140,11 +141,15 @@ async def test_approve_order_happy(
 ) -> None:
     """POST approve transitions status and writes audit + NATS."""
     client, nats = orders_admin_client
-    response = await client.post(
-        f"/admin/orders/{PENDING_ORDER_ID}/approve",
-        headers=auth_headers,
-        json={"note": "looks good"},
-    )
+    with (
+        patch("api.orders.check_risk_order", AsyncMock(return_value={"approved": True})),
+        patch("api.orders.check_compliance_order", AsyncMock(return_value={"approved": True})),
+    ):
+        response = await client.post(
+            f"/admin/orders/{PENDING_ORDER_ID}/approve",
+            headers={**auth_headers, "X-Confirm": "true"},
+            json={"reason": "looks good", "confirm": True, "note": "looks good"},
+        )
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "approved"
@@ -161,6 +166,64 @@ async def test_approve_order_happy(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+async def test_approve_rejects_on_risk_block(
+    orders_admin_client: tuple[AsyncClient, object],
+    orders_integration_dsn: str,
+    auth_headers: dict[str, str],
+) -> None:
+    """A risk-service block auto-rejects the order instead of approving it."""
+    client, nats = orders_admin_client
+    _run_sql_file(orders_integration_dsn, _SQL_SEED)
+    with (
+        patch(
+            "api.orders.check_risk_order",
+            AsyncMock(return_value={"approved": False, "reason": "position_size_pct breach"}),
+        ),
+        patch("api.orders.check_compliance_order", AsyncMock()) as mock_compliance,
+    ):
+        response = await client.post(
+            f"/admin/orders/{PENDING_ORDER_ID}/approve",
+            headers={**auth_headers, "X-Confirm": "true"},
+            json={"reason": "looks good", "confirm": True},
+        )
+
+    assert response.status_code == 422
+    assert "position_size_pct" in response.json()["detail"]
+    mock_compliance.assert_not_called()
+    assert _audit_count(orders_integration_dsn, PENDING_ORDER_ID, "reject.order") >= 1
+    assert not nats.published or nats.published[-1][0] != f"orders.approved.{PENDING_ORDER_ID}"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_approve_rejects_on_compliance_block(
+    orders_admin_client: tuple[AsyncClient, object],
+    orders_integration_dsn: str,
+    auth_headers: dict[str, str],
+) -> None:
+    """A compliance-service block auto-rejects the order even when risk approves."""
+    client, _nats = orders_admin_client
+    _run_sql_file(orders_integration_dsn, _SQL_SEED)
+    with (
+        patch("api.orders.check_risk_order", AsyncMock(return_value={"approved": True})),
+        patch(
+            "api.orders.check_compliance_order",
+            AsyncMock(return_value={"approved": False, "reason": "legal hold active"}),
+        ),
+    ):
+        response = await client.post(
+            f"/admin/orders/{PENDING_ORDER_ID}/approve",
+            headers={**auth_headers, "X-Confirm": "true"},
+            json={"reason": "looks good", "confirm": True},
+        )
+
+    assert response.status_code == 422
+    assert "legal hold" in response.json()["detail"]
+    assert _audit_count(orders_integration_dsn, PENDING_ORDER_ID, "reject.order") >= 1
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
 async def test_approve_conflict(
     orders_admin_client: tuple[AsyncClient, object],
     auth_headers: dict[str, str],
@@ -169,8 +232,8 @@ async def test_approve_conflict(
     client, _ = orders_admin_client
     response = await client.post(
         f"/admin/orders/{APPROVED_ORDER_ID}/approve",
-        headers=auth_headers,
-        json={},
+        headers={**auth_headers, "X-Confirm": "true"},
+        json={"reason": "retry", "confirm": True},
     )
     assert response.status_code == 409
 
@@ -186,8 +249,8 @@ async def test_reject_order_happy(
     client, _ = orders_admin_client
     response = await client.post(
         f"/admin/orders/{PENDING_ORDER_ID_2}/reject",
-        headers=auth_headers,
-        json={"rejection_reason": "risk limit exceeded"},
+        headers={**auth_headers, "X-Confirm": "true"},
+        json={"rejection_reason": "risk limit exceeded", "confirm": True},
     )
     assert response.status_code == 200
     body = response.json()
@@ -222,13 +285,17 @@ async def test_approve_rate_limit(
     """Burst approve calls eventually return 429 (20/min write limit)."""
     client, _ = orders_admin_client
     statuses: list[int] = []
-    for _ in range(22):
-        _run_sql_file(orders_integration_dsn, _SQL_SEED)
-        response = await client.post(
-            f"/admin/orders/{PENDING_ORDER_ID}/approve",
-            headers=auth_headers,
-            json={},
-        )
-        statuses.append(response.status_code)
+    with (
+        patch("api.orders.check_risk_order", AsyncMock(return_value={"approved": True})),
+        patch("api.orders.check_compliance_order", AsyncMock(return_value={"approved": True})),
+    ):
+        for _ in range(22):
+            _run_sql_file(orders_integration_dsn, _SQL_SEED)
+            response = await client.post(
+                f"/admin/orders/{PENDING_ORDER_ID}/approve",
+                headers={**auth_headers, "X-Confirm": "true"},
+                json={"reason": "burst", "confirm": True},
+            )
+            statuses.append(response.status_code)
     assert 200 in statuses
     assert 429 in statuses

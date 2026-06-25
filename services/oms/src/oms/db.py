@@ -106,6 +106,25 @@ async def persist_order_state(
     log.info("order_status_persisted", order_id=order_id, status=status)
 
 
+async def persist_order_rejection(dsn: str, *, order_id: str, reason: str) -> None:
+    """Mark a pending order rejected by the pre-submission risk/compliance gate."""
+    now = datetime.now(tz=UTC)
+    metadata_patch = json.dumps({"rejection_reason": reason, "rejected_at": now.isoformat()})
+    async with await psycopg.AsyncConnection.connect(dsn) as conn:
+        await conn.execute(
+            """
+            UPDATE theeyebeta.orders
+               SET status = 'rejected',
+                   metadata = metadata || %s::jsonb,
+                   updated_at = %s
+             WHERE id = %s AND status = 'pending_approval'
+            """,
+            (metadata_patch, now, UUID(order_id)),
+        )
+        await conn.commit()
+    log.info("order_rejected_pre_submission", order_id=order_id, reason=reason)
+
+
 async def insert_execution(
     dsn: str,
     *,

@@ -83,6 +83,11 @@ async def get_redis(request: Request) -> Redis:
     return client
 
 
+async def get_redis_optional(request: Request) -> Redis | None:
+    """Return Redis when available; ``None`` in lightweight integration tests."""
+    return getattr(request.app.state, "redis", _redis)
+
+
 def settings_dep(request: Request) -> Settings:
     """Return the :class:`Settings` bound to ``app.state`` by the lifespan.
 
@@ -101,6 +106,7 @@ SettingsDep = Annotated[Settings, Depends(settings_dep)]
 DbConn = Annotated[asyncpg.Connection, Depends(get_db)]
 NatsClient = Annotated[nats.NATS, Depends(get_nats)]
 RedisDep = Annotated[Redis, Depends(get_redis)]
+RedisOptionalDep = Annotated[Redis | None, Depends(get_redis_optional)]
 
 
 def bind_app_state(app: FastAPI, settings: Settings) -> None:
