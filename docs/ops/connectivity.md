@@ -43,8 +43,10 @@ bash scripts/verify_dataapi_tunnel.sh
 bash scripts/verify_dataapi_tunnel.sh --auth
 ```
 
-**Admin service** (server `.env`) — point server-side Data API calls at the tunnel
-when callers are off-host, or keep loopback when admin-service runs on the same machine:
+**Admin service** (server `.env`) — TheEyeBetaProd should use the prod tunnel
+hostname by default. This keeps admin-service bridge calls on the same edge path
+as external clients, which makes Cloudflare/Data API debugging consistent.
+Use loopback only for isolated on-host troubleshooting.
 
 ```bash
 ADMIN_DATAAPI_URL=https://dataapiprod.theeyebeta.store

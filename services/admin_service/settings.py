@@ -78,7 +78,7 @@ class Settings(BaseSettings):
         validation_alias="BROKER_ADAPTER_URL",
     )
     dataapi_url: str = Field(
-        default="http://127.0.0.1:7000",
+        default="https://dataapiprod.theeyebeta.store",
         validation_alias="ADMIN_DATAAPI_URL",
     )
     dataapi_client_id: str = Field(
