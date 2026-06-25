@@ -141,9 +141,6 @@ async def async_main(args: argparse.Namespace) -> None:
         print(f"sample: {', '.join(symbols[:10])}")
 
     if args.apply:
-        if tier != "eod":
-            msg = "--apply only applies to the EOD tier (sets instruments.active)"
-            raise RuntimeError(msg)
         import psycopg
 
         from scripts.rebuild_universe import (  # noqa: PLC0415
@@ -202,7 +199,7 @@ def main() -> None:
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="Reconcile instruments.active from the generated EOD tier file",
+        help="Reconcile instruments.active from the generated universe file (EOD or intraday)",
     )
     parser.add_argument(
         "--clear-delisted",

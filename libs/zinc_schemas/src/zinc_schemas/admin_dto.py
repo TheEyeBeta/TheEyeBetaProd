@@ -747,6 +747,45 @@ class OpsPulseResponse(BaseModel):
     audit_chain_status: AuditChainStatusSummary | None = None
 
 
+class MasterAdminControlEntry(BaseModel):
+    """One backend capability in the MASTER_ADMIN control matrix."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    feature: str
+    category: str
+    source: list[str]
+    frontend_location: str
+    viewable: bool
+    controllable: bool
+    editable: bool
+    schedulable: bool
+    kill_switch_needed: bool
+    confirmation_needed: bool
+    role_required: str
+    audit_log_required: bool
+    api_exists: bool
+    available_actions: list[str] = Field(default_factory=list)
+    existing_endpoints: list[str] = Field(default_factory=list)
+    missing_backend_work: list[str] = Field(default_factory=list)
+    dangerous_actions: list[str] = Field(default_factory=list)
+    operator_notes: str | None = None
+    priority: str
+
+
+class MasterAdminControlMatrixResponse(BaseModel):
+    """``GET /admin/master-admin/control-matrix`` payload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role: str
+    authority: str
+    generated_at: datetime
+    controls: list[MasterAdminControlEntry]
+    gaps: list[MasterAdminControlEntry]
+    dangerous_actions_require: list[str]
+
+
 class WorkerRegistryEntry(BaseModel):
     """One worker in the registry."""
 

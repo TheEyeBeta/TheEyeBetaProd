@@ -31,12 +31,11 @@ psql "$DATABASE_URL" -c \
    systemctl --user enable --now theeye-latest-snapshot.timer
    systemctl --user enable --now theeye-supabase-sync.timer
    ```
-4. Run **3 consecutive shadow days** for Supabase sync (default `--shadow`). Review reports in `reports/supabase_shadow_YYYY-MM-DD.md`.
-5. After clean shadow reports, flip Supabase sync to live by editing `theeye-supabase-sync.service`:
-   ```ini
-   ExecStart=... uv run python -m workers.supabase_sync_worker --live
-   ```
-   Then `systemctl --user daemon-reload && systemctl --user restart theeye-supabase-sync.timer`.
+4. Run **3 consecutive shadow days** for Supabase sync when validating a change:
+   `uv run python -m workers.supabase_sync_worker --shadow`
+   Review reports in `reports/supabase_shadow_YYYY-MM-DD.md`.
+5. Production systemd unit runs **`--live`** (writes to Supabase). For manual shadow:
+   `uv run python -m workers.supabase_sync_worker --shadow`
 6. Verify:
    - DataAPI: `GET /api/v1/context?ticker=AAPL` returns fresh `last_price`
    - Supabase: `stock_snapshots.synced_at` advances on timer cadence

@@ -271,6 +271,14 @@ hooks-run: ## Run all pre-commit hooks against every file (useful after changing
 	$(UV) run pre-commit run --all-files
 
 # ─────────────────────────────────────────────────────────────────────────────
+##@ Ops
+# ─────────────────────────────────────────────────────────────────────────────
+
+.PHONY: verify-dataapi-tunnel
+verify-dataapi-tunnel: ## Smoke-test Data API via Cloudflare (DATAAPI_TUNNEL_URL, optional --auth)
+	@bash scripts/verify_dataapi_tunnel.sh $(ARGS)
+
+# ─────────────────────────────────────────────────────────────────────────────
 ##@ Documentation
 # ─────────────────────────────────────────────────────────────────────────────
 

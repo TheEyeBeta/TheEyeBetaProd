@@ -51,6 +51,7 @@ WITH universe AS (
       FROM theeyebeta.instruments i
       JOIN theeyebeta.public_ticker_map m ON m.instrument_id = i.id
      WHERE i.active
+       AND i.asset_class IN ('equity', 'adr')
 ),
 ranked AS (
     SELECT p.instrument_id,
@@ -463,10 +464,21 @@ async def resolve_target_trade_date(conn: asyncpg.Connection, trade_date: date) 
         """,
         trade_date,
     )
-    if value is None:
-        msg = f"No trading day found on or before {trade_date.isoformat()}"
-        raise RuntimeError(msg)
-    return value
+    if value is not None:
+        return value
+    has_data = await conn.fetchval(
+        """
+        SELECT 1
+          FROM theeyebeta.ind_technical_daily
+         WHERE date = $1
+         LIMIT 1
+        """,
+        trade_date,
+    )
+    if has_data:
+        return trade_date
+    msg = f"No trading day found on or before {trade_date.isoformat()}"
+    raise RuntimeError(msg)
 
 
 def _parse_date(raw: str | None) -> date:

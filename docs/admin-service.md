@@ -5,6 +5,38 @@
 > See [architecture.md §9](architecture.md#9-admin-service) and
 > [.cursor/rules/frontend-htmx.mdc](../.cursor/rules/frontend-htmx.mdc).
 
+## MASTER_ADMIN Control Contract
+
+`MASTER_ADMIN` is the system owner/operator role. It must be able to see the
+entire backend ecosystem and must have an explicit control path for every
+backend feature that can mutate data, affect trading, alter risk/compliance
+outputs, run jobs, call external integrations, or change configuration.
+
+The admin frontend must not hide backend-only gaps. If a feature cannot be
+started, stopped, paused, resumed, retried, scheduled, configured, locked,
+audited, or killed from the frontend, the frontend must show that as missing
+backend work.
+
+Dangerous actions still require operator safety rails:
+
+- confirmation prompt and consequence preview
+- durable `audit_log` row with actor, timestamp, reason, payload, and override flag
+- timestamped action history visible in Audit
+- rollback or compensating action where technically possible
+- emergency stop/lockout controls for trading, schedulers, workers, and mutating integrations
+
+### MASTER_ADMIN Matrix API
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/admin/master-admin/control-matrix` | `MASTER_ADMIN` | Machine-readable owner/operator matrix covering backend features, existing endpoints, dangerous actions, audit requirements, frontend location, and missing backend work. |
+| `GET` | `/admin/master-admin` | `MASTER_ADMIN` | Dense frontend matrix showing view/control/edit/schedule/kill/API status and per-feature backend gaps. |
+
+This endpoint is intentionally blunt. It includes features that are only
+partially controllable today, such as workers without cooperative cancellation,
+systemd timers without schedule editing, RBAC without a user-management UI,
+and external integrations/secrets that must never expose raw secret values.
+
 ## Stack
 
 - **Jinja2** templates rendered server-side by FastAPI
@@ -57,8 +89,8 @@
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `GET` | `/admin/services/status` | Bearer JWT | Lists Docker containers attached to `theeyebeta-net` (name, image, state, health, uptime) |
-| `POST` | `/admin/services/{name}/restart` | Bearer JWT (20/min) | Restarts a whitelisted service container; audit logs `restart.service` |
+| `GET` | `/admin/services/status` | Bearer JWT | Lists known systemd units (name, unit, state, health, uptime) |
+| `POST` | `/admin/services/{name}/restart` | Bearer JWT (20/min) | Restarts a whitelisted systemd unit; audit logs `restart.service` |
 
 ### Backtest API (P-AD-R-backtest)
 

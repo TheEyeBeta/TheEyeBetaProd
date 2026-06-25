@@ -36,15 +36,21 @@ async def fetch_audit_alerts(
     conn: asyncpg.Connection,
     *,
     limit: int = 50,
+    severity: str | None = None,
+    alert_type: str | None = None,
 ) -> list[dict[str, Any]]:
     """Recent audit alerts."""
     rows = await conn.fetch(
         """
-        SELECT id, severity, worker_id, message, created_at, resolved_at
+        SELECT alert_id, alert_type, severity, worker_name, title, message, created_at
           FROM theeyebeta.audit_alerts
+         WHERE ($1::text IS NULL OR severity = $1)
+           AND ($2::text IS NULL OR alert_type = $2)
          ORDER BY created_at DESC
-         LIMIT $1
+         LIMIT $3
         """,
+        severity,
+        alert_type,
         limit,
     )
     return [dict(r) for r in rows]
@@ -57,27 +63,17 @@ async def fetch_data_gaps(
     limit: int = 50,
 ) -> list[dict[str, Any]]:
     """Instrument-scoped data gaps."""
-    if open_only:
-        rows = await conn.fetch(
-            """
-            SELECT id, instrument_id, gap_type, severity, gap_start, gap_end, detected_at
-              FROM theeyebeta.audit_data_gaps
-             WHERE resolved_at IS NULL
-             ORDER BY detected_at DESC
-             LIMIT $1
-            """,
-            limit,
-        )
-    else:
-        rows = await conn.fetch(
-            """
-            SELECT id, instrument_id, gap_type, severity, gap_start, gap_end, detected_at
-              FROM theeyebeta.audit_data_gaps
-             ORDER BY detected_at DESC
-             LIMIT $1
-            """,
-            limit,
-        )
+    state_filter = "AND remediation_state = 'OPEN'" if open_only else ""
+    rows = await conn.fetch(
+        f"""
+        SELECT gap_id, dataset_type, instrument_id, gap_start, gap_end, severity, created_at
+          FROM theeyebeta.audit_data_gaps
+         WHERE TRUE {state_filter}
+         ORDER BY created_at DESC
+         LIMIT $1
+        """,  # noqa: S608
+        limit,
+    )
     return [dict(r) for r in rows]
 
 

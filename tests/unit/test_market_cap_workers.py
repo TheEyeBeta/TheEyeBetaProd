@@ -12,6 +12,7 @@ from workers.market_cap_providers import (
     CapSnapshot,
     classify_cap_crossings,
     reference_ticker_variants,
+    sector_from_massive_detail,
     symbols_above_threshold,
 )
 from workers.market_cap_threshold_worker import MarketCapThresholdWorker
@@ -20,6 +21,21 @@ from workers.market_cap_threshold_worker import MarketCapThresholdWorker
 def test_reference_ticker_variants_for_class_shares() -> None:
     assert reference_ticker_variants("BF-B") == ["BF-B", "BF.B"]
     assert reference_ticker_variants("BRK.B") == ["BRK.B", "BRK-B"]
+
+
+def test_sector_from_massive_detail_maps_type_and_metadata() -> None:
+    assert sector_from_massive_detail({"type": "ETF", "sic_code": None}) == "ETF"
+    assert sector_from_massive_detail({"type": "CS", "sic_code": 7372}) == "Technology"
+    assert (
+        sector_from_massive_detail(
+            {
+                "type": "CS",
+                "name": "FS Specialty Lending Fund",
+                "description": "closed-end management investment company",
+            },
+        )
+        == "Fund"
+    )
 
 
 def test_classify_crosses_up_from_below() -> None:
