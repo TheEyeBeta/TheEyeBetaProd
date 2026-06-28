@@ -37,7 +37,6 @@ export function PipelinesPanel() {
     mutationFn: () =>
       adminPost(`/admin/workers/${encodeURIComponent(workerName)}/run`, {
         dry_run: false,
-        force: true,
         args: {},
         reason
       }),

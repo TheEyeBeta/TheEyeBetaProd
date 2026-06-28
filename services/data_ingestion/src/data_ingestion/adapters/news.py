@@ -21,7 +21,20 @@ from zinc_schemas.ingestion import NewsRecord, Record
 log = structlog.get_logger()
 
 LOOKBACK_DAYS = int(os.environ.get("NEWS_LOOKBACK_DAYS", "7"))
-API_PROVIDER_LIMIT = int(os.environ.get("NEWS_API_PROVIDER_LIMIT", "100"))
+
+
+def _positive_int_from_env(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+API_PROVIDER_LIMIT = _positive_int_from_env("NEWS_API_PROVIDER_LIMIT", 100)
 
 
 def _url_hash(url: str) -> str:
@@ -32,7 +45,10 @@ def _entry_published_at(entry: dict[str, Any], fallback: date) -> datetime:
     published = entry.get("published") or entry.get("updated")
     if published:
         try:
-            return parsedate_to_datetime(str(published)).astimezone(UTC)
+            parsed = parsedate_to_datetime(str(published))
+            if parsed.tzinfo is None:
+                return parsed.replace(tzinfo=UTC)
+            return parsed.astimezone(UTC)
         except (TypeError, ValueError):
             pass
     return datetime(fallback.year, fallback.month, fallback.day, 12, 0, tzinfo=UTC)
@@ -54,7 +70,10 @@ def _parse_iso_datetime(raw: object, fallback: date) -> datetime:
     except ValueError:
         pass
     try:
-        return parsedate_to_datetime(value).astimezone(UTC)
+        parsed = parsedate_to_datetime(value)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
     except (TypeError, ValueError):
         return datetime(fallback.year, fallback.month, fallback.day, 12, 0, tzinfo=UTC)
 
@@ -119,8 +138,9 @@ def _record_from_article(
         return None
     seen_hashes.add(url_digest)
     text_blob = f"{title}\n{body or ''}"
-    explicit = explicit_tickers or set()
-    tickers = sorted((explicit & universe) | set(extract_tickers(text_blob, universe)))
+    explicit = (explicit_tickers or set()) & universe
+    extracted = set(extract_tickers(text_blob, universe))
+    tickers = sorted(explicit if explicit else extracted)
     return NewsRecord(
         source="news",
         observed_at=observed_at,
@@ -235,16 +255,21 @@ class NewsAdapter:
     ) -> list[NewsRecord]:
         records: list[NewsRecord] = []
         provider_fetches = (
-            self._fetch_finnhub(client, cutoff, target_date, seen_hashes, universe),
-            self._fetch_alpha_vantage(client, cutoff, target_date, seen_hashes, universe),
-            self._fetch_newsapi(client, cutoff, target_date, seen_hashes, universe),
-            self._fetch_tavily(client, cutoff, target_date, seen_hashes, universe),
+            ("finnhub", self._fetch_finnhub(client, cutoff, target_date, seen_hashes, universe)),
+            (
+                "alpha_vantage",
+                self._fetch_alpha_vantage(client, cutoff, target_date, seen_hashes, universe),
+            ),
+            ("newsapi", self._fetch_newsapi(client, cutoff, target_date, seen_hashes, universe)),
+            ("tavily", self._fetch_tavily(client, cutoff, target_date, seen_hashes, universe)),
         )
-        for fetch in provider_fetches:
+        for provider, fetch in provider_fetches:
             try:
                 records.extend(await fetch)
             except Exception as exc:  # noqa: BLE001
-                log.warning("news_api_provider_failed", error=str(exc))
+                log.warning(
+                    "news_api_provider_failed", provider=provider, error_type=type(exc).__name__
+                )
         return records
 
     async def _fetch_finnhub(
