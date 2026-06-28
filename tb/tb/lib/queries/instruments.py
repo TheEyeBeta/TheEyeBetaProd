@@ -30,10 +30,33 @@ async def fetch_latest_price(
     """Latest daily close for an instrument."""
     row = await conn.fetchrow(
         """
-        SELECT ts::date AS d, open, high, low, close, volume
-          FROM theeyebeta.prices_daily
-         WHERE instrument_id = $1
-         ORDER BY ts DESC
+        WITH ranked_prices AS (
+            SELECT ts::date AS d, open, high, low, close, volume,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY ts::date
+                       ORDER BY
+                           CASE source
+                               WHEN 'massive' THEN 100
+                               WHEN 'yfinance_backfill_prices' THEN 90
+                               WHEN 'yfinance_gap_fix' THEN 90
+                               WHEN 'yfinance' THEN 80
+                               WHEN 'finnhub' THEN 70
+                               WHEN 'public_mirror_backfill' THEN 60
+                               WHEN 'public_mirror_active_universe' THEN 50
+                               WHEN 'tick_rollup' THEN 40
+                               WHEN 'csv' THEN 10
+                               ELSE 0
+                           END DESC,
+                           ts DESC,
+                           ingested_at DESC
+                   ) AS rn
+              FROM theeyebeta.prices_daily
+             WHERE instrument_id = $1
+        )
+        SELECT d, open, high, low, close, volume
+          FROM ranked_prices
+         WHERE rn = 1
+         ORDER BY d DESC
          LIMIT 1
         """,
         instrument_id,
@@ -73,12 +96,35 @@ async def fetch_price_series(
     """Daily price series for plotting/export."""
     rows = await conn.fetch(
         """
-        SELECT ts::date AS d, open, high, low, close, volume
-          FROM theeyebeta.prices_daily
-         WHERE instrument_id = $1
-           AND ($2::date IS NULL OR ts::date >= $2)
-           AND ($3::date IS NULL OR ts::date <= $3)
-         ORDER BY ts DESC
+        WITH ranked_prices AS (
+            SELECT ts::date AS d, open, high, low, close, volume,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY ts::date
+                       ORDER BY
+                           CASE source
+                               WHEN 'massive' THEN 100
+                               WHEN 'yfinance_backfill_prices' THEN 90
+                               WHEN 'yfinance_gap_fix' THEN 90
+                               WHEN 'yfinance' THEN 80
+                               WHEN 'finnhub' THEN 70
+                               WHEN 'public_mirror_backfill' THEN 60
+                               WHEN 'public_mirror_active_universe' THEN 50
+                               WHEN 'tick_rollup' THEN 40
+                               WHEN 'csv' THEN 10
+                               ELSE 0
+                           END DESC,
+                           ts DESC,
+                           ingested_at DESC
+                   ) AS rn
+              FROM theeyebeta.prices_daily
+             WHERE instrument_id = $1
+               AND ($2::date IS NULL OR ts::date >= $2)
+               AND ($3::date IS NULL OR ts::date <= $3)
+        )
+        SELECT d, open, high, low, close, volume
+          FROM ranked_prices
+         WHERE rn = 1
+         ORDER BY d DESC
          LIMIT $4
         """,
         instrument_id,

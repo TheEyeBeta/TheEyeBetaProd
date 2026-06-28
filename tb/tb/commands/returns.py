@@ -23,20 +23,52 @@ def returns_latest(symbol: str = typer.Argument(...)) -> None:
                 raise typer.Exit(code=1)
             rows = await conn.fetch(
                 """
-                SELECT ts::date AS d, close,
-                       LAG(close) OVER (ORDER BY ts) AS prev
-                  FROM theeyebeta.prices_daily
-                 WHERE instrument_id = $1
-                 ORDER BY ts DESC
-                 LIMIT 2
+                WITH ranked_prices AS (
+                    SELECT ts::date AS d, close,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY ts::date
+                               ORDER BY
+                                   CASE source
+                                       WHEN 'massive' THEN 100
+                                       WHEN 'yfinance_backfill_prices' THEN 90
+                                       WHEN 'yfinance_gap_fix' THEN 90
+                                       WHEN 'yfinance' THEN 80
+                                       WHEN 'finnhub' THEN 70
+                                       WHEN 'public_mirror_backfill' THEN 60
+                                       WHEN 'public_mirror_active_universe' THEN 50
+                                       WHEN 'tick_rollup' THEN 40
+                                       WHEN 'csv' THEN 10
+                                       ELSE 0
+                                   END DESC,
+                                   ts DESC,
+                                   ingested_at DESC
+                           ) AS rn
+                      FROM theeyebeta.prices_daily
+                     WHERE instrument_id = $1
+                ),
+                canonical AS (
+                    SELECT d, close
+                      FROM ranked_prices
+                     WHERE rn = 1
+                ),
+                with_prev AS (
+                    SELECT d, close, LAG(close) OVER (ORDER BY d) AS prev
+                      FROM canonical
+                )
+                SELECT d, close, prev
+                  FROM with_prev
+                 ORDER BY d DESC
+                 LIMIT 1
                 """,
                 inst["instrument_id"],
             )
-        if len(rows) < 2 or not rows[0]["prev"]:
+        if not rows or not rows[0]["prev"]:
             typer.echo("Insufficient data")
             return
         ret = (float(rows[0]["close"]) / float(rows[0]["prev"]) - 1.0) * 100
         typer.echo(f"{symbol} {rows[0]['d']}: {ret:.2f}%")
+
+    asyncio.run(_run())
 
 
 @app.command("leaderboard")
@@ -51,9 +83,33 @@ def returns_leaderboard(
             rows = await conn.fetch(
                 """
                 WITH ranked AS (
-                    SELECT instrument_id, ts::date AS d, close,
-                           ROW_NUMBER() OVER (PARTITION BY instrument_id ORDER BY ts DESC) AS rn
-                      FROM theeyebeta.prices_daily
+                    SELECT instrument_id, d, close,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY instrument_id ORDER BY d DESC
+                           ) AS rn
+                      FROM (
+                            SELECT instrument_id, ts::date AS d, close,
+                                   ROW_NUMBER() OVER (
+                                       PARTITION BY instrument_id, ts::date
+                                       ORDER BY
+                                           CASE source
+                                               WHEN 'massive' THEN 100
+                                               WHEN 'yfinance_backfill_prices' THEN 90
+                                               WHEN 'yfinance_gap_fix' THEN 90
+                                               WHEN 'yfinance' THEN 80
+                                               WHEN 'finnhub' THEN 70
+                                               WHEN 'public_mirror_backfill' THEN 60
+                                               WHEN 'public_mirror_active_universe' THEN 50
+                                               WHEN 'tick_rollup' THEN 40
+                                               WHEN 'csv' THEN 10
+                                               ELSE 0
+                                           END DESC,
+                                           ts DESC,
+                                           ingested_at DESC
+                                   ) AS daily_rn
+                              FROM theeyebeta.prices_daily
+                      ) daily
+                     WHERE daily_rn = 1
                 ),
                 ends AS (SELECT instrument_id, close AS end_px FROM ranked WHERE rn = 1),
                 starts AS (SELECT instrument_id, close AS start_px FROM ranked WHERE rn = $1)

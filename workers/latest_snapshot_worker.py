@@ -147,24 +147,96 @@ LEFT JOIN LATERAL (
 ) pi ON true
 LEFT JOIN LATERAL (
     SELECT close, ts, volume
-      FROM theeyebeta.prices_daily
-     WHERE instrument_id = i.id
-     ORDER BY ts DESC
+      FROM (
+            SELECT p.ts::date AS d,
+                   p.close,
+                   p.ts,
+                   p.volume,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY p.ts::date
+                       ORDER BY
+                           CASE p.source
+                               WHEN 'massive' THEN 100
+                               WHEN 'yfinance_backfill_prices' THEN 90
+                               WHEN 'yfinance_gap_fix' THEN 90
+                               WHEN 'yfinance' THEN 80
+                               WHEN 'finnhub' THEN 70
+                               WHEN 'public_mirror_backfill' THEN 60
+                               WHEN 'public_mirror_active_universe' THEN 50
+                               WHEN 'tick_rollup' THEN 40
+                               WHEN 'csv' THEN 10
+                               ELSE 0
+                           END DESC,
+                           p.ts DESC,
+                           p.ingested_at DESC
+                   ) AS rn
+              FROM theeyebeta.prices_daily p
+             WHERE p.instrument_id = i.id
+      ) ranked
+     WHERE rn = 1
+     ORDER BY d DESC
      LIMIT 1
 ) pd ON true
 LEFT JOIN LATERAL (
     SELECT close
-      FROM theeyebeta.prices_daily
-     WHERE instrument_id = i.id
-     ORDER BY ts DESC
+      FROM (
+            SELECT p.ts::date AS d,
+                   p.close,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY p.ts::date
+                       ORDER BY
+                           CASE p.source
+                               WHEN 'massive' THEN 100
+                               WHEN 'yfinance_backfill_prices' THEN 90
+                               WHEN 'yfinance_gap_fix' THEN 90
+                               WHEN 'yfinance' THEN 80
+                               WHEN 'finnhub' THEN 70
+                               WHEN 'public_mirror_backfill' THEN 60
+                               WHEN 'public_mirror_active_universe' THEN 50
+                               WHEN 'tick_rollup' THEN 40
+                               WHEN 'csv' THEN 10
+                               ELSE 0
+                           END DESC,
+                           p.ts DESC,
+                           p.ingested_at DESC
+                   ) AS rn
+              FROM theeyebeta.prices_daily p
+             WHERE p.instrument_id = i.id
+      ) ranked
+     WHERE rn = 1
+     ORDER BY d DESC
      OFFSET 1
      LIMIT 1
 ) pd_prev ON true
 LEFT JOIN LATERAL (
-    SELECT MAX(p.high) AS high_52w, MIN(p.low) AS low_52w
-      FROM theeyebeta.prices_daily p
-     WHERE p.instrument_id = i.id
-       AND p.ts >= now() - INTERVAL '365 days'
+    SELECT MAX(high) AS high_52w, MIN(low) AS low_52w
+      FROM (
+            SELECT p.ts::date AS d,
+                   p.high,
+                   p.low,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY p.ts::date
+                       ORDER BY
+                           CASE p.source
+                               WHEN 'massive' THEN 100
+                               WHEN 'yfinance_backfill_prices' THEN 90
+                               WHEN 'yfinance_gap_fix' THEN 90
+                               WHEN 'yfinance' THEN 80
+                               WHEN 'finnhub' THEN 70
+                               WHEN 'public_mirror_backfill' THEN 60
+                               WHEN 'public_mirror_active_universe' THEN 50
+                               WHEN 'tick_rollup' THEN 40
+                               WHEN 'csv' THEN 10
+                               ELSE 0
+                           END DESC,
+                           p.ts DESC,
+                           p.ingested_at DESC
+                   ) AS rn
+              FROM theeyebeta.prices_daily p
+             WHERE p.instrument_id = i.id
+               AND p.ts >= now() - INTERVAL '365 days'
+      ) ranked
+     WHERE rn = 1
 ) range52 ON true
 LEFT JOIN LATERAL (
     SELECT
@@ -172,10 +244,33 @@ LEFT JOIN LATERAL (
         AVG(volume) FILTER (WHERE rn BETWEEN 1 AND 30) AS avg_volume_30d
       FROM (
             SELECT volume,
-                   ROW_NUMBER() OVER (ORDER BY ts DESC) AS rn
-              FROM theeyebeta.prices_daily
-             WHERE instrument_id = i.id
-               AND volume IS NOT NULL
+                   ROW_NUMBER() OVER (ORDER BY d DESC) AS rn
+              FROM (
+                    SELECT p.ts::date AS d,
+                           p.volume,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY p.ts::date
+                               ORDER BY
+                                   CASE p.source
+                                       WHEN 'massive' THEN 100
+                                       WHEN 'yfinance_backfill_prices' THEN 90
+                                       WHEN 'yfinance_gap_fix' THEN 90
+                                       WHEN 'yfinance' THEN 80
+                                       WHEN 'finnhub' THEN 70
+                                       WHEN 'public_mirror_backfill' THEN 60
+                                       WHEN 'public_mirror_active_universe' THEN 50
+                                       WHEN 'tick_rollup' THEN 40
+                                       WHEN 'csv' THEN 10
+                                       ELSE 0
+                                   END DESC,
+                                   p.ts DESC,
+                                   p.ingested_at DESC
+                           ) AS daily_rn
+                      FROM theeyebeta.prices_daily p
+                     WHERE p.instrument_id = i.id
+                       AND p.volume IS NOT NULL
+              ) daily
+             WHERE daily_rn = 1
         ) ranked
      WHERE rn <= 30
 ) vol ON true

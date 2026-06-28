@@ -14,6 +14,7 @@ app = typer.Typer(no_args_is_help=True, help="Run canonical workers")
 WORKER_MODULES: dict[str, str] = {
     "macro-ingest": "workers.macro_ingestion_worker",
     "macro-regime": "workers.macro_regime_worker",
+    "fixed-income": "workers.fixed_income.pipeline_worker",
     "massive-ingest": "workers.massive_ingestion_worker",
     "intraday-ingest": "workers.intraday_ingestion_worker",
     "indicator-compute": "workers.indicator_compute_worker",
@@ -34,6 +35,7 @@ SCRIPT_WORKERS: dict[str, str] = {
 
 WORKER_UNITS: dict[str, str] = {
     "macro-ingest": "theeye-macro.service",
+    "fixed-income": "theeye-fixed-income.service",
     "massive-ingest": "theeye-massive-ingest.service",
     "intraday-ingest": "theeye-intraday-ingest.service",
     "daily-pipeline": "theeye-daily-pipeline.service",

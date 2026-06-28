@@ -1,0 +1,11 @@
+[Unit]
+Description=Run TheEyeBeta fixed-income regime worker after macro close jobs
+
+[Timer]
+OnCalendar=Mon..Fri 21:45 UTC
+Persistent=true
+RandomizedDelaySec=60
+Unit=theeye-fixed-income.service
+
+[Install]
+WantedBy=timers.target

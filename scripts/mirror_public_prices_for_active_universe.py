@@ -25,7 +25,7 @@ PROD_ROOT = Path(__file__).resolve().parents[1]
 if str(PROD_ROOT) not in sys.path:
     sys.path.insert(0, str(PROD_ROOT))
 
-from workers.base_worker import worker_database_url
+from workers.base_worker import worker_database_url  # noqa: E402
 
 log = structlog.get_logger()
 
@@ -82,7 +82,7 @@ async def mirror_year(
         INSERT INTO theeyebeta.prices_daily
             (instrument_id, ts, open, high, low, close, adj_close, volume, source)
         SELECT m.instrument_id,
-               p.date::timestamptz,
+               p.date::timestamp AT TIME ZONE 'UTC',
                p.open,
                p.high,
                p.low,

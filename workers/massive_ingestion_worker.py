@@ -293,11 +293,34 @@ async def load_prev_closes(
     instrument_ids = [inst.instrument_id for inst in universe]
     rows = await conn.fetch(
         """
+        WITH ranked_prices AS (
+            SELECT p.instrument_id, p.close,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY p.instrument_id, p.ts::date
+                       ORDER BY
+                           CASE p.source
+                               WHEN 'massive' THEN 100
+                               WHEN 'yfinance_backfill_prices' THEN 90
+                               WHEN 'yfinance_gap_fix' THEN 90
+                               WHEN 'yfinance' THEN 80
+                               WHEN 'finnhub' THEN 70
+                               WHEN 'public_mirror_backfill' THEN 60
+                               WHEN 'public_mirror_active_universe' THEN 50
+                               WHEN 'tick_rollup' THEN 40
+                               WHEN 'csv' THEN 10
+                               ELSE 0
+                           END DESC,
+                           p.ts DESC,
+                           p.ingested_at DESC
+                   ) AS rn
+              FROM theeyebeta.prices_daily p
+             WHERE p.ts::date = $1
+               AND p.instrument_id = ANY($2::bigint[])
+        )
         SELECT m.public_ticker_id AS ticker_id, p.close::float AS close
-          FROM theeyebeta.prices_daily p
+          FROM ranked_prices p
           JOIN theeyebeta.public_ticker_map m ON m.instrument_id = p.instrument_id
-         WHERE p.ts::date = $1
-           AND p.instrument_id = ANY($2::bigint[])
+         WHERE p.rn = 1
         """,
         ref_date,
         instrument_ids,

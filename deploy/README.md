@@ -52,6 +52,30 @@ Run manually:
 uv run python -m workers.macro_pipeline --run-type manual
 ```
 
+## Fixed-Income Regime Timer
+
+Create `/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env.theeye-fixed-income`
+with `DATABASE_URL` or `MACRO_DATABASE_URL`, plus `FRED_API_KEY`.
+
+Install and enable the fixed-income regime timer (runs after macro jobs at
+21:45 UTC, Mon-Fri):
+
+```bash
+sudo cp deploy/systemd/theeye-fixed-income.service /etc/systemd/system/
+sudo cp deploy/systemd/theeye-fixed-income.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now theeye-fixed-income.timer
+systemctl list-timers theeye-fixed-income.timer
+systemctl cat theeye-fixed-income.timer
+```
+
+Dry-run / manual checks:
+
+```bash
+uv run python -m workers.fixed_income.pipeline_worker --dry-run
+uv run tb workers run fixed-income --dry-run
+```
+
 ## Daily Pipeline Timer
 
 Install and enable the daily market-data pipeline timer:
