@@ -51,21 +51,51 @@ WITH universe AS (
       FROM theeyebeta.instruments i
       JOIN theeyebeta.public_ticker_map m ON m.instrument_id = i.id
      WHERE i.active
+       AND i.asset_class IN ('equity', 'adr')
+),
+daily_prices AS (
+    SELECT instrument_id, d, close, volume
+      FROM (
+            SELECT p.instrument_id,
+                   p.ts::date AS d,
+                   p.close,
+                   p.volume,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY p.instrument_id, p.ts::date
+                       ORDER BY
+                           CASE p.source
+                               WHEN 'massive' THEN 100
+                               WHEN 'yfinance_backfill_prices' THEN 90
+                               WHEN 'yfinance_gap_fix' THEN 90
+                               WHEN 'yfinance' THEN 80
+                               WHEN 'finnhub' THEN 70
+                               WHEN 'public_mirror_backfill' THEN 60
+                               WHEN 'public_mirror_active_universe' THEN 50
+                               WHEN 'tick_rollup' THEN 40
+                               WHEN 'csv' THEN 10
+                               ELSE 0
+                           END DESC,
+                           p.ts DESC,
+                           p.ingested_at DESC
+                   ) AS daily_rn
+              FROM theeyebeta.prices_daily p
+              JOIN universe u ON u.instrument_id = p.instrument_id
+             WHERE p.ts::date <= $1
+               AND p.ts::date > $1 - INTERVAL '400 days'
+               AND p.close IS NOT NULL
+               AND p.close > 0
+      ) picked
+     WHERE daily_rn = 1
 ),
 ranked AS (
-    SELECT p.instrument_id,
-           p.ts::date AS d,
-           p.close,
-           p.volume,
+    SELECT instrument_id,
+           d,
+           close,
+           volume,
            ROW_NUMBER() OVER (
-               PARTITION BY p.instrument_id ORDER BY p.ts DESC
+               PARTITION BY instrument_id ORDER BY d DESC
            ) AS rn
-      FROM theeyebeta.prices_daily p
-      JOIN universe u ON u.instrument_id = p.instrument_id
-     WHERE p.ts::date <= $1
-       AND p.ts::date > $1 - INTERVAL '400 days'
-       AND p.close IS NOT NULL
-       AND p.close > 0
+      FROM daily_prices
 ),
 vol20 AS (
     SELECT instrument_id, AVG(volume) AS avg_volume_20d
@@ -103,13 +133,37 @@ SELECT u.instrument_id,
 """
 
 SPY_CLOSES_SQL = """
-SELECT p.close
-  FROM theeyebeta.prices_daily p
-  JOIN theeyebeta.instruments i ON i.id = p.instrument_id
- WHERE i.symbol = 'SPY'
-   AND p.ts::date <= $1
-   AND p.close IS NOT NULL
- ORDER BY p.ts DESC
+WITH ranked_prices AS (
+    SELECT p.ts::date AS d,
+           p.close,
+           ROW_NUMBER() OVER (
+               PARTITION BY p.ts::date
+               ORDER BY
+                   CASE p.source
+                       WHEN 'massive' THEN 100
+                       WHEN 'yfinance_backfill_prices' THEN 90
+                       WHEN 'yfinance_gap_fix' THEN 90
+                       WHEN 'yfinance' THEN 80
+                       WHEN 'finnhub' THEN 70
+                       WHEN 'public_mirror_backfill' THEN 60
+                       WHEN 'public_mirror_active_universe' THEN 50
+                       WHEN 'tick_rollup' THEN 40
+                       WHEN 'csv' THEN 10
+                       ELSE 0
+                   END DESC,
+                   p.ts DESC,
+                   p.ingested_at DESC
+           ) AS rn
+      FROM theeyebeta.prices_daily p
+      JOIN theeyebeta.instruments i ON i.id = p.instrument_id
+     WHERE i.symbol = 'SPY'
+       AND p.ts::date <= $1
+       AND p.close IS NOT NULL
+)
+SELECT close
+  FROM ranked_prices
+ WHERE rn = 1
+ ORDER BY d DESC
  LIMIT $2
 """
 
@@ -463,10 +517,21 @@ async def resolve_target_trade_date(conn: asyncpg.Connection, trade_date: date) 
         """,
         trade_date,
     )
-    if value is None:
-        msg = f"No trading day found on or before {trade_date.isoformat()}"
-        raise RuntimeError(msg)
-    return value
+    if value is not None:
+        return value
+    has_data = await conn.fetchval(
+        """
+        SELECT 1
+          FROM theeyebeta.ind_technical_daily
+         WHERE date = $1
+         LIMIT 1
+        """,
+        trade_date,
+    )
+    if has_data:
+        return trade_date
+    msg = f"No trading day found on or before {trade_date.isoformat()}"
+    raise RuntimeError(msg)
 
 
 def _parse_date(raw: str | None) -> date:

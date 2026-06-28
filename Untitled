@@ -1,27 +1,52 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# theeyebeta — environment variables template
-# Copy to .env and fill in real values. Never commit .env.
-# ─────────────────────────────────────────────────────────────────────────────
-
-# ── PostgreSQL ───────────────────────────────────────────────────────────────
-POSTGRES_USER=theeyebeta
-POSTGRES_DB=theeyebeta
-POSTGRES_PASSWORD=changeme_postgres
-
-# ── MinIO ────────────────────────────────────────────────────────────────────
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=changeme_minio_secret
-
-# ── Grafana ──────────────────────────────────────────────────────────────────
-GRAFANA_ADMIN_PASSWORD=changeme_grafana
-
-# ── Application services (add as services are created) ───────────────────────
-# DATABASE_URL=postgresql+asyncpg://theeyebeta:changeme_postgres@localhost:5432/theeyebeta
-# REDIS_URL=redis://localhost:6379/0
-# NATS_URL=nats://localhost:4222
-# MINIO_ENDPOINT=localhost:9000
-# OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
-
-# ── Data ingestion ───────────────────────────────────────────────────────────
-FRED_API_KEY=
-INGEST_DATABASE_URL=postgresql://tb_app:tb_app_CHANGE_ME@127.0.0.1:5432/TheEyeBeta2025Live
+Component            ┃ Type               ┃ State   ┃ Age(s) ┃
+┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━┩
+│ GapSentinelWorker    │ audit              │ STOPPED │ 52531  │
+│ MassiveDailyIngesti… │ canonical_prices   │ STOPPED │ 1548   │
+│ daily_pipeline       │ daily_pipeline     │ RUNNING │ 0      │
+│ IndicatorComputeWor… │ indicators         │ STOPPED │ 195082 │
+│ TheeyebetaIndicator… │ indicators         │ STOPPED │ 88115  │
+│ IntradayIngestionWo… │ intraday_prices    │ STOPPED │ 10741  │
+│ MacroIngestionWorker │ macro              │ STOPPED │ 2639   │
+│ MacroRegimeWorker    │ macro              │ STOPPED │ 2628   │
+│ MarketCapFetchWorker │ market_cap         │ STOPPED │ 2322   │
+│ MarketCapThresholdW… │ market_cap         │ STOPPED │ 2234   │
+│ CanonicalPriceMirror │ price_mirror       │ STOPPED │ 1740   │
+│ SectorAggregationWo… │ sector_aggregation │ FAILED  │ 31     │
+│ algorithm_sentinel   │ sentinel           │ RUNNING │ 3      │
+│ CanonicalPriceMirro… │ sentinel           │ STOPPED │ 9999   │
+│ corporate_actions_s… │ sentinel           │ RUNNING │ 3      │
+│ daily_pipeline_sent… │ sentinel           │ RUNNING │ 4      │
+│ db_intelligence_sen… │ sentinel           │ RUNNING │ 2      │
+│ db_pipeline_sentinel │ sentinel           │ RUNNING │ 3      │
+│ db_structural_senti… │ sentinel           │ RUNNING │ 3      │
+│ db_timeseries_senti… │ sentinel           │ RUNNING │ 3      │
+│ GapSentinelWorker_s… │ sentinel           │ STOPPED │ 9999   │
+│ IndicatorComputeWor… │ sentinel           │ STOPPED │ 9999   │
+│ indicator_sentinel   │ sentinel           │ RUNNING │ 3      │
+│ IntradayIngestionWo… │ sentinel           │ STOPPED │ 9999   │
+│ MacroIngestionWorke… │ sentinel           │ STOPPED │ 9999   │
+│ MacroRegimeWorker_s… │ sentinel           │ STOPPED │ 9999   │
+│ MarketCapFetchWorke… │ sentinel           │ STOPPED │ 9999   │
+│ MarketCapThresholdW… │ sentinel           │ STOPPED │ 9999   │
+│ MassiveDailyIngesti… │ sentinel           │ STOPPED │ 9999   │
+│ news_sentinel        │ sentinel           │ RUNNING │ 4      │
+│ price_sentinel       │ sentinel           │ RUNNING │ 3      │
+│ quant_sentinel       │ sentinel           │ RUNNING │ 3      │
+│ scoring_sentinel     │ sentinel           │ RUNNING │ 3      │
+│ SectorAggregationWo… │ sentinel           │ STOPPED │ 9999   │
+│ supabase_sync_senti… │ sentinel           │ RUNNING │ 3      │
+│ SupabaseSyncV2_sent… │ sentinel           │ STOPPED │ 9999   │
+│ TheeyebetaIndicator… │ sentinel           │ STOPPED │ 9999   │
+│ trade_algorithm_sen… │ sentinel           │ RUNNING │ 3      │
+│ SupabaseSyncV2       │ supabase_sync      │ FAILED  │ 279277 │
+│ audit_wiring_smoke   │ system             │ STOPPED │ 280076 │
+│ algorithm            │ worker             │ RUNNING │ 0      │
+│ corporate_actions    │ worker             │ RUNNING │ 0      │
+│ indicator            │ worker             │ RUNNING │ 0      │
+│ news                 │ worker             │ RUNNING │ 0      │
+│ price                │ worker             │ RUNNING │ 0      │
+│ quant                │ worker             │ RUNNING │ 0      │
+│ scoring              │ worker             │ RUNNING │ 0      │
+│ supabase_sync        │ worker             │ RUNNING │ 0      │
+│ trade_algorithm      │ worker             │ RUNNING │ 0      │
+└──────────────────────┴────────────────────┴─────────┴────

@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime, time, timedelta
 
 import asyncpg
 
+from scripts.audit_price_quality import CANDIDATES_SQL, REPAIR_SOURCE, SUMMARY_SQL
 from workers.base_worker import BaseWorker, WorkerResult
 
 PIPELINE_WORKER_NAME = "daily_pipeline"
@@ -16,6 +17,26 @@ LOOKBACK_TRADING_DAYS = 10
 STUCK_STARTED_HOURS = 2
 CANONICAL_COVERAGE_THRESHOLD = 0.95
 CANONICAL_POST_CLOSE_UTC = time(22, 0)
+PRICE_QUALITY_START = date(2021, 1, 1)
+PRICE_QUALITY_DUPLICATE_THRESHOLD = 2.0
+PRICE_QUALITY_FACTORS = [10.0, 20.0]
+PRICE_QUALITY_TOLERANCE = 0.20
+PRICE_QUALITY_MAX_INTERVAL_DAYS = 370
+PRICE_QUALITY_CANDIDATE_LIMIT = 25
+
+
+def _metadata_value(value: object) -> object:
+    if isinstance(value, date):
+        return value.isoformat()
+    return value
+
+
+def _record_dict(row: asyncpg.Record | dict[str, object] | None) -> dict[str, object]:
+    if row is None:
+        return {}
+    if isinstance(row, dict):
+        return {key: _metadata_value(value) for key, value in row.items()}
+    return {key: _metadata_value(value) for key, value in row.items()}
 
 
 async def check_pipeline_calendar_gaps(
@@ -330,6 +351,101 @@ async def check_canonical_freshness(
     }
 
 
+async def check_price_quality_anomalies(
+    conn: asyncpg.Connection,
+    *,
+    start: date = PRICE_QUALITY_START,
+    end: date | None = None,
+    dry_run: bool = False,
+) -> dict[str, object]:
+    """Flag duplicate-date price conflicts and bounded split-scale intervals."""
+    audit_end = end or date.today()
+    summary_row = await conn.fetchrow(
+        SUMMARY_SQL,
+        start,
+        audit_end,
+        PRICE_QUALITY_DUPLICATE_THRESHOLD,
+    )
+    candidates = await conn.fetch(
+        CANDIDATES_SQL,
+        start,
+        audit_end,
+        PRICE_QUALITY_FACTORS,
+        PRICE_QUALITY_TOLERANCE,
+        PRICE_QUALITY_MAX_INTERVAL_DAYS,
+        None,
+        PRICE_QUALITY_CANDIDATE_LIMIT,
+        REPAIR_SOURCE,
+    )
+    summary = _record_dict(summary_row)
+    candidate_rows = [_record_dict(row) for row in candidates]
+    duplicate_conflicts = int(summary.get("duplicate_dates_over_threshold") or 0)
+    violation = duplicate_conflicts > 0 or bool(candidate_rows)
+    alert_ids: list[int] = []
+
+    if violation and not dry_run:
+        existing = await conn.fetchval(
+            """
+            SELECT alert_id
+              FROM theeyebeta.audit_alerts
+             WHERE alert_type = 'DATA_QUALITY'
+               AND worker_name = 'GapSentinelWorker'
+               AND title = 'Daily price quality anomalies detected'
+               AND acknowledged_at IS NULL
+               AND resolved_at IS NULL
+             LIMIT 1
+            """,
+        )
+        if existing is None:
+            candidate_symbols = sorted({str(row["symbol"]) for row in candidate_rows})
+            message = (
+                f"Daily price audit found {duplicate_conflicts} duplicate-date conflicts "
+                f"over {PRICE_QUALITY_DUPLICATE_THRESHOLD:g}x"
+            )
+            if candidate_symbols:
+                message += f"; bounded scale candidates: {', '.join(candidate_symbols)}"
+            alert_id = await conn.fetchval(
+                """
+                INSERT INTO theeyebeta.audit_alerts (
+                    alert_type, severity, trade_date, worker_name,
+                    title, message, metadata
+                )
+                VALUES (
+                    'DATA_QUALITY',
+                    'CRITICAL',
+                    $1,
+                    'GapSentinelWorker',
+                    'Daily price quality anomalies detected',
+                    $2,
+                    $3::jsonb
+                )
+                RETURNING alert_id
+                """,
+                audit_end,
+                message,
+                json.dumps(
+                    {
+                        "check": "price_quality_anomalies",
+                        "start": start.isoformat(),
+                        "end": audit_end.isoformat(),
+                        "duplicate_summary": summary,
+                        "repair_candidates": candidate_rows,
+                    },
+                    default=str,
+                ),
+            )
+            alert_ids.append(int(alert_id))
+
+    return {
+        "start": start.isoformat(),
+        "end": audit_end.isoformat(),
+        "duplicate_summary": summary,
+        "repair_candidates": candidate_rows,
+        "violation": violation,
+        "alerts_created": alert_ids,
+    }
+
+
 async def remediate_open_gaps(
     conn: asyncpg.Connection,
     *,
@@ -537,25 +653,38 @@ class GapSentinelWorker(BaseWorker):
         if dry_run:
             pipeline = await check_pipeline_calendar_gaps(conn, as_of=trade_date, dry_run=True)
             canonical = await check_canonical_freshness(conn, as_of=as_of_dt, dry_run=True)
+            price_quality = await check_price_quality_anomalies(conn, end=trade_date, dry_run=True)
             return WorkerResult(
                 records_written=0,
                 records_expected=0,
-                metadata={"dry_run": True, **pipeline, "canonical_freshness": canonical},
+                metadata={
+                    "dry_run": True,
+                    **pipeline,
+                    "canonical_freshness": canonical,
+                    "price_quality": price_quality,
+                },
             )
 
         pipeline = await check_pipeline_calendar_gaps(conn, as_of=trade_date)
         canonical = await check_canonical_freshness(conn, as_of=as_of_dt)
+        price_quality = await check_price_quality_anomalies(conn, end=trade_date)
         resolved = await remediate_open_gaps(conn, as_of=trade_date)
         gaps_created = len(pipeline["gaps_created"]) + len(canonical["gaps_created"])
         alerts_created = (
             len(pipeline["alerts_created"])
             + len(canonical["alerts_created"])
             + len(pipeline["stuck_runs"])
+            + len(price_quality["alerts_created"])
         )
         return WorkerResult(
             records_written=gaps_created + alerts_created,
             records_expected=0,
-            metadata={**pipeline, "canonical_freshness": canonical, "remediation": resolved},
+            metadata={
+                **pipeline,
+                "canonical_freshness": canonical,
+                "price_quality": price_quality,
+                "remediation": resolved,
+            },
         )
 
 

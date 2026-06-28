@@ -87,11 +87,34 @@ async def load_price_history(
     start = target_date - timedelta(days=HISTORY_CALENDAR_DAYS)
     rows = await conn.fetch(
         """
-        SELECT ts::date AS d, close::float, high::float, low::float, volume::bigint
-          FROM theeyebeta.prices_daily
-         WHERE instrument_id = $1
-           AND ts::date BETWEEN $2 AND $3
-         ORDER BY ts
+        WITH ranked_prices AS (
+            SELECT ts::date AS d, close, high, low, volume,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY ts::date
+                       ORDER BY
+                           CASE source
+                               WHEN 'massive' THEN 100
+                               WHEN 'yfinance_backfill_prices' THEN 90
+                               WHEN 'yfinance_gap_fix' THEN 90
+                               WHEN 'yfinance' THEN 80
+                               WHEN 'finnhub' THEN 70
+                               WHEN 'public_mirror_backfill' THEN 60
+                               WHEN 'public_mirror_active_universe' THEN 50
+                               WHEN 'tick_rollup' THEN 40
+                               WHEN 'csv' THEN 10
+                               ELSE 0
+                           END DESC,
+                           ts DESC,
+                           ingested_at DESC
+                   ) AS rn
+              FROM theeyebeta.prices_daily
+             WHERE instrument_id = $1
+               AND ts::date BETWEEN $2 AND $3
+        )
+        SELECT d, close::float, high::float, low::float, volume::bigint
+          FROM ranked_prices
+         WHERE rn = 1
+         ORDER BY d
         """,
         instrument_id,
         start,

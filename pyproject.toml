@@ -35,7 +35,11 @@ description = "Workspace root — not a publishable package"
 requires-python = ">=3.12"
 # No runtime dependencies here — see [tool.uv.workspace] for shared pins
 # and [dependency-groups] for dev-only tooling.
-dependencies = []
+dependencies = [
+    "tb",
+    "polars[rtcompat]>=1.12",
+    "yfinance>=0.2.50",
+]
 
 # ── uv workspace ─────────────────────────────────────────────────────────────
 [tool.uv.workspace]
@@ -143,6 +147,7 @@ dev = [
 # Tell uv that the named first-party packages live inside this workspace
 # (i.e. their wheels come from ``libs/<name>``) rather than PyPI.
 [tool.uv.sources]
+tb = { workspace = true }
 zinc-test = { workspace = true }
 
 # ── Build system (workspace root is not built; members use their own) ─────────

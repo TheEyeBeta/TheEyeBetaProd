@@ -1,0 +1,19 @@
+[Unit]
+Description=Bridge theeyebeta.news_articles to theeyebeta.market_news (DataAPI)
+Wants=network-online.target
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=the-eye-beta
+Group=the-eye-beta
+WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
+Environment=OTEL_SDK_DISABLED=true
+ExecStart=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.venv/bin/python scripts/sync_market_news.py
+TimeoutStartSec=120
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

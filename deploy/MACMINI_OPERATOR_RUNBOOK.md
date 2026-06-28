@@ -49,7 +49,12 @@ cd /home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
 sudo ./deploy/install_systemd_units.sh
 sudo systemctl daemon-reload
 
+# Fixed-income worker environment:
+# /home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env.theeye-fixed-income
+# must contain DATABASE_URL or MACRO_DATABASE_URL, plus FRED_API_KEY.
+
 sudo systemctl enable --now theeye-macro.timer
+sudo systemctl enable --now theeye-fixed-income.timer
 sudo systemctl enable --now theeye-massive-ingest.timer
 sudo systemctl enable --now theeye-daily-pipeline.timer
 sudo systemctl enable --now theeye-gap-sentinel.timer
@@ -79,6 +84,9 @@ uv run tb universe sync --tier intraday
 
 ```bash
 uv run tb workers run massive-ingest --dry-run
+uv run python -m workers.fixed_income.pipeline_worker --dry-run
+uv run tb workers run fixed-income --dry-run
+systemctl cat theeye-fixed-income.timer
 uv run tb workers run intraday-ingest --dry-run --force --date 2026-06-12
 uv run tb workers run indicator-compute --dry-run --date 2026-06-12
 uv run tb trask status
@@ -99,6 +107,7 @@ uv run tb workers run intraday-ingest --force
 |--------------|-------|--------|
 | 13:35–20:05 Mon–Fri | intraday | 15m bars (>= $500M) |
 | 21:00 | market-cap | Cap fetch + EOD universe sync |
+| 21:45 | fixed-income | Treasury/credit curve metrics + signals |
 | ~22:31 | massive-ingest | EOD prices (full active universe) |
 | ~22:36 | daily-pipeline | Indicator compute + validation |
 | morning | gap-sentinel | Freshness + stuck-run checks |
@@ -119,6 +128,15 @@ uv run tb trask status
 SELECT worker_name, trade_date, status, ended_at
   FROM theeyebeta.worker_runs
  ORDER BY started_at DESC LIMIT 20;
+```
+
+Fixed-income verification:
+
+```sql
+SELECT date, bond_environment_score, bond_environment_label
+  FROM theeyebeta.fixed_income_curve_metrics
+ ORDER BY date DESC
+ LIMIT 5;
 ```
 
 ---

@@ -43,6 +43,31 @@ def _finite_or_none(value: float) -> float | None:
     return float(value)
 
 
+def _float_or_none(value: object) -> float | None:
+    if value is None:
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
+
+
+def _add_fixed_income_macro(macro: dict[str, float], row: asyncpg.Record | None) -> None:
+    if row is None:
+        return
+    key_map = {
+        "bond_environment_score": "us.fi.bond_environment_score",
+        "y_10y": "us.fi.y_10y",
+        "y_2y": "us.fi.y_2y",
+        "spread_10y_2y": "us.fi.spread_10y_2y",
+        "spread_10y_3m": "us.fi.spread_10y_3m",
+        "real_yield_10y": "us.fi.real_yield_10y",
+        "high_yield_spread": "us.fi.hy_spread",
+    }
+    for column, key in key_map.items():
+        value = _float_or_none(row[column])
+        if value is not None:
+            macro[key] = value
+
+
 class SnapshotBuilder:
     """Build agent-ready packaged snapshots for one market and trade date."""
 
@@ -108,6 +133,29 @@ class SnapshotBuilder:
                 """,
                 day_end,
             )
+            fixed_income_exists = await conn.fetchval(
+                "SELECT to_regclass('theeyebeta.fixed_income_curve_metrics')"
+            )
+            fixed_income_row = None
+            if fixed_income_exists:
+                fixed_income_row = await conn.fetchrow(
+                    """
+                    SELECT
+                        bond_environment_score,
+                        y_10y,
+                        y_2y,
+                        spread_10y_2y,
+                        spread_10y_3m,
+                        real_yield_10y,
+                        high_yield_spread
+                      FROM theeyebeta.fixed_income_curve_metrics
+                     WHERE country = 'US'
+                       AND date <= $1
+                     ORDER BY date DESC
+                     LIMIT 1
+                    """,
+                    trade_date,
+                )
 
             news_rows = await conn.fetch(
                 """
@@ -185,6 +233,7 @@ class SnapshotBuilder:
         macro = {
             macro_key_for_series(row["series_code"]): float(row["value"]) for row in macro_rows
         }
+        _add_fixed_income_macro(macro, fixed_income_row)
         news_summary = [
             PackagedNewsItem(
                 id=row["id"],

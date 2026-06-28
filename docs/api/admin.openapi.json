@@ -1143,6 +1143,28 @@
         }
       }
     },
+    "/admin/master-admin/control-matrix": {
+      "get": {
+        "tags": [
+          "master-admin"
+        ],
+        "summary": "MASTER_ADMIN backend control matrix (MASTER_ADMIN)",
+        "description": "Return the feature-by-feature system-owner control contract.",
+        "operationId": "control_matrix_admin_master_admin_control_matrix_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterAdminControlMatrixResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/services/status": {
       "get": {
         "tags": [
@@ -1423,6 +1445,47 @@
                 "schema": {
                   "$ref": "#/components/schemas/CostsByAgentResponse"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/dataapi/{path}": {
+      "get": {
+        "tags": [
+          "dataapi"
+        ],
+        "summary": "Proxy DataAPI GET request (MASTER_ADMIN)",
+        "description": "Proxy DataAPI GET requests with a server-side scoped service token.",
+        "operationId": "proxy_dataapi_get_admin_dataapi__path__get",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -4584,6 +4647,178 @@
         "type": "object",
         "title": "LoginResponse",
         "description": "Login may return tokens directly or require MFA."
+      },
+      "MasterAdminControlEntry": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "title": "Feature"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "source": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source"
+          },
+          "frontend_location": {
+            "type": "string",
+            "title": "Frontend Location"
+          },
+          "viewable": {
+            "type": "boolean",
+            "title": "Viewable"
+          },
+          "controllable": {
+            "type": "boolean",
+            "title": "Controllable"
+          },
+          "editable": {
+            "type": "boolean",
+            "title": "Editable"
+          },
+          "schedulable": {
+            "type": "boolean",
+            "title": "Schedulable"
+          },
+          "kill_switch_needed": {
+            "type": "boolean",
+            "title": "Kill Switch Needed"
+          },
+          "confirmation_needed": {
+            "type": "boolean",
+            "title": "Confirmation Needed"
+          },
+          "role_required": {
+            "type": "string",
+            "title": "Role Required"
+          },
+          "audit_log_required": {
+            "type": "boolean",
+            "title": "Audit Log Required"
+          },
+          "api_exists": {
+            "type": "boolean",
+            "title": "Api Exists"
+          },
+          "available_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Available Actions"
+          },
+          "existing_endpoints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Existing Endpoints"
+          },
+          "missing_backend_work": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Backend Work"
+          },
+          "dangerous_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dangerous Actions"
+          },
+          "operator_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operator Notes"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "feature",
+          "category",
+          "source",
+          "frontend_location",
+          "viewable",
+          "controllable",
+          "editable",
+          "schedulable",
+          "kill_switch_needed",
+          "confirmation_needed",
+          "role_required",
+          "audit_log_required",
+          "api_exists",
+          "priority"
+        ],
+        "title": "MasterAdminControlEntry",
+        "description": "One backend capability in the MASTER_ADMIN control matrix."
+      },
+      "MasterAdminControlMatrixResponse": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "authority": {
+            "type": "string",
+            "title": "Authority"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "controls": {
+            "items": {
+              "$ref": "#/components/schemas/MasterAdminControlEntry"
+            },
+            "type": "array",
+            "title": "Controls"
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/MasterAdminControlEntry"
+            },
+            "type": "array",
+            "title": "Gaps"
+          },
+          "dangerous_actions_require": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dangerous Actions Require"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "authority",
+          "generated_at",
+          "controls",
+          "gaps",
+          "dangerous_actions_require"
+        ],
+        "title": "MasterAdminControlMatrixResponse",
+        "description": "``GET /admin/master-admin/control-matrix`` payload."
       },
       "MfaBackupRequest": {
         "properties": {

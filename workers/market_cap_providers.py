@@ -21,6 +21,273 @@ DEFAULT_MIN_REQUEST_INTERVAL_SECONDS = 0.12
 
 CapEventType = Literal["CROSSED_UP", "CROSSED_DOWN"]
 
+# Map 2-digit SIC major groups → GICS-style sector labels used in theeyebeta.
+_SIC_MAJOR_SECTOR: tuple[tuple[int, str], ...] = (
+    (9, "Consumer Defensive"),
+    (12, "Energy"),
+    (14, "Basic Materials"),
+    (17, "Industrials"),
+    (21, "Consumer Defensive"),
+    (25, "Consumer Cyclical"),
+    (27, "Basic Materials"),
+    (29, "Energy"),
+    (34, "Industrials"),
+    (36, "Industrials"),
+    (37, "Consumer Cyclical"),
+    (38, "Healthcare"),
+    (39, "Industrials"),
+    (41, "Industrials"),
+    (47, "Industrials"),
+    (48, "Communication Services"),
+    (49, "Utilities"),
+    (51, "Consumer Cyclical"),
+    (59, "Consumer Cyclical"),
+    (67, "Financials"),
+    (72, "Consumer Cyclical"),
+    (79, "Industrials"),
+    (87, "Technology"),
+    (99, "Industrials"),
+)
+
+# Software / semiconductors / electronic computers override broad manufacturing bins.
+_SIC_EXACT_SECTOR: dict[int, str] = {
+    3571: "Technology",
+    3572: "Technology",
+    3575: "Technology",
+    3577: "Technology",
+    3661: "Technology",
+    3663: "Technology",
+    3669: "Technology",
+    3674: "Technology",
+    3812: "Technology",
+    7370: "Technology",
+    7371: "Technology",
+    7372: "Technology",
+    7373: "Technology",
+    7374: "Technology",
+    7375: "Technology",
+    7376: "Technology",
+    7377: "Technology",
+    7378: "Technology",
+    7379: "Technology",
+    4812: "Communication Services",
+    4813: "Communication Services",
+    4833: "Communication Services",
+    4899: "Communication Services",
+    2834: "Healthcare",
+    2836: "Healthcare",
+    3841: "Healthcare",
+    3845: "Healthcare",
+    6798: "Real Estate",
+    6500: "Real Estate",
+    6510: "Real Estate",
+    6512: "Real Estate",
+    6513: "Real Estate",
+    6514: "Real Estate",
+    6515: "Real Estate",
+    6517: "Real Estate",
+    6519: "Real Estate",
+}
+
+# Massive ticker types without SIC still need a sector bucket for aggregation.
+_MASSIVE_TYPE_SECTOR: dict[str, str] = {
+    "ETF": "ETF",
+    "ETV": "ETF",
+    "ETS": "ETF",
+    "FUND": "Fund",
+    "WARRANT": "Warrant",
+    "PFD": "Preferred",
+    "UNIT": "Unit",
+    "RIGHT": "Right",
+}
+
+_MASSIVE_TYPE_ASSET_CLASS: dict[str, str] = {
+    "ETF": "etf",
+    "ETV": "etf",
+    "ETS": "etf",
+    "FUND": "etf",
+    "ADRC": "adr",
+}
+
+# Align yfinance GICS labels with theeyebeta sector_daily naming.
+_YFINANCE_SECTOR_NORMALIZE: dict[str, str] = {
+    "Financial Services": "Financials",
+    "Consumer Cyclicals": "Consumer Cyclical",
+    "Consumer Defensives": "Consumer Defensive",
+    "Basic Materials": "Basic Materials",
+    "Communication Services": "Communication Services",
+}
+
+
+def sector_from_sic_code(sic_code: str | int | None) -> str | None:
+    """Map a SIC code to a coarse GICS-style sector label."""
+    if sic_code is None:
+        return None
+    try:
+        code = int(str(sic_code).strip())
+    except ValueError:
+        return None
+    if code in _SIC_EXACT_SECTOR:
+        return _SIC_EXACT_SECTOR[code]
+    major = code // 100
+    for limit, sector in _SIC_MAJOR_SECTOR:
+        if major <= limit:
+            return sector
+    return None
+
+
+def sector_from_massive_detail(detail: dict[str, Any] | None) -> str | None:
+    """Derive sector from Massive ``/v3/reference/tickers`` payload."""
+    if not detail:
+        return None
+    sic_sector = sector_from_sic_code(detail.get("sic_code"))
+    if sic_sector:
+        return sic_sector
+    ticker_type = str(detail.get("type") or "").upper()
+    type_sector = _MASSIVE_TYPE_SECTOR.get(ticker_type)
+    if type_sector:
+        return type_sector
+    return _sector_from_massive_metadata(detail)
+
+
+def _sector_from_massive_metadata(detail: dict[str, Any]) -> str | None:
+    """Heuristic sector for reference rows without SIC (e.g. misclassified funds)."""
+    name = str(detail.get("name") or "").lower()
+    description = str(detail.get("description") or "").lower()
+    fund_markers = (
+        " fund",
+        "etf",
+        "closed-end",
+        "investment company",
+        "business development company",
+    )
+    haystack = f" {name} {description}"
+    if any(marker in haystack for marker in fund_markers):
+        return "Fund"
+    return None
+
+
+def asset_class_from_massive_detail(detail: dict[str, Any] | None) -> str | None:
+    """Map Massive ticker type to theeyebeta.instruments.asset_class when known."""
+    if not detail:
+        return None
+    ticker_type = str(detail.get("type") or "").upper()
+    return _MASSIVE_TYPE_ASSET_CLASS.get(ticker_type)
+
+
+def normalize_yfinance_sector(sector: str | None) -> str | None:
+    """Normalize a yfinance sector label to theeyebeta conventions."""
+    if sector is None:
+        return None
+    cleaned = str(sector).strip()
+    if not cleaned:
+        return None
+    return _YFINANCE_SECTOR_NORMALIZE.get(cleaned, cleaned)
+
+
+def sector_from_yfinance_info(info: dict[str, Any] | None) -> str | None:
+    """Extract a GICS-style sector from a yfinance ``Ticker.info`` payload."""
+    if not info:
+        return None
+    return normalize_yfinance_sector(info.get("sector"))
+
+
+def _fetch_yfinance_sector_sync(symbol: str) -> str | None:
+    import yfinance as yf
+
+    for candidate in reference_ticker_variants(symbol):
+        ticker = yf.Ticker(candidate)
+        info = ticker.info or {}
+        sector = sector_from_yfinance_info(info)
+        if sector:
+            return sector
+        fast = getattr(ticker, "fast_info", None)
+        if fast is not None:
+            raw = getattr(fast, "get", lambda _k, _d=None: None)("sector")
+            sector = normalize_yfinance_sector(raw)
+            if sector:
+                return sector
+    return None
+
+
+async def fetch_yfinance_sectors(
+    symbols: list[str],
+    *,
+    min_interval_seconds: float = 1.0,
+) -> dict[str, str]:
+    """Return symbol → sector for symbols with a resolvable yfinance profile."""
+    sectors: dict[str, str] = {}
+    for symbol in symbols:
+        try:
+            sector = await asyncio.to_thread(_fetch_yfinance_sector_sync, symbol)
+            if sector:
+                sectors[symbol] = sector
+        except Exception as exc:  # noqa: BLE001
+            log.warning("yfinance_sector_fetch_failed", symbol=symbol, error=str(exc))
+        if min_interval_seconds > 0:
+            await asyncio.sleep(min_interval_seconds)
+    return sectors
+
+
+@dataclass(slots=True, frozen=True)
+class InstrumentTags:
+    """Sector and optional asset_class from a reference provider."""
+
+    sector: str | None
+    asset_class: str | None = None
+
+
+async def fetch_massive_instrument_tags(
+    client: MassiveReferenceClient,
+    symbols: list[str],
+    *,
+    concurrency: int = DEFAULT_FETCH_CONCURRENCY,
+    min_interval_seconds: float = DEFAULT_MIN_REQUEST_INTERVAL_SECONDS,
+) -> dict[str, InstrumentTags]:
+    """Return symbol → tags for symbols with SIC, Massive type, or both."""
+    semaphore = asyncio.Semaphore(max(1, concurrency))
+    lock = asyncio.Lock()
+    last_request = 0.0
+    tags: dict[str, InstrumentTags] = {}
+
+    async def _fetch_one(symbol: str) -> None:
+        nonlocal last_request
+        try:
+            async with semaphore:
+                async with lock:
+                    now = asyncio.get_running_loop().time()
+                    wait = min_interval_seconds - (now - last_request)
+                    if wait > 0:
+                        await asyncio.sleep(wait)
+                    last_request = asyncio.get_running_loop().time()
+                detail = await client.ticker_detail(symbol)
+            sector = sector_from_massive_detail(detail)
+            asset_class = asset_class_from_massive_detail(detail)
+            if sector or asset_class:
+                tags[symbol] = InstrumentTags(sector=sector, asset_class=asset_class)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("massive_sector_fetch_failed", symbol=symbol, error=str(exc))
+
+    await asyncio.gather(*(_fetch_one(symbol) for symbol in symbols))
+    return tags
+
+
+async def fetch_massive_sectors(
+    client: MassiveReferenceClient,
+    symbols: list[str],
+    *,
+    concurrency: int = DEFAULT_FETCH_CONCURRENCY,
+    min_interval_seconds: float = DEFAULT_MIN_REQUEST_INTERVAL_SECONDS,
+) -> dict[str, str]:
+    """Return symbol → sector for symbols with a resolvable Massive reference tag."""
+    tag_map = await fetch_massive_instrument_tags(
+        client,
+        symbols,
+        concurrency=concurrency,
+        min_interval_seconds=min_interval_seconds,
+    )
+    return {symbol: meta.sector for symbol, meta in tag_map.items() if meta.sector}
+
 
 @dataclass(slots=True, frozen=True)
 class CapSnapshot:

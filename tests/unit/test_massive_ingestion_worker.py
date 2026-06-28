@@ -92,13 +92,14 @@ def test_parse_massive_grouped_filters_to_universe() -> None:
     universe = {"AAPL": _inst("AAPL", 10), "MSFT": _inst("MSFT", 11)}
     payload = {
         "results": [
-            {"T": "AAPL", "o": 1, "h": 2, "l": 1, "c": 1.5, "v": 100},
+            {"T": "AAPL", "o": 1, "h": 2, "l": 1, "c": 1.5, "vw": 1.7, "v": 100},
             {"T": "UNKNOWN", "o": 1, "h": 2, "l": 1, "c": 1.5, "v": 100},
         ],
     }
     bars = parse_massive_grouped(payload, symbol_map=universe, trade_date=date(2026, 6, 10))
     assert set(bars) == {"AAPL"}
     assert bars["AAPL"].source == "massive"
+    assert bars["AAPL"].adj_close == bars["AAPL"].close
 
 
 def test_parse_massive_grouped_matches_class_share_aliases() -> None:

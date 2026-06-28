@@ -1,37 +1,51 @@
 #!/usr/bin/env python
-"""Run the news RSS ingestion adapter once (driver for the theeye-news-ingest timer).
-
-Invokes ``data_ingestion.pipeline.run_adapter("news", today)`` which fetches the
-configured RSS feeds and writes URL-SHA256-deduplicated rows into
-``theeyebeta.news_articles`` (ON CONFLICT DO NOTHING, so reruns are cheap).
-
-Why a standalone driver instead of the data_ingestion FastAPI service: that service
-is scaffolded and intentionally not deployed (see SERVICES_STATUS.md). This timer runs
-only the news adapter so the news layer stays fresh without standing up the whole
-service. Prices/macro are already covered by their own ingestors.
-"""
+"""Run news RSS ingest + sync to market_news (DataAPI source table)."""
 
 from __future__ import annotations
 
 import asyncio
 import os
-from datetime import date
+import sys
+from datetime import date, timedelta
+from pathlib import Path
 
 import structlog
 from dotenv import load_dotenv
 
 load_dotenv()
-# otel-collector is not running on this host; avoid console-exporter span spam in journal.
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
 
 log = structlog.get_logger()
+REPO = Path(__file__).resolve().parents[1]
+LOOKBACK_DAYS = int(os.environ.get("NEWS_LOOKBACK_DAYS", "3"))
+
+
+async def _ingest_day(target: date) -> dict:
+    from data_ingestion.pipeline import run_adapter  # noqa: PLC0415
+
+    return await run_adapter("news", target)
 
 
 async def _main() -> None:
-    from data_ingestion.pipeline import run_adapter  # noqa: PLC0415
+    today = date.today()
+    total_written = 0
+    for offset in range(LOOKBACK_DAYS):
+        target = today - timedelta(days=offset)
+        result = await _ingest_day(target)
+        written = result.get("written", {})
+        if isinstance(written, dict):
+            total_written += int(written.get("news_articles", 0))
+        log.info("news_ingest_day", date=str(target), **result)
 
-    result = await run_adapter("news", date.today())
-    log.info("news_ingest_complete", **result)
+    sync = await asyncio.create_subprocess_exec(
+        sys.executable,
+        str(REPO / "scripts" / "sync_market_news.py"),
+        cwd=REPO,
+    )
+    returncode = await sync.wait()
+    if returncode != 0:
+        raise SystemExit(returncode)
+    log.info("news_pipeline_complete", days=LOOKBACK_DAYS, articles_written=total_written)
 
 
 if __name__ == "__main__":

@@ -216,6 +216,54 @@ async def test_read_only_can_access_pulse(read_only_client: AsyncClient) -> None
 
 
 @pytest.mark.asyncio
+async def test_master_admin_control_matrix(control_plane_client: AsyncClient) -> None:
+    """MASTER_ADMIN can view the full owner/operator control contract."""
+    resp = await control_plane_client.get(
+        "/admin/master-admin/control-matrix",
+        headers={"Authorization": "Bearer test"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["role"] == "MASTER_ADMIN"
+    assert body["authority"] == "system_owner_operator"
+    assert len(body["controls"]) >= 10
+    assert len(body["gaps"]) >= 1
+    assert any(
+        control["feature"] == "Trading live approval and emergency halt"
+        for control in body["controls"]
+    )
+    assert any(not gap["api_exists"] for gap in body["gaps"])
+    required_safety_rail = (
+        "durable audit_log row with actor, timestamp, reason, override flag, and payload"
+    )
+    assert required_safety_rail in body["dangerous_actions_require"]
+
+
+@pytest.mark.asyncio
+async def test_read_only_denied_master_admin_control_matrix(read_only_client: AsyncClient) -> None:
+    """READ_ONLY cannot inspect MASTER_ADMIN-only owner controls."""
+    resp = await read_only_client.get(
+        "/admin/master-admin/control-matrix",
+        headers={"Authorization": "Bearer test"},
+    )
+    assert resp.status_code == 403
+    assert resp.json()["error"]["details"]["required_role"] == "MASTER_ADMIN"
+
+
+@pytest.mark.asyncio
+async def test_master_admin_control_page(control_plane_client: AsyncClient) -> None:
+    """MASTER_ADMIN gets the frontend owner/operator matrix page."""
+    resp = await control_plane_client.get(
+        "/admin/master-admin",
+        headers={"Authorization": "Bearer test"},
+    )
+    assert resp.status_code == 200
+    assert "Owner control matrix" in resp.text
+    assert "Trading live approval and emergency halt" in resp.text
+    assert "Backend/API work needed" in resp.text
+
+
+@pytest.mark.asyncio
 async def test_login_page_renders() -> None:
     """GET /admin/login returns HTML without auth."""
     from unittest.mock import patch

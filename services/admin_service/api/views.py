@@ -95,6 +95,7 @@ from api.guard import (
     resolve_guard_violation_impl,
     validate_severity,
 )
+from api.master_admin import build_master_admin_control_matrix
 from api.orders import (
     _SELECT_ORDER,
     _fetch_order,
@@ -448,6 +449,40 @@ def register_views_routes(limiter: Limiter) -> APIRouter:
                     "daily_backtest_strategy_id": settings.daily_backtest_strategy_id,
                     "daily_backtest_days": settings.daily_backtest_days,
                     "audit_verify_hours": settings.audit_verify_hours,
+                },
+            ),
+        )
+
+    @router.get("/master-admin", response_class=HTMLResponse)
+    async def view_master_admin_control(
+        request: Request,
+        user: dict[str, str] = require_role(Role.MASTER_ADMIN),
+    ) -> HTMLResponse:
+        """Render the MASTER_ADMIN owner/operator matrix."""
+        controls = build_master_admin_control_matrix()
+        gaps = [
+            entry
+            for entry in controls
+            if (not entry.api_exists) or entry.missing_backend_work or not entry.controllable
+        ]
+        critical_count = sum(1 for entry in controls if entry.priority == "Critical")
+        log.info(
+            "admin_master_control_page_rendered",
+            controls=len(controls),
+            gaps=len(gaps),
+            sub=user["sub"],
+        )
+        return templates.TemplateResponse(
+            request,
+            "master_admin.html",
+            page_context(
+                request,
+                active="master-admin",
+                title="Master Admin",
+                extra={
+                    "controls": controls,
+                    "gaps": gaps,
+                    "critical_count": critical_count,
                 },
             ),
         )

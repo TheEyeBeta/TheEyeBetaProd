@@ -5,6 +5,10 @@
 
 ## What Was Added
 
+### MASTER_ADMIN owner/operator contract
+- **`GET /admin/master-admin/control-matrix`** — MASTER_ADMIN-only machine-readable control matrix. It tells the frontend what each backend feature can view/control today, which actions require confirmation/audit, and what backend/API work is still missing for full owner control.
+- The matrix explicitly records gaps instead of letting the frontend pretend that trigger-only, view-only, or CLI-only features are fully controllable.
+
 ### Phase 1 — Connectivity
 - **`GET /admin/login`** — browser login page (stores JWT in sessionStorage via `adminShell`)
 - **CORS** — `https://tauri.localhost` added via `ADMIN_CORS_TAURI_ORIGIN`
@@ -51,6 +55,7 @@
 | `/admin/trading/emergency-halt` | Functional (Redis + NATS; OMS undeployed) |
 | `/admin/timers` | Functional where systemctl available |
 | `/admin/events/stream` | Functional (NATS events when infra up) |
+| `/admin/master-admin/control-matrix` | Functional (MASTER_ADMIN-only owner/operator registry) |
 | Broker fills in WS | **Pending** — broker_adapter undeployed |
 | OMS reconciliation UI | **Blocked** — OMS undeployed |
 | MO workflow events | **Pending** — master_orchestrator undeployed |

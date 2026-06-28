@@ -96,3 +96,11 @@ def restart_top(
 ) -> None:
     """Restart one Docker Compose service."""
     restart_service(service, yes=yes)
+
+
+@app.command("version")
+def version_cmd() -> None:
+    """Show CLI version."""
+    from importlib.metadata import version
+
+    typer.echo(f"tb {version('tb')} (TheEyeBetaProd operator CLI)")

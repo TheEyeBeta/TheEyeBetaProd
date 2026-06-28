@@ -44,6 +44,7 @@ SYNC_TABLES = (
     ("public.ind_technical_daily", "theeyebeta.ind_technical_daily"),
     ("public.ind_risk_daily", "theeyebeta.ind_risk_daily"),
     ("public.returns_snapshot_daily", "theeyebeta.returns_snapshot_daily"),
+    ("public.ind_valuation_daily", "theeyebeta.ind_valuation_daily"),
 )
 
 

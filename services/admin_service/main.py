@@ -24,10 +24,14 @@ from api.compliance import register_compliance_routes
 from api.compliance import router as compliance_router
 from api.costs import register_costs_routes
 from api.costs import router as costs_router
+from api.dataapi import register_dataapi_routes
+from api.dataapi import router as dataapi_router
 from api.events import register_events_routes, start_nats_event_bridge
 from api.events import router as events_router
 from api.guard import register_guard_routes
 from api.guard import router as guard_router
+from api.master_admin import register_master_admin_routes
+from api.master_admin import router as master_admin_router
 from api.oms import register_oms_routes
 from api.oms import router as oms_router
 from api.ops import register_ops_routes
@@ -81,9 +85,11 @@ register_orders_routes(limiter)
 register_audit_routes()
 register_agents_routes(limiter)
 register_guard_routes(limiter)
+register_master_admin_routes()
 register_services_routes(limiter)
 register_backtest_routes(limiter)
 register_costs_routes()
+register_dataapi_routes()
 register_sql_routes(limiter)
 register_proposals_routes(limiter)
 register_views_routes(limiter)
@@ -171,9 +177,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(agents_router, prefix="/admin")
     app.include_router(briefings_router, prefix="/admin")
     app.include_router(guard_router, prefix="/admin")
+    app.include_router(master_admin_router, prefix="/admin")
     app.include_router(services_router, prefix="/admin")
     app.include_router(backtest_router, prefix="/admin")
     app.include_router(costs_router, prefix="/admin")
+    app.include_router(dataapi_router, prefix="/admin")
     app.include_router(sql_router, prefix="/admin")
     app.include_router(proposals_router, prefix="/admin")
     app.include_router(web_router, prefix="/admin")

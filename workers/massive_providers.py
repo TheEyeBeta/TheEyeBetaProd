@@ -161,7 +161,7 @@ def parse_massive_grouped(
                 high=float(row["h"]),
                 low=float(row["l"]),
                 close=close,
-                adj_close=float(row.get("vw") or close),
+                adj_close=close,
                 volume=int(row["v"]),
                 source="massive",
             )

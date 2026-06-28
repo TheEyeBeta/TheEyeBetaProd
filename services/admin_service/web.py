@@ -45,6 +45,7 @@ NAV_ITEMS: list[dict[str, str]] = [
     {"label": "Costs", "href": "/admin/costs", "key": "costs"},
     {"label": "SQL", "href": "/admin/sql", "key": "sql"},
     {"label": "Proposals", "href": "/admin/proposals", "key": "proposals"},
+    {"label": "Master", "href": "/admin/master-admin", "key": "master-admin"},
 ]
 
 router = APIRouter(tags=["web"])

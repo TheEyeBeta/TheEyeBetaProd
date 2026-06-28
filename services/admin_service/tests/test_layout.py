@@ -90,6 +90,7 @@ def test_nav_contains_all_required_links(layout_client: TestClient) -> None:
         ("Costs", '/admin/costs"'),
         ("SQL", '/admin/sql"'),
         ("Proposals", '/admin/proposals"'),
+        ("Master", '/admin/master-admin"'),
     ]
     for label, href_suffix in expected:
         assert label in body, f"nav label {label!r} missing"

@@ -205,16 +205,39 @@ def upsert_stock_snapshots(
         "Content-Type": "application/json",
         "Prefer": "resolution=merge-duplicates",
     }
-    with httpx.Client(timeout=60.0) as client:
+    with httpx.Client(timeout=120.0) as client:
         for offset in range(0, len(rows), BATCH_SIZE):
             batch = rows[offset : offset + BATCH_SIZE]
-            response = client.post(
-                endpoint,
-                params={"on_conflict": "ticker_id"},
-                headers=headers,
-                json=batch,
-            )
-            response.raise_for_status()
+            last_error: Exception | None = None
+            for attempt in range(1, 4):
+                try:
+                    response = client.post(
+                        endpoint,
+                        params={"on_conflict": "ticker_id"},
+                        headers=headers,
+                        json=batch,
+                    )
+                    response.raise_for_status()
+                    last_error = None
+                    break
+                except httpx.HTTPStatusError as exc:
+                    last_error = exc
+                    status = exc.response.status_code
+                    if status in {522, 523, 524, 502, 503, 504} and attempt < 3:
+                        import time
+
+                        time.sleep(2.0 * attempt)
+                        continue
+                    if status == 522:
+                        msg = (
+                            "Supabase returned HTTP 522 (origin unreachable). "
+                            "The project may be paused — open the Supabase dashboard "
+                            "and restore/unpause the project, then retry."
+                        )
+                        raise RuntimeError(msg) from exc
+                    raise
+            if last_error is not None:
+                raise last_error
 
 
 def write_shadow_report(
@@ -246,7 +269,7 @@ def write_shadow_report(
 class SupabaseSyncWorker(BaseWorker):
     """Publish latest_snapshots to Supabase stock_snapshots (shadow by default)."""
 
-    worker_name = "SupabaseSyncWorker"
+    worker_name = "SupabaseSyncV2"
     worker_type = "supabase_sync"
     display_name = "Supabase Sync"
 
@@ -316,7 +339,7 @@ async def _async_main(args: argparse.Namespace) -> None:
     shadow = args.shadow and not args.live
     worker = SupabaseSyncWorker(shadow=shadow)
     target = date.fromisoformat(args.date) if args.date else date.today()
-    result = await worker.run(target, run_type="scheduled", dry_run=args.dry_run)
+    result = await worker.run(target, run_type=args.run_type, dry_run=args.dry_run)
     print(json.dumps({"worker": worker.worker_name, **result.metadata}, indent=2))
 
 
@@ -327,8 +350,21 @@ def main() -> None:
     )
     parser.add_argument("--date")
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--live", action="store_true", help="Live writes (cutover only)")
-    parser.add_argument("--shadow", action="store_true", default=True)
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Write to Supabase (default for systemd)",
+    )
+    parser.add_argument(
+        "--shadow",
+        action="store_true",
+        help="Shadow mode: local report only, no Supabase writes",
+    )
+    parser.add_argument(
+        "--run-type",
+        default="manual",
+        choices=["manual", "scheduled", "recovery"],
+    )
     asyncio.run(_async_main(parser.parse_args()))
 
 

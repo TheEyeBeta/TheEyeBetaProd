@@ -10,6 +10,7 @@ import pytest
 from workers.gap_sentinel_worker import (
     check_canonical_freshness,
     check_pipeline_calendar_gaps,
+    check_price_quality_anomalies,
     check_stuck_worker_runs,
     expected_latest_trading_day,
     freshness_as_of,
@@ -140,6 +141,72 @@ async def test_stuck_worker_runs_dry_run_reports_without_alerts() -> None:
 
     assert result == [{"alert_id": None, "worker_name": "BackfillPrices", "run_id": 42}]
     conn.fetchval.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_price_quality_anomalies_dry_run_reports_without_alerts() -> None:
+    conn = AsyncMock()
+    conn.fetchrow = AsyncMock(
+        return_value={
+            "symbols_with_duplicates": 2,
+            "duplicate_dates": 5,
+            "extra_rows": 5,
+            "max_same_day_ratio": 20.15,
+            "duplicate_dates_over_threshold": 5,
+        },
+    )
+    conn.fetch = AsyncMock(
+        return_value=[
+            {
+                "symbol": "NVDA",
+                "instrument_id": 3,
+                "start_date": date(2022, 1, 3),
+                "end_date": date(2022, 3, 25),
+                "up_date": date(2022, 3, 28),
+                "factor": 10,
+                "rows_to_repair": 58,
+                "existing_repairs": 0,
+            },
+        ],
+    )
+    conn.fetchval = AsyncMock()
+
+    result = await check_price_quality_anomalies(
+        conn,
+        end=date(2026, 6, 10),
+        dry_run=True,
+    )
+
+    assert result["violation"] is True
+    assert result["alerts_created"] == []
+    assert result["repair_candidates"][0]["symbol"] == "NVDA"
+    conn.fetchval.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_price_quality_anomalies_creates_single_alert() -> None:
+    conn = AsyncMock()
+    conn.fetchrow = AsyncMock(
+        return_value={
+            "symbols_with_duplicates": 1,
+            "duplicate_dates": 1,
+            "extra_rows": 1,
+            "max_same_day_ratio": 10.0,
+            "duplicate_dates_over_threshold": 1,
+        },
+    )
+    conn.fetch = AsyncMock(return_value=[])
+    conn.fetchval = AsyncMock(side_effect=[None, 7001])
+
+    result = await check_price_quality_anomalies(
+        conn,
+        end=date(2026, 6, 10),
+        dry_run=False,
+    )
+
+    assert result["violation"] is True
+    assert result["alerts_created"] == [7001]
+    assert conn.fetchval.await_count == 2
 
 
 @pytest.mark.asyncio

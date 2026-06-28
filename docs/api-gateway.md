@@ -159,7 +159,7 @@ Operators and automation must not confuse **`/api/v1/admin/*`** (machine API on 
 
 | Port | Service | Exposure |
 |------|---------|----------|
-| 7000 | main-api | Loopback; Cloudflare tunnel to `api.theeyebeta.store` |
+| 7000 | main-api (Data API) | Loopback; Cloudflare tunnel to `dataapiprod.theeyebeta.store` and `dataapi.theeyebeta.store` (see [connectivity.md](ops/connectivity.md)) |
 | 7200 | admin-service | Tailscale / Cloudflare Access (see [ADR 0010](adr/0010-cloudflare-tailscale-dual-access.md)) |
 
 Different ports alone prevent accidental routing overlap even if paths were ever aliased at a reverse proxy.

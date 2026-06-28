@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 WORKER_ALLOWLIST: dict[str, str] = {
     "macro-ingestion": "workers.macro_ingestion_worker",
     "macro-regime": "workers.macro_regime_worker",
+    "fixed-income": "workers.fixed_income.pipeline_worker",
     "massive-ingest": "workers.massive_ingestion_worker",
     "intraday-ingest": "workers.intraday_ingestion_worker",
     "daily-pipeline": "workers.daily_pipeline_runner",
@@ -30,6 +31,7 @@ WORKER_ALIASES: dict[str, str] = {
 WORKER_CLASS_NAMES: dict[str, str] = {
     "macro-ingestion": "MacroIngestionWorker",
     "macro-regime": "MacroRegimeWorker",
+    "fixed-income": "FixedIncomePipelineWorker",
     "massive-ingest": "MassiveDailyIngestionWorker",
     "intraday-ingest": "IntradayIngestionWorker",
     "indicator-compute": "IndicatorComputeWorker",
@@ -50,6 +52,7 @@ WORKER_HEARTBEAT_INTERVALS: dict[str, int] = {
     "GapSentinelWorker": 86400,
     "MacroIngestionWorker": 86400,
     "MacroRegimeWorker": 86400,
+    "FixedIncomePipelineWorker": 86400,
     "MassiveDailyIngestionWorker": 86400,
     "IndicatorComputeWorker": 86400,
     "TheeyebetaIndicatorWorker": 86400,

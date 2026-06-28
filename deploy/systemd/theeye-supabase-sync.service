@@ -1,15 +1,16 @@
 [Unit]
-Description=TheEyeBeta Supabase stock_snapshots sync (shadow mode default)
+Description=TheEyeBeta Supabase stock_snapshots sync (live)
 Wants=network-online.target
-After=network-online.target postgresql.service
+After=network-online.target postgresql.service theeye-latest-snapshot.service
 
 [Service]
 Type=oneshot
 User=the-eye-beta
 Group=the-eye-beta
 WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
 EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env.theeye-supabase-sync
-ExecStart=/home/the-eye-beta/.local/bin/uv run python -m workers.supabase_sync_worker --shadow
+ExecStart=/home/the-eye-beta/.local/bin/uv run python -m workers.supabase_sync_worker --live --run-type scheduled
 TimeoutStartSec=1800
 
 [Install]
