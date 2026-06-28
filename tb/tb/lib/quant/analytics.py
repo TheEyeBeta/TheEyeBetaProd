@@ -59,7 +59,9 @@ def optimize_sharpe(
     bounds = [(-1, 1) if allow_short else (0, 1)] * n
     cons = {"type": "eq", "fun": lambda w: np.sum(w) - 1}
     x0 = np.full(n, 1 / n)
-    res = optimize.minimize(neg_sharpe, x0, bounds=bounds, constraints=cons, method="SLSQP")
+    res = optimize.minimize(
+        neg_sharpe, x0, bounds=bounds, constraints=cons, method="SLSQP"
+    )
     w = res.x
     port_ret = float(w @ mu)
     port_vol = float(np.sqrt(w @ cov @ w))
@@ -90,7 +92,9 @@ def optimize_risk_parity(prices: pd.DataFrame) -> PortfolioResult:
     cons = {"type": "eq", "fun": lambda w: np.sum(w) - 1}
     bounds = [(0, 1)] * n
     x0 = np.full(n, 1 / n)
-    res = optimize.minimize(risk_budget_obj, x0, bounds=bounds, constraints=cons, method="SLSQP")
+    res = optimize.minimize(
+        risk_budget_obj, x0, bounds=bounds, constraints=cons, method="SLSQP"
+    )
     w = res.x
     mu = rets.mean().values
     port_ret = float(w @ mu)
@@ -104,7 +108,9 @@ def optimize_risk_parity(prices: pd.DataFrame) -> PortfolioResult:
     )
 
 
-def max_sharpe_frontier(prices: pd.DataFrame, *, risk_free_rate: float = 0.0) -> PortfolioResult:
+def max_sharpe_frontier(
+    prices: pd.DataFrame, *, risk_free_rate: float = 0.0
+) -> PortfolioResult:
     return optimize_sharpe(prices, risk_free_rate=risk_free_rate, allow_short=False)
 
 
@@ -127,7 +133,9 @@ def historical_var(
     }
 
 
-def capm_beta(asset: pd.Series, market: pd.Series, *, risk_free_rate: float = 0.0) -> dict[str, float]:
+def capm_beta(
+    asset: pd.Series, market: pd.Series, *, risk_free_rate: float = 0.0
+) -> dict[str, float]:
     df = pd.concat([asset, market], axis=1, keys=["asset", "market"]).dropna()
     rets = df.pct_change().dropna()
     if len(rets) < 30:
@@ -145,12 +153,16 @@ def capm_beta(asset: pd.Series, market: pd.Series, *, risk_free_rate: float = 0.
     }
 
 
-def rolling_correlation(returns: pd.DataFrame, window: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+def rolling_correlation(
+    returns: pd.DataFrame, window: int
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     tail = returns.tail(window)
     return tail.corr(), tail.cov() * 252
 
 
-def find_cointegrated_pairs(prices: pd.DataFrame, *, max_pairs: int = 10) -> list[dict[str, Any]]:
+def find_cointegrated_pairs(
+    prices: pd.DataFrame, *, max_pairs: int = 10
+) -> list[dict[str, Any]]:
     from statsmodels.tsa.stattools import coint
 
     cols = list(prices.columns)
@@ -200,7 +212,9 @@ def mc_european_option(
     rng = np.random.default_rng(42)
     if n_steps <= 1:
         z = rng.standard_normal(n_paths)
-        st = spot * np.exp((rate - 0.5 * sigma**2) * maturity + sigma * np.sqrt(maturity) * z)
+        st = spot * np.exp(
+            (rate - 0.5 * sigma**2) * maturity + sigma * np.sqrt(maturity) * z
+        )
     else:
         dt = maturity / n_steps
         st = np.full(n_paths, spot)
@@ -224,9 +238,21 @@ def black_scholes(
     option_type: str,
 ) -> float:
     if maturity <= 0 or sigma <= 0:
-        return max(0.0, spot - strike) if option_type.lower().startswith("c") else max(0.0, strike - spot)
-    d1 = (np.log(spot / strike) + (rate + 0.5 * sigma**2) * maturity) / (sigma * np.sqrt(maturity))
+        return (
+            max(0.0, spot - strike)
+            if option_type.lower().startswith("c")
+            else max(0.0, strike - spot)
+        )
+    d1 = (np.log(spot / strike) + (rate + 0.5 * sigma**2) * maturity) / (
+        sigma * np.sqrt(maturity)
+    )
     d2 = d1 - sigma * np.sqrt(maturity)
     if option_type.lower().startswith("p"):
-        return float(strike * np.exp(-rate * maturity) * stats.norm.cdf(-d2) - spot * stats.norm.cdf(-d1))
-    return float(spot * stats.norm.cdf(d1) - strike * np.exp(-rate * maturity) * stats.norm.cdf(d2))
+        return float(
+            strike * np.exp(-rate * maturity) * stats.norm.cdf(-d2)
+            - spot * stats.norm.cdf(-d1)
+        )
+    return float(
+        spot * stats.norm.cdf(d1)
+        - strike * np.exp(-rate * maturity) * stats.norm.cdf(d2)
+    )

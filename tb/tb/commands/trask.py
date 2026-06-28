@@ -31,7 +31,11 @@ app = typer.Typer(
     no_args_is_help=True, help="Trask worker registry and circuit breakers"
 )
 
-LOCAL_ROOT = Path(os.environ.get("THEEYE_LOCAL_ROOT", "/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal"))
+LOCAL_ROOT = Path(
+    os.environ.get(
+        "THEEYE_LOCAL_ROOT", "/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal"
+    )
+)
 LOCAL_THEEYE = LOCAL_ROOT / "theeye"
 
 
@@ -68,7 +72,9 @@ def trask_workers() -> None:
 @app.command("dashboard")
 def trask_dashboard(
     once: bool = typer.Option(False, "--once", help="Print once and exit"),
-    refresh: float = typer.Option(2.0, "--refresh", "-r", help="Refresh interval (seconds)"),
+    refresh: float = typer.Option(
+        2.0, "--refresh", "-r", help="Refresh interval (seconds)"
+    ),
 ) -> None:
     """Live Trask component dashboard."""
 
@@ -148,7 +154,9 @@ def trask_digest(
             err=True,
         )
         raise typer.Exit(code=1)
-    typer.echo("Trask digest status: use Local Trask service or `./theeye trask digest --now`")
+    typer.echo(
+        "Trask digest status: use Local Trask service or `./theeye trask digest --now`"
+    )
 
 
 worker_app = typer.Typer(no_args_is_help=True, help="Worker control")

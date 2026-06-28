@@ -86,7 +86,10 @@ def memory_check_status(stats: MemoryStats) -> tuple[str, str]:
     if stats.swap_used_pct >= SWAP_FAIL_PCT:
         return "FAIL", f"{detail} (swap >={SWAP_FAIL_PCT:.0f}% is a launch blocker)"
     if stats.swap_used_pct >= SWAP_WARN_PCT:
-        return "WARN", f"{detail} (swap >={SWAP_WARN_PCT:.0f}% — expect sluggish workers)"
+        return (
+            "WARN",
+            f"{detail} (swap >={SWAP_WARN_PCT:.0f}% — expect sluggish workers)",
+        )
     if stats.mem_available_kb < MIN_AVAILABLE_KB:
         return "WARN", f"{detail} (available <2GiB — pipeline jobs may OOM)"
     return "PASS", detail
@@ -111,7 +114,9 @@ def probe_legacy_daemons(
     units: tuple[str, ...] = LEGACY_DAEMON_UNITS,
 ) -> list[LegacyDaemonStatus]:
     """Return ActiveState for each legacy unit."""
-    return [LegacyDaemonStatus(unit=unit, active=_systemctl_active(unit)) for unit in units]
+    return [
+        LegacyDaemonStatus(unit=unit, active=_systemctl_active(unit)) for unit in units
+    ]
 
 
 def legacy_daemon_check_status(
@@ -131,4 +136,3 @@ def legacy_daemon_check_status(
             f"(engine alone uses ~1.7GiB)",
         )
     return "WARN", f"{names} running — should be masked on Prod host"
-

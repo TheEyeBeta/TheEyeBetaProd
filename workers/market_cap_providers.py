@@ -286,11 +286,7 @@ async def fetch_massive_sectors(
         concurrency=concurrency,
         min_interval_seconds=min_interval_seconds,
     )
-    return {
-        symbol: meta.sector
-        for symbol, meta in tag_map.items()
-        if meta.sector
-    }
+    return {symbol: meta.sector for symbol, meta in tag_map.items() if meta.sector}
 
 
 @dataclass(slots=True, frozen=True)

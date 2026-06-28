@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Deprecated — use scripts/sync_market_news.py."""
+
 import subprocess
 import sys
 from pathlib import Path

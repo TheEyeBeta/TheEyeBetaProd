@@ -76,13 +76,17 @@ def instrument_list(
 def instrument_add(
     tickers: list[str] = typer.Argument(..., help="Symbols to add"),
     name: str | None = typer.Option(None, "--name", help="Company name"),
-    exchange: str | None = typer.Option(None, "--exchange", "-e", help="Exchange name or code"),
+    exchange: str | None = typer.Option(
+        None, "--exchange", "-e", help="Exchange name or code"
+    ),
     dry_run: bool = typer.Option(False, "--dry-run"),
 ) -> None:
     """Add tickers to theeyebeta.instruments."""
 
     async def _run() -> None:
-        exchange_code = _EXCHANGE_CODES.get((exchange or "NASDAQ").upper(), (exchange or "XNAS").upper())
+        exchange_code = _EXCHANGE_CODES.get(
+            (exchange or "NASDAQ").upper(), (exchange or "XNAS").upper()
+        )
         added: list[str] = []
         existing: list[str] = []
 

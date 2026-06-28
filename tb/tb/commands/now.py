@@ -243,7 +243,9 @@ def now_signals(
                 limit,
             )
         if not rows:
-            typer.echo(f"No signals for {sym} (engine may not be writing theeyebeta.signals yet)")
+            typer.echo(
+                f"No signals for {sym} (engine may not be writing theeyebeta.signals yet)"
+            )
             return
         console.print(Panel.fit(f"Trading Signals for {sym}", style="cyan"))
         table = Table()

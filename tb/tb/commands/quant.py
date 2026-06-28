@@ -329,7 +329,9 @@ def quant_ema_backtest(
     if df.empty:
         raise typer.Exit(code=1)
 
-    fast_col = "ema_12" if fast_period <= 12 else "sma_50" if fast_period <= 50 else "sma_200"
+    fast_col = (
+        "ema_12" if fast_period <= 12 else "sma_50" if fast_period <= 50 else "sma_200"
+    )
     slow_col = "sma_200" if slow_period >= 200 else "ema_26"
     if fast_col not in df.columns or slow_col not in df.columns:
         typer.echo("Missing indicator columns for requested periods", err=True)

@@ -152,8 +152,12 @@ def load_chart_bundle(ticker: str, range_key: RangeLiteral = "2y") -> ChartBundl
             prices_dict["adj_close"].append(
                 float(p["adj_close"]) if p["adj_close"] is not None else None
             )
-            prices_dict["open"].append(float(p["open"]) if p["open"] is not None else None)
-            prices_dict["high"].append(float(p["high"]) if p["high"] is not None else None)
+            prices_dict["open"].append(
+                float(p["open"]) if p["open"] is not None else None
+            )
+            prices_dict["high"].append(
+                float(p["high"]) if p["high"] is not None else None
+            )
             prices_dict["low"].append(float(p["low"]) if p["low"] is not None else None)
             volume_list.append(int(p["volume"]) if p["volume"] is not None else None)
         else:
@@ -184,7 +188,9 @@ def load_chart_bundle(ticker: str, range_key: RangeLiteral = "2y") -> ChartBundl
                 action_type=row["action_type"].upper(),
                 split_ratio=split_ratio,
                 dividend_amount=(
-                    float(row["cash_amount"]) if row["cash_amount"] is not None else None
+                    float(row["cash_amount"])
+                    if row["cash_amount"] is not None
+                    else None
                 ),
             )
         )

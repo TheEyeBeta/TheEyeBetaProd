@@ -156,9 +156,7 @@ def generate_fixed_income_signals(row: Mapping[str, Any]) -> list[dict[str, Any]
                 "signal_name": "curve_inversion",
                 "value": value,
                 "strength": (
-                    "strong"
-                    if value <= -1.0 or len(inversion_spreads) == 2
-                    else "moderate"
+                    "strong" if value <= -1.0 or len(inversion_spreads) == 2 else "moderate"
                 ),
                 "direction": "risk_off",
                 "interpretation": (
@@ -220,9 +218,7 @@ def generate_fixed_income_signals(row: Mapping[str, Any]) -> list[dict[str, Any]
                 "signal_name": "bull_steepening",
                 "value": slope_change,
                 "strength": (
-                    "strong"
-                    if slope_change is not None and slope_change >= 0.50
-                    else "moderate"
+                    "strong" if slope_change is not None and slope_change >= 0.50 else "moderate"
                 ),
                 "direction": "risk_on",
                 "interpretation": "Front-end yields are falling faster than long yields.",
@@ -234,9 +230,7 @@ def generate_fixed_income_signals(row: Mapping[str, Any]) -> list[dict[str, Any]
                 "signal_name": "bear_steepening",
                 "value": slope_change,
                 "strength": (
-                    "strong"
-                    if slope_change is not None and slope_change >= 0.50
-                    else "moderate"
+                    "strong" if slope_change is not None and slope_change >= 0.50 else "moderate"
                 ),
                 "direction": "risk_off",
                 "interpretation": "Long yields are rising faster than front-end yields.",

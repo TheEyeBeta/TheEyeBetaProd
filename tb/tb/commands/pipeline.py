@@ -33,10 +33,14 @@ def pipeline_daily(
         "--skip-non-trading",
         help="Skip weekends/holidays (only run on trading days).",
     ),
-    fail_fast: bool = typer.Option(False, "--fail-fast", help="Stop pipeline on first error."),
+    fail_fast: bool = typer.Option(
+        False, "--fail-fast", help="Stop pipeline on first error."
+    ),
     lookback: str = typer.Option("2y", "--lookback", help="Lookback window (e.g. 2y)."),
     batch_size: int = typer.Option(10, "--batch-size", help="Tickers per batch."),
-    json_output: bool = typer.Option(False, "--json-output", help="JSON summary output."),
+    json_output: bool = typer.Option(
+        False, "--json-output", help="JSON summary output."
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview without writing."),
     force_update: bool = typer.Option(
         False, "--force-update", help="Bypass market-hours check."
@@ -80,7 +84,9 @@ def pipeline_daily(
     if mode == "full":
         cmd.extend(["--mode", mode.replace("-", "_")])
 
-    proc = subprocess.run(cmd, cwd=REPO_ROOT, check=False, capture_output=True, text=True)  # noqa: S603
+    proc = subprocess.run(
+        cmd, cwd=REPO_ROOT, check=False, capture_output=True, text=True
+    )  # noqa: S603
     if json_output and proc.stdout.strip():
         typer.echo(proc.stdout)
     elif proc.stdout.strip():

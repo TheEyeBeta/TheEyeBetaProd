@@ -17,4 +17,3 @@ def test_dataapi_default_uses_prod_debug_hostname() -> None:
     settings = Settings()
 
     assert settings.dataapi_url == "https://dataapiprod.theeyebeta.store"
-

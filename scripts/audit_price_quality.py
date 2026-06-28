@@ -220,6 +220,7 @@ SELECT symbol,
  LIMIT $7
 """
 
+
 def _parse_symbols(raw: str | None) -> list[str] | None:
     if not raw:
         return None

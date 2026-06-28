@@ -442,7 +442,9 @@ def _plot_chart(
                     lambda x, p: (
                         f"{x / 1e6:.0f}M"
                         if x >= 1e6
-                        else f"{x / 1e3:.0f}K" if x >= 1e3 else f"{x:.0f}"
+                        else f"{x / 1e3:.0f}K"
+                        if x >= 1e3
+                        else f"{x:.0f}"
                     )
                 )
             )
