@@ -81,14 +81,14 @@ INSERT INTO theeyebeta.exchanges (code, name, country_iso2, timezone, currency_i
 VALUES ('ARCX', 'NYSE Arca', 'US', 'America/New_York', 'USD')
 ON CONFLICT (code) DO NOTHING;
 
-WITH proxy_seed(symbol, exchange_code, name, industry, proxy_type) AS (
+WITH proxy_seed(symbol, exchange_code, name, industry, proxy_type, issuer_type) AS (
   VALUES
-    ('SHY', 'ARCX', 'iShares 1-3 Year Treasury Bond ETF', 'Short Treasury ETF', 'short_treasury'),
-    ('IEF', 'ARCX', 'iShares 7-10 Year Treasury Bond ETF', 'Intermediate Treasury ETF', 'intermediate_treasury'),
-    ('TLT', 'ARCX', 'iShares 20+ Year Treasury Bond ETF', 'Long Treasury ETF', 'long_treasury'),
-    ('TIP', 'ARCX', 'iShares TIPS Bond ETF', 'TIPS ETF', 'inflation_linked'),
-    ('BND', 'XNAS', 'Vanguard Total Bond Market ETF', 'Aggregate Bond ETF', 'aggregate_bond'),
-    ('AGG', 'ARCX', 'iShares Core U.S. Aggregate Bond ETF', 'Aggregate Bond ETF', 'aggregate_bond')
+    ('SHY', 'ARCX', 'iShares 1-3 Year Treasury Bond ETF', 'Short Treasury ETF', 'short_treasury', 'government'),
+    ('IEF', 'ARCX', 'iShares 7-10 Year Treasury Bond ETF', 'Intermediate Treasury ETF', 'intermediate_treasury', 'government'),
+    ('TLT', 'ARCX', 'iShares 20+ Year Treasury Bond ETF', 'Long Treasury ETF', 'long_treasury', 'government'),
+    ('TIP', 'ARCX', 'iShares TIPS Bond ETF', 'TIPS ETF', 'inflation_linked', 'government'),
+    ('BND', 'XNAS', 'Vanguard Total Bond Market ETF', 'Aggregate Bond ETF', 'aggregate_bond', 'aggregate'),
+    ('AGG', 'ARCX', 'iShares Core U.S. Aggregate Bond ETF', 'Aggregate Bond ETF', 'aggregate_bond', 'aggregate')
 ),
 resolved AS (
   SELECT
@@ -96,7 +96,8 @@ resolved AS (
       e.id AS exchange_id,
       s.name,
       s.industry,
-      s.proxy_type
+      s.proxy_type,
+      s.issuer_type
     FROM proxy_seed s
     JOIN theeyebeta.exchanges e ON e.code = s.exchange_code
 )
@@ -113,6 +114,7 @@ SELECT
       'name', name,
       'fixed_income_proxy', true,
       'fixed_income_proxy_type', proxy_type,
+      'fixed_income_issuer_type', issuer_type,
       'source', '0036_fixed_income'
     )
   FROM resolved
@@ -123,6 +125,30 @@ ON CONFLICT (symbol, exchange_id) DO UPDATE SET
     active = true,
     metadata = theeyebeta.instruments.metadata || EXCLUDED.metadata,
     updated_at = now();
+
+WITH proxy_classification(symbol, industry, proxy_type, issuer_type) AS (
+  VALUES
+    ('SHY', 'Short Treasury ETF', 'short_treasury', 'government'),
+    ('IEF', 'Intermediate Treasury ETF', 'intermediate_treasury', 'government'),
+    ('TLT', 'Long Treasury ETF', 'long_treasury', 'government'),
+    ('TIP', 'TIPS ETF', 'inflation_linked', 'government'),
+    ('BND', 'Aggregate Bond ETF', 'aggregate_bond', 'aggregate'),
+    ('AGG', 'Aggregate Bond ETF', 'aggregate_bond', 'aggregate')
+)
+UPDATE theeyebeta.instruments i
+   SET asset_class = 'etf',
+       sector = 'Fixed Income',
+       industry = c.industry,
+       active = true,
+       metadata = i.metadata || jsonb_build_object(
+         'fixed_income_proxy', true,
+         'fixed_income_proxy_type', c.proxy_type,
+         'fixed_income_issuer_type', c.issuer_type,
+         'source', '0036_fixed_income'
+       ),
+       updated_at = now()
+  FROM proxy_classification c
+ WHERE i.symbol = c.symbol;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON
   theeyebeta.fixed_income_curve_metrics,

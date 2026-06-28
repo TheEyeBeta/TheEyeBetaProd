@@ -22,6 +22,7 @@ class FixedIncomeETFProxy:
     exchange_code: str
     name: str
     proxy_type: str
+    issuer_type: str
 
 
 FRED_SERIES: dict[str, FredSeries] = {
@@ -50,17 +51,48 @@ FRED_SERIES: dict[str, FredSeries] = {
 }
 
 ETF_PROXIES: tuple[FixedIncomeETFProxy, ...] = (
-    FixedIncomeETFProxy("SHY", "ARCX", "iShares 1-3 Year Treasury Bond ETF", "short_treasury"),
+    FixedIncomeETFProxy(
+        "SHY",
+        "ARCX",
+        "iShares 1-3 Year Treasury Bond ETF",
+        "short_treasury",
+        "government",
+    ),
     FixedIncomeETFProxy(
         "IEF",
         "ARCX",
         "iShares 7-10 Year Treasury Bond ETF",
         "intermediate_treasury",
+        "government",
     ),
-    FixedIncomeETFProxy("TLT", "ARCX", "iShares 20+ Year Treasury Bond ETF", "long_treasury"),
-    FixedIncomeETFProxy("TIP", "ARCX", "iShares TIPS Bond ETF", "inflation_linked"),
-    FixedIncomeETFProxy("BND", "XNAS", "Vanguard Total Bond Market ETF", "aggregate_bond"),
-    FixedIncomeETFProxy("AGG", "ARCX", "iShares Core U.S. Aggregate Bond ETF", "aggregate_bond"),
+    FixedIncomeETFProxy(
+        "TLT",
+        "ARCX",
+        "iShares 20+ Year Treasury Bond ETF",
+        "long_treasury",
+        "government",
+    ),
+    FixedIncomeETFProxy(
+        "TIP",
+        "ARCX",
+        "iShares TIPS Bond ETF",
+        "inflation_linked",
+        "government",
+    ),
+    FixedIncomeETFProxy(
+        "BND",
+        "XNAS",
+        "Vanguard Total Bond Market ETF",
+        "aggregate_bond",
+        "aggregate",
+    ),
+    FixedIncomeETFProxy(
+        "AGG",
+        "ARCX",
+        "iShares Core U.S. Aggregate Bond ETF",
+        "aggregate_bond",
+        "aggregate",
+    ),
 )
 
 ETF_PROXY_SYMBOLS: tuple[str, ...] = tuple(proxy.symbol for proxy in ETF_PROXIES)
