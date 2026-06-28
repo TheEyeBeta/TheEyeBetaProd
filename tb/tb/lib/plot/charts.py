@@ -548,9 +548,9 @@ def plot_all(
     Plot stock price with all EMAs and SMAs (10, 50, 200).
 
     Examples:
-        ./theeye plot all AAPL
-        ./theeye plot all MSFT --range 1y
-        ./theeye plot all GOOGL --save chart.png
+        tb plot all AAPL
+        tb plot all MSFT --range 1y
+        tb plot all GOOGL --save chart.png
     """
     _plot_chart(
         ticker=ticker,
@@ -578,8 +578,8 @@ def plot_ema(
     Plot stock price with all EMAs (10, 50, 200).
 
     Examples:
-        ./theeye plot ema AAPL
-        ./theeye plot ema MSFT --range 1y
+        tb plot ema AAPL
+        tb plot ema MSFT --range 1y
     """
     _plot_chart(
         ticker=ticker,
@@ -603,8 +603,8 @@ def plot_sma(
     Plot stock price with all SMAs (10, 50, 200).
 
     Examples:
-        ./theeye plot sma AAPL
-        ./theeye plot sma MSFT --range 1y
+        tb plot sma AAPL
+        tb plot sma MSFT --range 1y
     """
     _plot_chart(
         ticker=ticker,
@@ -628,8 +628,8 @@ def plot_price(
     Plot stock price only.
 
     Examples:
-        ./theeye plot price AAPL
-        ./theeye plot price MSFT --range 1y
+        tb plot price AAPL
+        tb plot price MSFT --range 1y
     """
     _plot_chart(ticker=ticker, show_price=True, range=range, save_path=save)
     console.print(f"[green]✓ Plotted {ticker.upper()} price[/green]")
@@ -647,8 +647,8 @@ def plot_volume(
     Volume bars are colored green (up day) / red (down day).
 
     Examples:
-        ./theeye plot volume AAPL
-        ./theeye plot volume TSLA --range 1y --save tsla_volume.png
+        tb plot volume AAPL
+        tb plot volume TSLA --range 1y --save tsla_volume.png
     """
     _plot_chart(
         ticker=ticker, show_price=True, show_volume=True, range=range, save_path=save
@@ -668,8 +668,8 @@ def plot_rsi(
     Highlights oversold (<30) and overbought (>70) zones.
 
     Examples:
-        ./theeye plot rsi AAPL
-        ./theeye plot rsi NVDA --range 1y
+        tb plot rsi AAPL
+        tb plot rsi NVDA --range 1y
     """
     _plot_chart(
         ticker=ticker, show_price=True, show_rsi=True, range=range, save_path=save
@@ -687,8 +687,8 @@ def plot_macd(
     Plot stock price with MACD / signal / histogram subplot.
 
     Examples:
-        ./theeye plot macd AAPL
-        ./theeye plot macd MSFT --range 1y --save msft_macd.png
+        tb plot macd AAPL
+        tb plot macd MSFT --range 1y --save msft_macd.png
     """
     _plot_chart(
         ticker=ticker, show_price=True, show_macd=True, range=range, save_path=save
@@ -708,8 +708,8 @@ def plot_splits(
     Splits are shown as dashed yellow lines; dividends as dotted cyan lines.
 
     Examples:
-        ./theeye plot splits AAPL --range 5y
-        ./theeye plot splits NVDA --range 5y --save nvda_splits.png
+        tb plot splits AAPL --range 5y
+        tb plot splits NVDA --range 5y --save nvda_splits.png
     """
     _plot_chart(
         ticker=ticker, show_price=True, show_splits=True, range=range, save_path=save
@@ -729,8 +729,8 @@ def plot_full(
     The most complete view of a stock's technical picture.
 
     Examples:
-        ./theeye plot full AAPL
-        ./theeye plot full MSFT --range 1y --save msft_full.png
+        tb plot full AAPL
+        tb plot full MSFT --range 1y --save msft_full.png
     """
     _plot_chart(
         ticker=ticker,
@@ -782,9 +782,9 @@ def plot_custom(
     Plot custom combination of price, overlays, and subplots.
 
     Examples:
-        ./theeye plot custom AAPL --price --ema-50 --rsi
-        ./theeye plot custom MSFT --price --sma-50 --sma-200 --volume --macd
-        ./theeye plot custom GOOGL --price --ema-10 --ema-50 --sma-200 --splits --crosses
+        tb plot custom AAPL --price --ema-50 --rsi
+        tb plot custom MSFT --price --sma-50 --sma-200 --volume --macd
+        tb plot custom GOOGL --price --ema-10 --ema-50 --sma-200 --splits --crosses
     """
     _plot_chart(
         ticker=ticker,

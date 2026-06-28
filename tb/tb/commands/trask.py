@@ -1,4 +1,4 @@
-"""``tb trask`` — audit & monitoring (Local ``./theeye trask`` parity)."""
+"""``tb trask`` — audit & monitoring (tb trask commands)."""
 
 from __future__ import annotations
 
@@ -32,9 +32,7 @@ app = typer.Typer(
 )
 
 LOCAL_ROOT = Path(
-    os.environ.get(
-        "THEEYE_LOCAL_ROOT", "/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaLocal"
-    )
+    os.environ.get("THEEYE_LOCAL_ROOT", "/home/the-eye-beta/TheEyeBeta2025/TheEyeProd")
 )
 LOCAL_THEEYE = LOCAL_ROOT / "theeye"
 
@@ -141,7 +139,7 @@ def trask_audit(limit: int = typer.Option(20, "--limit")) -> None:
 def trask_digest(
     now: bool = typer.Option(False, "--now", help="Trigger digest email immediately"),
 ) -> None:
-    """View digest status or trigger digest via Local Trask when available."""
+    """View digest status or trigger digest via the configured Trask command."""
     if LOCAL_THEEYE.is_file() and os.access(LOCAL_THEEYE, os.X_OK):
         cmd = [str(LOCAL_THEEYE), "trask", "digest"]
         if now:
@@ -150,13 +148,11 @@ def trask_digest(
         raise typer.Exit(code=proc.returncode)
     if now:
         typer.echo(
-            "Digest trigger requires Local Trask (set THEEYE_LOCAL_ROOT or install TheEyeBetaLocal).",
+            "Digest trigger requires the Trask command (set THEEYE_LOCAL_ROOT).",
             err=True,
         )
         raise typer.Exit(code=1)
-    typer.echo(
-        "Trask digest status: use Local Trask service or `./theeye trask digest --now`"
-    )
+    typer.echo("Trask digest status: use `tb trask digest --now`")
 
 
 worker_app = typer.Typer(no_args_is_help=True, help="Worker control")

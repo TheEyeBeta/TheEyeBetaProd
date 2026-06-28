@@ -1,4 +1,4 @@
-"""Quant analytics (ported from TheEyeBetaLocal core, theeyebeta schema)."""
+"""Quant analytics using the theeyebeta schema."""
 
 from __future__ import annotations
 

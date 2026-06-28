@@ -1,4 +1,4 @@
-"""``tb now`` — live data queries (Local ``./theeye now`` parity)."""
+"""``tb now`` — live data queries (tb now commands)."""
 
 from __future__ import annotations
 
@@ -234,8 +234,9 @@ def now_signals(
                 SELECT s.ts, s.strategy_name, s.signal, s.confidence,
                        s.entry_price, s.target_price, s.stop_loss
                   FROM theeyebeta.signals s
-                  JOIN public.tickers t ON t.ticker_id = s.ticker_id
-                 WHERE UPPER(t.ticker) = $1
+                  JOIN theeyebeta.public_ticker_map m ON m.public_ticker_id = s.ticker_id
+                  JOIN theeyebeta.instruments i ON i.id = m.instrument_id
+                 WHERE UPPER(i.symbol) = $1
                  ORDER BY s.ts DESC
                  LIMIT $2
                 """,

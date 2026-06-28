@@ -1,4 +1,4 @@
-"""``tb pipeline`` — daily pipeline orchestration (Local ``./theeye pipeline`` parity)."""
+"""``tb pipeline`` — daily pipeline orchestration (tb pipeline commands)."""
 
 from __future__ import annotations
 
