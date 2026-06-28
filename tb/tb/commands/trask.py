@@ -75,42 +75,7 @@ def trask_dashboard(
     ),
 ) -> None:
     """Live Trask component dashboard."""
-
-    async def _build() -> Table:
-        async with async_connect() as conn:
-            rows = await fetch_trask_components(conn)
-            breakers = await fetch_open_breakers(conn)
-        table = Table(
-            title=f"Trask Dashboard — {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC"
-        )
-        table.add_column("Component")
-        table.add_column("Type")
-        table.add_column("State")
-        table.add_column("Age(s)")
-        now = datetime.now(UTC)
-        for row in rows:
-            hb = row["last_heartbeat"]
-            age = int((now - hb).total_seconds()) if hb else 9999
-            table.add_row(
-                str(row["component_id"]),
-                str(row["component_type"]),
-                str(row["state"]),
-                str(age),
-            )
-        table.caption = f"Open breakers: {len(breakers)}"
-        return table
-
-    if once:
-        console.print(asyncio.run(_build()))
-        return
-
-    with Live(console=console, refresh_per_second=4) as live:
-        try:
-            while True:
-                live.update(asyncio.run(_build()))
-                time.sleep(max(refresh, 0.5))
-        except KeyboardInterrupt:
-            typer.echo("\nDashboard stopped.")
+    asyncio.run(_trask_dashboard_async(once=once, refresh=refresh))
 
 
 @app.command("events")
@@ -257,6 +222,44 @@ async def _trask_workers_async() -> None:
             hb.isoformat() if hb else "never",
         )
     console.print(table)
+
+
+async def _trask_dashboard_async(*, once: bool, refresh: float) -> None:
+    async def _build() -> Table:
+        async with async_connect() as conn:
+            rows = await fetch_trask_components(conn)
+            breakers = await fetch_open_breakers(conn)
+        table = Table(
+            title=f"Trask Dashboard — {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC"
+        )
+        table.add_column("Component")
+        table.add_column("Type")
+        table.add_column("State")
+        table.add_column("Age(s)")
+        now = datetime.now(UTC)
+        for row in rows:
+            hb = row["last_heartbeat"]
+            age = int((now - hb).total_seconds()) if hb else 9999
+            table.add_row(
+                str(row["component_id"]),
+                str(row["component_type"]),
+                str(row["state"]),
+                str(age),
+            )
+        table.caption = f"Open breakers: {len(breakers)}"
+        return table
+
+    if once:
+        console.print(await _build())
+        return
+
+    with Live(console=console, refresh_per_second=4) as live:
+        try:
+            while True:
+                live.update(await _build())
+                time.sleep(max(refresh, 0.5))
+        except KeyboardInterrupt:
+            typer.echo("\nDashboard stopped.")
 
 
 async def _trask_events_async(
