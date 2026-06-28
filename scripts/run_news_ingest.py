@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import subprocess
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -38,13 +37,14 @@ async def _main() -> None:
             total_written += int(written.get("news_articles", 0))
         log.info("news_ingest_day", date=str(target), **result)
 
-    sync = subprocess.run(  # noqa: S603
-        [sys.executable, str(REPO / "scripts" / "sync_market_news.py")],
+    sync = await asyncio.create_subprocess_exec(
+        sys.executable,
+        str(REPO / "scripts" / "sync_market_news.py"),
         cwd=REPO,
-        check=False,
     )
-    if sync.returncode != 0:
-        raise SystemExit(sync.returncode)
+    returncode = await sync.wait()
+    if returncode != 0:
+        raise SystemExit(returncode)
     log.info("news_pipeline_complete", days=LOOKBACK_DAYS, articles_written=total_written)
 
 

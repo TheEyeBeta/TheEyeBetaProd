@@ -350,7 +350,11 @@ def main() -> None:
     )
     parser.add_argument("--date")
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--live", action="store_true", help="Write to Supabase (default for systemd)")
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Write to Supabase (default for systemd)",
+    )
     parser.add_argument(
         "--shadow",
         action="store_true",

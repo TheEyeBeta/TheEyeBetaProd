@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: E402
 """Sync theeyebeta.instruments.sector from public fundamentals and Massive SIC data.
 
 CLI:

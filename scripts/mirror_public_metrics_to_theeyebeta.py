@@ -28,8 +28,8 @@ PROD_ROOT = Path(__file__).resolve().parents[1]
 if str(PROD_ROOT) not in sys.path:
     sys.path.insert(0, str(PROD_ROOT))
 
-from workers.base_worker import worker_database_url
-from workers.sector_aggregation_worker import SectorAggregationWorker
+from workers.base_worker import worker_database_url  # noqa: E402
+from workers.sector_aggregation_worker import SectorAggregationWorker  # noqa: E402
 
 log = structlog.get_logger()
 
@@ -398,10 +398,7 @@ def main() -> None:
 
     dry_run = not args.apply
     raw_steps = {s.strip().lower() for s in args.steps.split(",")}
-    if "all" in raw_steps:
-        steps = {"mirror", "sector"}
-    else:
-        steps = raw_steps
+    steps = {"mirror", "sector"} if "all" in raw_steps else raw_steps
 
     summary = asyncio.run(
         run_backfill(

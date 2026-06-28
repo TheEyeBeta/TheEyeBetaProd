@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: E402
 """Backfill theeyebeta.prices_daily for the active universe via Massive grouped-daily.
 
 One API call per trading day (not per symbol). Replaces the slow public SQL mirror
