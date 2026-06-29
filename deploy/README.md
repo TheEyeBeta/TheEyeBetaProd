@@ -73,7 +73,29 @@ Dry-run / manual checks:
 
 ```bash
 uv run python -m workers.fixed_income.pipeline_worker --dry-run
-uv run tb workers run fixed-income --dry-run
+  uv run tb workers run fixed-income --dry-run
+  ```
+
+## Production News Ingestion Timer
+
+Install and enable the news ingestion timer. It runs every 15 minutes and the
+service reads both the shared `.env` file and `.env.theeye-news-ingest`, so
+provider keys such as Finnhub, Alpha Vantage, NewsAPI, and Tavily are available
+to the worker.
+
+```bash
+sudo cp deploy/systemd/theeye-news-ingest.service /etc/systemd/system/
+sudo cp deploy/systemd/theeye-news-ingest.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now theeye-news-ingest.timer
+systemctl list-timers theeye-news-ingest.timer
+```
+
+Run and verify manually:
+
+```bash
+sudo systemctl start theeye-news-ingest.service
+journalctl -u theeye-news-ingest.service -n 200 --no-pager
 ```
 
 ## Daily Pipeline Timer

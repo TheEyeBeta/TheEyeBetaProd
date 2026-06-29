@@ -1,5 +1,5 @@
 [Unit]
-Description=TheEyeBeta news RSS ingestion (data_ingestion news adapter -> theeyebeta.news_articles)
+Description=TheEyeBeta news ingestion (RSS + API providers -> theeyebeta.news_articles)
 Wants=network-online.target
 After=network-online.target postgresql.service
 
@@ -8,7 +8,9 @@ Type=oneshot
 User=the-eye-beta
 Group=the-eye-beta
 WorkingDirectory=/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd
-# Provides INGEST_DATABASE_URL (asyncpg pool target) + other config.
+# .env carries shared provider keys; .env.theeye-news-ingest can override
+# service-specific settings such as NEWS_LOOKBACK_DAYS and NEWS_API_PROVIDER_LIMIT.
+EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env
 EnvironmentFile=-/home/the-eye-beta/TheEyeBeta2025/TheEyeBetaProd/.env.theeye-news-ingest
 # otel-collector is not running on this host; silence console-exporter span spam.
 Environment=OTEL_SDK_DISABLED=true
