@@ -17,7 +17,7 @@ os.environ.setdefault("OTEL_SDK_DISABLED", "true")
 
 log = structlog.get_logger()
 REPO = Path(__file__).resolve().parents[1]
-LOOKBACK_DAYS = int(os.environ.get("NEWS_LOOKBACK_DAYS", "3"))
+LOOKBACK_DAYS = int(os.environ.get("NEWS_LOOKBACK_DAYS", "1"))
 
 
 async def _ingest_day(target: date) -> dict:

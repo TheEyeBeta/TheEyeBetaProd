@@ -6,10 +6,16 @@ import re
 
 
 def extract_tickers(text: str, universe: set[str]) -> tuple[str, ...]:
-    """Return sorted tickers found as standalone tokens in text."""
+    """Return sorted uppercase ticker-like tokens found in text."""
     if not text or not universe:
         return ()
-    tokens = set(re.findall(r"\b[A-Z]{1,5}\b", text.upper()))
+    tokens = {
+        match.group(1) for match in re.finditer(r"(?<![A-Za-z])([A-Z]{2,5})(?![A-Za-z])", text)
+    }
+    tokens.update(
+        match.group(1).upper()
+        for match in re.finditer(r"(?<![A-Za-z])\$([A-Za-z]{1,5})(?![A-Za-z])", text)
+    )
     # Drop common false positives
     stop = {
         "A",
@@ -45,6 +51,7 @@ def extract_tickers(text: str, universe: set[str]) -> tuple[str, ...]:
         "SHE",
         "SO",
         "THE",
+        "TIME",
         "TO",
         "TWO",
         "UK",

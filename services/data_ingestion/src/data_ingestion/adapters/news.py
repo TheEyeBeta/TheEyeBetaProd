@@ -20,7 +20,7 @@ from zinc_schemas.ingestion import NewsRecord, Record
 
 log = structlog.get_logger()
 
-LOOKBACK_DAYS = int(os.environ.get("NEWS_LOOKBACK_DAYS", "7"))
+LOOKBACK_DAYS = int(os.environ.get("NEWS_LOOKBACK_DAYS", "1"))
 
 
 def _positive_int_from_env(name: str, default: int) -> int:
@@ -202,7 +202,7 @@ class NewsAdapter:
 
     async def fetch(self, target_date: date) -> AsyncIterator[Record]:
         """Yield news articles within NEWS_LOOKBACK_DAYS ending on target_date."""
-        cutoff = target_date - timedelta(days=LOOKBACK_DAYS)
+        cutoff = target_date - timedelta(days=max(LOOKBACK_DAYS - 1, 0))
         seen_hashes: set[str] = set()
         instruments = await load_active_instruments()
         universe = {str(row["symbol"]).upper() for row in instruments}

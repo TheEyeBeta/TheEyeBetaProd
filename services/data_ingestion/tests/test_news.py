@@ -93,8 +93,12 @@ async def test_fetch_yields_api_provider_news_with_tickers(monkeypatch: pytest.M
 
 @pytest.mark.unit
 def test_ticker_extraction_ignores_common_word_symbols() -> None:
-    universe = {"A", "FOR", "ON", "AAPL", "MSFT"}
-    assert extract_tickers("A test for Apple on Monday mentions AAPL and MSFT.", universe) == (
+    universe = {"A", "F", "FOR", "ON", "AAPL", "MSFT", "S", "TIME"}
+    assert extract_tickers(
+        "A test for Ford on Monday mentions AAPL, $Msft, $F, and Part-Time chair.",
+        universe,
+    ) == (
         "AAPL",
+        "F",
         "MSFT",
     )
